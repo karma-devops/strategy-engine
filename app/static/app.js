@@ -85,6 +85,49 @@ function drawPulse() {
         </svg>`;
 }
 
+/* ── Fleet Toggle ─────────────────────────── */
+function toggleFleet() {
+    const grid = document.getElementById('instances-grid');
+    const btn = document.getElementById('fleet-toggle-btn');
+    grid.classList.toggle('collapsed');
+    btn.textContent = grid.classList.contains('collapsed') ? 'Expand' : 'Collapse';
+}
+
+/* ── Trade History (global) ─────────────────── */
+async function fetchTradeHistory() {
+    const el = document.getElementById('trade-history');
+    const countEl = document.getElementById('trade-count');
+    if (!el) return;
+    try {
+        const res = await fetch(`${API_BASE}/api/v2/trades?limit=20`, { headers: apiHeaders() });
+        const data = await res.json();
+        const trades = data.trades || [];
+        countEl.textContent = trades.length;
+        if (!trades.length) {
+            el.innerHTML = '<div class="empty">No trades yet.</div>';
+            return;
+        }
+        el.innerHTML = trades.map(t => {
+            const time = t.timestamp ? new Date(t.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '';
+            const pnl = t.pnl_usd || 0;
+            const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
+            const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+            const side = t.side || 'LONG';
+            const inst = instances.find(i => i.slug === t.instance_id);
+            const symbol = inst ? inst.token : (t.instance_id || '?');
+            return `
+                <div class="trade-row">
+                    <span class="trade-time">${time}</span>
+                    <span class="trade-symbol">${escapeHtml(symbol)}</span>
+                    <span class="trade-side ${side}">${side}</span>
+                    <span class="trade-pnl ${pnlClass}">${pnlStr}</span>
+                </div>`;
+        }).join('');
+    } catch (e) {
+        el.innerHTML = '<div class="empty">Failed to load trades.</div>';
+    }
+}
+
 /* ── Fleet ─────────────────────────────────── */
 async function fetchInstances() {
     try {
@@ -673,6 +716,7 @@ function clearConsole() {
 function refreshAll() {
     fetchPulseData();
     fetchInstances();
+    fetchTradeHistory();
     fetchLogs();
     addLog('Manual refresh', 'info');
 }
@@ -706,10 +750,12 @@ window.addEventListener('resize', drawPulse);
 (async function init() {
     await fetchPulseData();
     await fetchInstances();
+    await fetchTradeHistory();
     await fetchLogs();
     connectSSE();
     setInterval(fetchInstances, 5000);
     setInterval(fetchLogs, 5000);
+    setInterval(fetchTradeHistory, 10000);
     setInterval(fetchPulseData, 30000);
     setInterval(updateClock, 1000);
 })();

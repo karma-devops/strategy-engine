@@ -203,6 +203,70 @@ def close_instance_position(request: Request, instance_id: str, db: Session = De
     return {"ok": True, "message": f"Closed {inst.token}", "result": result}
 
 
+@router.get("/instances/{instance_id}/trades")
+@limiter.limit(READ_LIMIT)
+def get_trades(request: Request, instance_id: str, limit: int = 50, db: Session = Depends(get_db)):
+    """Get trade history for an instance, most recent first."""
+    from instances.models import Trade
+    rows = (
+        db.query(Trade)
+        .filter(Trade.instance_id == instance_id)
+        .order_by(Trade.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "ok": True,
+        "trades": [
+            {
+                "id": t.id,
+                "side": t.side,
+                "size": t.size,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl_usd": t.pnl_usd,
+                "pnl_pct": t.pnl_pct,
+                "price_diff": t.price_diff,
+                "entry_cost": t.entry_cost,
+                "exit_cost": t.exit_cost,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+            }
+            for t in rows
+        ],
+    }
+
+
+@router.get("/trades")
+@limiter.limit(READ_LIMIT)
+def get_all_trades(request: Request, limit: int = 50, db: Session = Depends(get_db)):
+    """Get recent trades across all instances, most recent first."""
+    from instances.models import Trade
+    rows = (
+        db.query(Trade)
+        .order_by(Trade.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "ok": True,
+        "trades": [
+            {
+                "id": t.id,
+                "instance_id": t.instance_id,
+                "side": t.side,
+                "size": t.size,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl_usd": t.pnl_usd,
+                "pnl_pct": t.pnl_pct,
+                "price_diff": t.price_diff,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+            }
+            for t in rows
+        ],
+    }
+
+
 @router.post("/instances/{instance_id}/restart")
 @limiter.limit(WRITE_LIMIT)
 def restart_instance(request: Request, instance_id: str, db: Session = Depends(get_db)):

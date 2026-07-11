@@ -83,9 +83,20 @@
                 <div class="card">
                     <div class="card-head">
                         <h2>Fleet <span class="tag tag-neutral" id="fleet-count">0</span></h2>
+                        <button class="btn-sm fleet-toggle" onclick="toggleFleet()" id="fleet-toggle-btn">Collapse</button>
                     </div>
                     <div id="instances-grid" class="fleet-grid">
                         <div class="empty">Loading engines...</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Trade History</h2>
+                        <span class="tag tag-neutral" id="trade-count">0</span>
+                    </div>
+                    <div id="trade-history" class="trade-list">
+                        <div class="empty">No trades yet.</div>
                     </div>
                 </div>
             </div>
