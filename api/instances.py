@@ -188,6 +188,21 @@ def stop_instance(request: Request, instance_id: str, db: Session = Depends(get_
     return {"ok": ok, "message": "Stopped" if ok else "Instance not running"}
 
 
+@router.post("/instances/{instance_id}/close")
+@limiter.limit(WRITE_LIMIT)
+def close_instance_position(request: Request, instance_id: str, db: Session = Depends(get_db)):
+    """Close the open position for an instance's token at market."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    from core.exchange import get_hyperliquid_client
+    client = get_hyperliquid_client(inst)
+    result = client.market_close(inst.token)
+    if result is None:
+        return {"ok": False, "message": "Close failed — check logs"}
+    return {"ok": True, "message": f"Closed {inst.token}", "result": result}
+
+
 @router.post("/instances/{instance_id}/restart")
 @limiter.limit(WRITE_LIMIT)
 def restart_instance(request: Request, instance_id: str, db: Session = Depends(get_db)):

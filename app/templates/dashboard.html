@@ -3,94 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PULS-R</title>
+    <title>PULS-R Strategy Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="dashboard">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <div class="logo logo-header">
-                    <span class="logo-l">PULS</span>
-                    <svg class="logo-pulse" viewBox="0 0 90 72" aria-hidden="true">
-                        <path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" />
-                    </svg>
-                    <span class="logo-r">R</span>
+    <div class="app">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <div class="logo">
+                    <span class="logo-text">PULS<span class="logo-accent">·</span>R</span>
                 </div>
-                <span class="agent-badge ready" id="global-status">Ready</span>
+                <span class="status-pill" id="global-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Ready</span>
+                </span>
             </div>
-            <div class="header-right">
-                <span class="timestamp" id="clock">--:--:--</span>
-                <button class="icon-btn" onclick="refreshAll()" title="Refresh">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            <div class="topbar-right">
+                <span class="clock" id="clock">--:--:--</span>
+                <button class="btn-icon" onclick="refreshAll()" title="Refresh">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                 </button>
-                <a href="/withdrawals" class="icon-btn" title="Withdrawals">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 6l-5-5-5 5M17 18l-5 5-5-5"></path></svg>
+                <a href="/withdrawals" class="btn-icon" title="Withdrawals">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 6l-5-5-5 5M17 18l-5 5-5-5"/></svg>
                 </a>
-                <a href="/instances/new" class="icon-btn icon-btn-primary" title="Add Engine">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <a href="/instances/new" class="btn-icon btn-icon-accent" title="Add Engine">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </a>
             </div>
         </header>
 
-        <!-- Account Summary -->
-        <div class="account-summary">
-            <div class="summary-item">
-                <span class="label">Account Value</span>
-                <span class="value" id="stat-account">-</span>
-                <span class="sublabel">USDC</span>
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="stats-bar">
+            <div class="stat">
+                <span class="stat-label">Account Value</span>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-account">-</span>
+                    <span class="stat-unit">USDC</span>
+                </div>
             </div>
-            <div class="summary-item">
-                <span class="label">Drawdown</span>
-                <span class="value" id="stat-drawdown">-</span>
-                <span class="sublabel">30D</span>
+            <div class="stat">
+                <span class="stat-label">Drawdown</span>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-drawdown">-</span>
+                    <span class="stat-unit">30D</span>
+                </div>
             </div>
-            <div class="summary-item">
-                <span class="label">Active Engines</span>
-                <span class="value" id="stat-active">-</span>
-                <span class="sublabel">Running</span>
+            <div class="stat">
+                <span class="stat-label">Active Engines</span>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-active">-</span>
+                    <span class="stat-unit">Running</span>
+                </div>
             </div>
-            <div class="summary-item">
-                <span class="label">Open PnL</span>
-                <span class="value pnl" id="stat-pnl">-</span>
-                <span class="sublabel">Unrealized</span>
+            <div class="stat">
+                <span class="stat-label">Open PnL</span>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="stat-pnl">-</span>
+                    <span class="stat-unit">Unrealized</span>
+                </div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Left Panel: Pulse Graph + Fleet -->
-            <div class="panel">
-                <!-- Pulse Graph -->
+        <!-- Main Layout -->
+        <div class="main">
+            <!-- Left: Graph + Fleet -->
+            <div class="left-panel">
                 <div class="card">
-                    <div class="card-header">
-                        <h2>Pulse Graph</h2>
-                        <span class="badge neutral" id="pulse-range">30D</span>
+                    <div class="card-head">
+                        <h2>Equity Curve</h2>
+                        <span class="tag tag-neutral" id="pulse-range">30D</span>
                     </div>
-                    <div id="pulse-canvas" class="pulse-canvas"></div>
+                    <div id="pulse-canvas" class="chart-area"></div>
                 </div>
 
-                <!-- Fleet -->
                 <div class="card">
-                    <div class="card-header">
-                        <h2>Fleet <span class="badge neutral" id="fleet-count">0</span></h2>
+                    <div class="card-head">
+                        <h2>Fleet <span class="tag tag-neutral" id="fleet-count">0</span></h2>
                     </div>
                     <div id="instances-grid" class="fleet-grid">
-                        <div class="empty-state">Loading engines...</div>
+                        <div class="empty">Loading engines...</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Panel: Engine Detail / Console -->
-            <div class="console-panel">
-                <div class="card console-card" id="detail-card">
-                    <div class="card-header">
+            <!-- Right: Engine Detail -->
+            <div class="right-panel">
+                <div class="card detail-card">
+                    <div class="card-head">
                         <h2 id="detail-title">Engine Detail</h2>
-                        <div id="detail-actions"></div>
+                        <div class="card-actions" id="detail-actions"></div>
                     </div>
                     <div class="tabs" id="detail-tabs">
                         <button class="tab active" data-tab="overview">Overview</button>
@@ -100,33 +105,31 @@
                         <button class="tab" data-tab="alerts">Alerts</button>
                         <button class="tab" data-tab="settings">Settings</button>
                     </div>
-                    <div id="tab-overview" class="tab-content active"></div>
-                    <div id="tab-signals" class="tab-content"></div>
-                    <div id="tab-trades" class="tab-content"></div>
-                    <div id="tab-backtests" class="tab-content"></div>
-                    <div id="tab-alerts" class="tab-content"></div>
-                    <div id="tab-settings" class="tab-content"></div>
+                    <div id="tab-overview" class="tab-pane active"></div>
+                    <div id="tab-signals" class="tab-pane"></div>
+                    <div id="tab-trades" class="tab-pane"></div>
+                    <div id="tab-backtests" class="tab-pane"></div>
+                    <div id="tab-alerts" class="tab-pane"></div>
+                    <div id="tab-settings" class="tab-pane"></div>
                 </div>
 
-                <div class="card console-card">
-                    <div class="card-header">
-                        <h2>Console</h2>
-                        <div class="console-header-actions">
-                            <button class="btn-small" onclick="copyLogs()">Copy</button>
-                            <button class="btn-small" onclick="clearConsole()">Clear</button>
+                <div class="card">
+                    <div class="card-head">
+                        <h2>Activity Log</h2>
+                        <div class="card-actions">
+                            <button class="btn-sm" onclick="copyLogs()">Copy</button>
+                            <button class="btn-sm" onclick="clearConsole()">Clear</button>
                         </div>
                     </div>
-                    <div class="console-output" id="console">
-                        <div class="console-line">Dashboard initialized...</div>
+                    <div class="log-area" id="console">
+                        <div class="log-line info">Dashboard initialized...</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        window.API_KEY = "{{ api_key }}";
-    </script>
+    <script>window.API_KEY = "{{ api_key }}";</script>
     <script src="/static/app.js"></script>
 </body>
 </html>

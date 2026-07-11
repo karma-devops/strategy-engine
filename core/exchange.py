@@ -234,7 +234,8 @@ class HyperLiquidClient:
         is_buy = side.lower() == "long"
         # Use IOC limit order with 0.5% slippage to simulate market fill
         limit_px = mid * (1.005 if is_buy else 0.995)
-        limit_px = round(limit_px, 6)
+        # Round to 5 decimals — safe for all HL assets (min tick 0.00001)
+        limit_px = round(limit_px, 5)
 
         try:
             result = self._exchange.order(
@@ -283,7 +284,8 @@ class HyperLiquidClient:
         # Opposite side to close
         is_buy = not is_long
         limit_px = mid * (1.005 if is_buy else 0.995)
-        limit_px = round(limit_px, 6)
+        # Round to 5 decimals — safe for all HL assets (min tick 0.00001)
+        limit_px = round(limit_px, 5)
 
         try:
             result = self._exchange.order(
