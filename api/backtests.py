@@ -27,8 +27,10 @@ router = APIRouter()
 class RunBacktestRequest(BaseModel):
     instance_slug: str = Field(..., min_length=1)
     days: int = Field(default=30, ge=1, le=365)
-    initial_capital: float = Field(default=1000.0, gt=0)
+    initial_capital: float = Field(default=100.0, gt=0)
     # Optional overrides (fall back to instance config if not provided)
+    token: str | None = None
+    strategy_id: str | None = None
     timeframe: str | None = None
     mode: str | None = None
     profile: str | None = None
@@ -52,8 +54,8 @@ def run_backtest_endpoint(
     # Use payload overrides if provided, else fall back to instance config
     result = run_backtest(
         instance_slug=instance.slug,
-        token=instance.token,
-        strategy_id=instance.strategy_id,
+        token=payload.token or instance.token,
+        strategy_id=payload.strategy_id or instance.strategy_id,
         timeframe=payload.timeframe or instance.timeframe,
         mode=payload.mode or instance.mode,
         profile=payload.profile or instance.profile,
