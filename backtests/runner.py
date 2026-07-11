@@ -255,6 +255,9 @@ def run_backtest(
         atr_per = getattr(strategy, 'atr_period', None) or getattr(strategy, 'ATR_VALU', 14)
         min_rows = max(ema_slow, atr_per) + 5
 
+        # Detect mintick from candle data (HL tick size varies per asset)
+        mintick = _detect_mintick(df)
+
         equity = initial_capital
         equity_curve = [{"time": df["timestamp"].iloc[0].isoformat(), "equity": equity}]
         position: BacktestTrade | None = None
@@ -351,7 +354,7 @@ def run_backtest(
             # Activates after price moves activation ticks in favor,
             # then trails at offset ticks behind best price.
             if position is not None and position.trail_activation > 0:
-                tick_size = 0.00001  # HL mintick for most crypto perps
+                tick_size = mintick  # detected per-asset from HL candle data
 
                 if position.side == "LONG":
                     # Track best price (highest high)
@@ -461,7 +464,7 @@ def run_backtest(
                 # qtyMax = floor(equity * 0.97 / close)
                 # qty = min(qtyRisk, qtyMax)
                 risk_per_share = abs(close - sl)
-                risk_per_share = max(risk_per_share, close * 0.001)  # mintick * 10 proxy
+                risk_per_share = max(risk_per_share, mintick * 10)
                 risk_amount = equity * (risk_per_trade_pct / 100.0)
                 qty_risk = risk_amount / risk_per_share if risk_per_share > 0 else 0
                 qty_max = int(equity * 0.97 / close) if close > 0 else 0
@@ -535,6 +538,29 @@ def run_backtest(
         result.status = "error"
         result.error_message = str(e)
         return result
+
+
+def _detect_mintick(df: pd.DataFrame) -> float:
+    """Detect the minimum price tick from candle data.
+
+    Sorts all unique price values (close, open, high, low) and finds
+    the smallest non-zero difference — that's the exchange's tick size.
+    Falls back to 0.00001 if detection fails.
+    """
+    try:
+        all_prices = set()
+        for col in ("close", "open", "high", "low"):
+            if col in df.columns:
+                all_prices.update(df[col].dropna().unique())
+        sorted_prices = sorted(all_prices)
+        if len(sorted_prices) < 2:
+            return 0.00001
+        diffs = [sorted_prices[i + 1] - sorted_prices[i] for i in range(len(sorted_prices) - 1)]
+        mintick = min(d for d in diffs if d > 0)
+        return float(mintick)
+    except Exception:
+        pass
+    return 0.00001
 
 
 def _minutes_for_timeframe(timeframe: str) -> int:
