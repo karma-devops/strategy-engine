@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Withdrawals — Strategy Engine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💸 Withdrawals</h1>
+            <a href="/" class="btn-secondary" style="text-decoration:none;">← Back</a>
+        </header>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Account Overview</h2>
+                <button class="btn-secondary" id="refresh-btn">🔄 Refresh</button>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <span class="small">Account Value</span>
+                    <div class="big" id="account-value">$0.00</div>
+                </div>
+                <div class="card">
+                    <span class="small">Withdrawable</span>
+                    <div class="big" id="withdrawable">$0.00</div>
+                </div>
+                <div class="card">
+                    <span class="small">Minimum Capital</span>
+                    <div class="big" id="min-capital">$10,000.00</div>
+                </div>
+                <div class="card">
+                    <span class="small">Available for Withdraw</span>
+                    <div class="big" id="available-profit">$0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Withdrawal Settings</h2>
+            </div>
+            <form id="config-form">
+                <div class="row">
+                    <span>Cycle Frequency</span>
+                    <select id="cycle-days" name="cycle_days">
+                        <option value="7">7 Days (Weekly)</option>
+                        <option value="14">14 Days (Bi-Weekly)</option>
+                        <option value="30" selected>30 Days (Monthly)</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <span>Auto-Withdraw</span>
+                    <input type="checkbox" id="auto-withdraw" name="auto_withdraw_enabled">
+                </div>
+                <div class="row">
+                    <span>Withdrawal Rate (profit %)</span>
+                    <input type="number" id="withdrawal-rate" name="withdrawal_rate" value="0.50" step="0.01" min="0" max="1">
+                </div>
+                <div class="row">
+                    <span>Minimum Capital</span>
+                    <input type="number" id="min-capital-input" name="min_capital" value="10000" min="0">
+                </div>
+                <div class="row">
+                    <span>Next Withdrawal (days)</span>
+                    <span id="days-until-next">-</span>
+                </div>
+                <div class="actions">
+                    <button type="submit" class="btn-primary">Save Settings</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Manual Withdrawals</h2>
+            </div>
+            <div class="grid">
+                <div class="card">
+                    <div class="small">Withdraw 50% of Recent Profits</div>
+                    <div class="big" id="est-50">$0.00</div>
+                    <button class="btn-primary" id="btn-50" disabled>💰 Withdraw 50%</button>
+                </div>
+                <div class="card">
+                    <div class="small">Withdraw ALL Available Profit</div>
+                    <div class="big" id="est-all">$0.00</div>
+                    <button class="btn-danger" id="btn-all" disabled>🔴 Withdraw All</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Withdrawal History</h2>
+            </div>
+            <div id="history-table">
+                <div class="console-line info">No withdrawals yet.</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>24-Month Projection</h2>
+            </div>
+            <pre id="projection" class="console"></pre>
+        </div>
+    </div>
+
+    <script src="/static/withdrawals.js"></script>
+</body>
+</html>

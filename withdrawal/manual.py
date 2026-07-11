@@ -1,0 +1,119 @@
+"""
+Manual withdrawal execution for strategy-engine.
+"""
+
+from sqlalchemy.orm import Session
+
+from instances.models import WithdrawalRecord, AccountSnapshot
+from instances.events import add_log
+from core.exchange import HyperLiquidClient
+from withdrawal.calculator import (
+    get_or_create_config,
+    calculate_manual_50,
+    calculate_manual_all,
+    set_baseline,
+)
+
+
+def execute_manual_50(db: Session, hl: HyperLiquidClient = None) -> dict:
+    if hl is None:
+        hl = HyperLiquidClient()
+
+    config = get_or_create_config(db)
+    balance = hl.get_account_value()
+    available = hl.get_withdrawable()
+
+    snap = AccountSnapshot(account_value=balance, withdrawable=available)
+    db.add(snap)
+    db.commit()
+
+    amount, reason = calculate_manual_50(db, balance, config)
+    if amount <= 0:
+        return {"ok": False, "message": reason, "amount": 0}
+
+    record = WithdrawalRecord(
+        amount=amount,
+        withdrawal_type="manual_50",
+        status="pending",
+        balance_before=balance,
+    )
+    db.add(record)
+    db.commit()
+
+    result = hl.withdraw_to_wallet(amount)
+    if result:
+        record.status = "completed"
+        record.balance_after = balance - amount
+        record.note = reason
+        db.commit()
+        set_baseline(db, balance - amount, "Post-manual-50 baseline")
+        add_log(f"[WITHDRAWAL] Manual 50% withdrew ${amount:.2f}", "trade")
+        return {"ok": True, "amount": amount, "message": reason, "balance_after": balance - amount}
+    else:
+        record.status = "failed"
+        db.commit()
+        add_log(f"[WITHDRAWAL] Manual 50% failed for ${amount:.2f}", "error")
+        return {"ok": False, "amount": amount, "message": "Withdrawal execution failed"}
+
+
+def execute_manual_all(db: Session, hl: HyperLiquidClient = None) -> dict:
+    if hl is None:
+        hl = HyperLiquidClient()
+
+    config = get_or_create_config(db)
+    balance = hl.get_account_value()
+    available = hl.get_withdrawable()
+
+    snap = AccountSnapshot(account_value=balance, withdrawable=available)
+    db.add(snap)
+    db.commit()
+
+    amount, reason = calculate_manual_all(db, balance, config)
+    if amount <= 0:
+        return {"ok": False, "message": reason, "amount": 0}
+
+    record = WithdrawalRecord(
+        amount=amount,
+        withdrawal_type="manual_all",
+        status="pending",
+        balance_before=balance,
+    )
+    db.add(record)
+    db.commit()
+
+    result = hl.withdraw_to_wallet(amount)
+    if result:
+        record.status = "completed"
+        record.balance_after = balance - amount
+        record.note = reason
+        db.commit()
+        set_baseline(db, balance - amount, "Post-manual-all baseline")
+        add_log(f"[WITHDRAWAL] Manual ALL withdrew ${amount:.2f}", "trade")
+        return {"ok": True, "amount": amount, "message": reason, "balance_after": balance - amount}
+    else:
+        record.status = "failed"
+        db.commit()
+        add_log(f"[WITHDRAWAL] Manual ALL failed for ${amount:.2f}", "error")
+        return {"ok": False, "amount": amount, "message": "Withdrawal execution failed"}
+
+
+def get_withdrawal_history(db: Session, limit: int = 50) -> list:
+    records = (
+        db.query(WithdrawalRecord)
+        .order_by(WithdrawalRecord.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "amount": r.amount,
+            "type": r.withdrawal_type,
+            "status": r.status,
+            "balance_before": r.balance_before,
+            "balance_after": r.balance_after,
+            "note": r.note,
+            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+        }
+        for r in records
+    ]

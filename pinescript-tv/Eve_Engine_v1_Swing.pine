@@ -1,0 +1,406 @@
+//@version=6
+// Strategy: Eve Engine v1 - [UNLEASHED]
+// Optimized by Eve for Operator - NO LIMITS
+
+strategy('Eve Engine v1 - LIVE Pionex [UNLEASHED 1.0]', 
+  overlay = true, 
+  initial_capital = 100, 
+  default_qty_type = strategy.percent_of_equity, 
+  default_qty_value = 100, 
+  currency = currency.USDT, 
+  commission_type = strategy.commission.percent, 
+  commission_value = 0.05, 
+  slippage = 5, 
+  pyramiding = 1, 
+  calc_on_every_tick = true,
+  process_orders_on_close = true)
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+FLOAT_EPSILON = 0.0001
+MIN_ATR_MULT = 0.5
+MAX_ATR_MULT = 3.0
+MIN_ADAPTIVE_LEN = 6
+MAX_ADAPTIVE_LEN = 30
+VOLATILITY_FLOOR = 1.0
+EQUITY_CURVE_MIN_SAMPLES = 3
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  HYPER-GROWTH PROTOCOL - NO BRAKES
+// ══════════════════════════════════════════════════════════════════════════════
+
+growthTargetX = input.float(50.0, 'Hyper-Growth Target (x Initial)', minval = 1.1, step = 0.5, group = 'Hyper-Growth Protocol')
+useMomentum = input.bool(true, 'Exploit: Momentum Entry?', group = 'Hyper-Growth Protocol', tooltip = 'Allows entry on strong ADX trends without waiting for Pin Bars.')
+momentumThresh = input.int(18, 'Momentum Threshold (ADX)', group = 'Hyper-Growth Protocol', tooltip = 'Suggested: 30M = 18, 15M = 23')
+
+// Calculate Hyper-Status
+targetEquityAmt = strategy.initial_capital * growthTargetX
+isHyperPhase = strategy.equity < targetEquityAmt
+progressPct = strategy.equity / targetEquityAmt * 100
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  DATE RANGE & TRADE DIRECTION
+// ══════════════════════════════════════════════════════════════════════════════
+
+startDate = input.time(timestamp('2025-01-01 08:00'), 'Start Date')
+endDate = input.time(timestamp('2069-12-30 00:00'), 'End Date')
+inDateRange = time >= startDate and time <= endDate
+
+tradeDirection = input.string(title = 'Trade Direction', defval = 'Both', options = ['Both', 'Long Only', 'Short Only'], confirm = false, group = 'Filters')
+allowLong = tradeDirection == 'Both' or tradeDirection == 'Long Only'
+allowShort = tradeDirection == 'Both' or tradeDirection == 'Short Only'
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EQUITY TRACKING & ADAPTIVE LOGIC
+// ══════════════════════════════════════════════════════════════════════════════
+
+var float[] equityCurve = array.new_float(0)
+var int lastClosedTrades = 0
+var int lastEntryBar = -1
+
+// Update equity curve on closed trade
+if strategy.closedtrades > lastClosedTrades
+    closedEquity = strategy.equity - strategy.openprofit
+    array.push(equityCurve, closedEquity)
+    if array.size(equityCurve) > 100
+        array.shift(equityCurve)
+    lastClosedTrades := strategy.closedtrades
+
+// Safe equity calculations
+currentClosedEquity = strategy.equity - strategy.openprofit
+eqLength = input.int(21, 'Equity SMA Length', group = 'Risk Management')
+warmupTrades = input.int(3, 'Warm-up Closed Trades', group = 'Risk Management')
+
+inWarmup = strategy.closedtrades < warmupTrades
+hasMinSamples = array.size(equityCurve) >= EQUITY_CURVE_MIN_SAMPLES
+
+avgEquity = hasMinSamples ? array.avg(equityCurve) : currentClosedEquity
+
+// Equity Guard (Optional - for when you want to throttle manually)
+useEquityGuard = input.bool(false, 'Use Equity Guard?', group = 'Risk Management')
+eqPercent = input.float(0.7, 'Position % in Cold Market', group = 'Risk Management')
+
+isStrategyCold = hasMinSamples and not inWarmup and currentClosedEquity < avgEquity
+
+// OVERRIDE: Hyper Phase ignores cold state (ALWAYS SEND)
+if isHyperPhase
+    isStrategyCold := false
+
+// ATR Multiplier Base
+atr_mult = input.float(1.8, title = 'Stop Loss Base (x*ATR)', group = 'Risk Management')
+atr_mult_guard = input.float(0.9, 'Stop Loss Guard (x*ATR)', group = 'Risk Management')
+
+atr_mult_use = inWarmup ? atr_mult : isStrategyCold ? atr_mult_guard : atr_mult
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ADAPTIVE EQUITY COMPOUNDING CORE (4-Layer Optimized)
+// ══════════════════════════════════════════════════════════════════════════════
+
+erLen = 14
+float change = 0.0
+float volatility = VOLATILITY_FLOOR
+
+if hasMinSamples and array.size(equityCurve) > erLen + 1
+    prevEquity = array.get(equityCurve, array.size(equityCurve) - erLen - 1)
+    change := math.abs(currentClosedEquity - prevEquity)
+    
+    volSum = 0.0
+    for i = 1 to erLen by 1
+        if array.size(equityCurve) > i + 1
+            e1 = array.get(equityCurve, array.size(equityCurve) - i)
+            e2 = array.get(equityCurve, array.size(equityCurve) - i - 1)
+            volSum := volSum + math.abs(e1 - e2)
+    volatility := volSum > FLOAT_EPSILON ? volSum : VOLATILITY_FLOOR
+else
+    change := 0.0
+    volatility := VOLATILITY_FLOOR
+
+effRatio = volatility > FLOAT_EPSILON ? change / volatility : 0.0
+
+// 1️⃣ Adaptive SMA (Dynamic Memory Length)
+lenAdaptive = 8 + (30 - 8) * (1 - effRatio)
+lenAdaptive := math.max(MIN_ADAPTIVE_LEN, math.min(MAX_ADAPTIVE_LEN, lenAdaptive))
+eqSMA = ta.sma(currentClosedEquity, math.round(lenAdaptive))
+
+// 2️⃣ Logistic Multiplier (Confidence Curve)
+epsilon = 0.02
+distRaw = eqSMA > FLOAT_EPSILON ? (currentClosedEquity - eqSMA) / eqSMA : 0.0
+dist = math.abs(distRaw) > epsilon ? distRaw : 0.0
+confidence = 1 / (1 + math.exp(-4 * dist))
+baseMult = 1.0 + 0.8 * confidence
+baseMult := math.max(0.9, math.min(1.8, baseMult))
+
+// 3️⃣ Acceleration Filter (Smart Smoothing)
+vel = eqSMA - nz(eqSMA[1])
+acc = vel - nz(vel[1])
+accSmooth = ta.ema(acc, 5)
+accImpact = math.max(0, math.min(1, (-accSmooth - 0.4) / 0.6))
+accAdj = 1.0 - 0.1 * accImpact
+
+// 4️⃣ Std-Dev Channel (Equity Envelope)
+z = 2.2
+eqStdev = ta.stdev(currentClosedEquity, math.round(lenAdaptive))
+eqUpper = eqSMA + z * eqStdev
+eqLower = eqSMA - z * eqStdev
+
+chanAdj = currentClosedEquity < eqLower ? 0.95 : currentClosedEquity > eqUpper ? 1.03 : 1.0
+
+// 5️⃣ Final Adaptive Multiplier (Hyper-Aware - AGGRESSIVE)
+lenFactor = isHyperPhase ? 0.8 : 1.0
+lenAdaptive := math.max(MIN_ADAPTIVE_LEN, math.min(MAX_ADAPTIVE_LEN, lenAdaptive * lenFactor))
+
+baseMultRange = isHyperPhase ? 1.0 : 0.9
+maxMultRange = isHyperPhase ? 2.0 : 1.8
+baseMult := math.max(baseMultRange, math.min(maxMultRange, baseMult))
+
+chanAdj := currentClosedEquity < eqLower ? isHyperPhase ? 0.97 : 0.95 : currentClosedEquity > eqUpper ? isHyperPhase ? 1.05 : 1.03 : 1.0
+accAdj := isHyperPhase ? 1.0 - 0.07 * accImpact : 1.0 - 0.1 * accImpact
+
+multAdaptive = baseMult * accAdj * chanAdj
+multAdaptive := math.max(MIN_ATR_MULT, math.min(MAX_ATR_MULT, multAdaptive))
+
+// Apply globally
+atr_mult_use := multAdaptive
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  RISK MANAGEMENT - 97% FULL SEND
+// ══════════════════════════════════════════════════════════════════════════════
+
+riskProfile = input.string('Manual', 'Risk Profile', options = ['Sniper Mode (18/6)', 'Trend Scalper (18/12)', 'Conservative (25/18)', 'Golden Growth (36/12)', 'Manual'], group = 'Risk Management')
+manActivation = input.int(18, 'Manual Activation (Ticks)', group = 'Risk Management')
+manOffset = input.int(6, 'Manual Offset (Ticks)', group = 'Risk Management')
+
+// 97% RISK PER TRADE - NO CAPS, NO LIMITS
+riskPerTradePct = input.float(97.0, 'Risk % Per Trade (FULL SEND)', group = 'Risk Management', tooltip = '97% ensures maximum compounding while leaving 3% for slippage')
+
+// Assign Ticks
+var int activeActivation = na
+var int activeOffset = na
+
+if riskProfile == 'Sniper Mode (18/6)'
+    activeActivation := 18
+    activeOffset := 6
+else if riskProfile == 'Trend Scalper (18/12)'
+    activeActivation := 18
+    activeOffset := 12
+else if riskProfile == 'Conservative (25/18)'
+    activeActivation := 25
+    activeOffset := 18
+else if riskProfile == 'Golden Growth (36/12)'
+    activeActivation := 36
+    activeOffset := 12
+else
+    activeActivation := manActivation
+    activeOffset := manOffset
+
+// Peak Equity Tracking (For Display Only - No Throttling)
+var float equityPeak = 0.0
+equityPeak := math.max(equityPeak, strategy.equity)
+ddPercent = equityPeak > 0 ? (strategy.equity - equityPeak) / equityPeak * 100 : 0.0
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  INDICATORS
+// ══════════════════════════════════════════════════════════════════════════════
+
+sma_slow = input.int(50, 'Slow SMA', group = 'Indicators')
+ema_medm = input.int(18, 'Medium EMA', group = 'Indicators')
+ema_fast = input.int(6, 'Fast EMA', group = 'Indicators')
+atr_valu = input.int(14, 'ATR Period', group = 'Indicators')
+
+slowSMA = ta.sma(close, sma_slow)
+medmEMA = ta.ema(close, ema_medm)
+fastEMA = ta.ema(close, ema_fast)
+atr = ta.atr(atr_valu)
+
+// EMA Fan Trend Detection
+fanUpTrend = fastEMA > medmEMA and medmEMA > slowSMA
+fanDnTrend = fastEMA < medmEMA and medmEMA < slowSMA
+
+// Momentum Logic
+[diplus, diminus, adxValue] = ta.dmi(14, 14)
+isStrongTrend = adxValue > momentumThresh
+
+// Pin Bar Detection (FIXED - renamed 'range' to 'barRange')
+barRange = high - low
+body = math.abs(close - open)
+upperWick = high - math.max(close, open)
+lowerWick = math.min(close, open) - low
+
+bullishPinBar = lowerWick >= 0.66 * barRange and body <= 0.34 * barRange
+bearishPinBar = upperWick >= 0.66 * barRange and body <= 0.34 * barRange
+
+// Valid Triggers (Hyper Phase = Momentum OR Pin Bar)
+validTriggerBull = isHyperPhase and useMomentum ? bullishPinBar or (isStrongTrend and close > high[1]) : bullishPinBar
+validTriggerBear = isHyperPhase and useMomentum ? bearishPinBar or (isStrongTrend and close < low[1]) : bearishPinBar
+
+// Price Pierce Detection
+bullPierce = (low < fastEMA and close > fastEMA) or (low < medmEMA and close > medmEMA) or (low < slowSMA and close > slowSMA)
+bearPierce = (high > fastEMA and close < fastEMA) or (high > medmEMA and close < medmEMA) or (high > slowSMA and close < slowSMA)
+
+// Final Entry Signals (Duplicate prevention only)
+longEntry  = fanUpTrend and bullPierce and validTriggerBull and (bar_index > lastEntryBar)
+shortEntry = fanDnTrend and bearPierce and validTriggerBear and (bar_index > lastEntryBar)
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  POSITION SIZING - 97% FULL EQUITY COMPOUNDING
+// ══════════════════════════════════════════════════════════════════════════════
+
+calcSize(dir) =>
+    stopDist = atr[1] * atr_mult_use
+    stopPrice = dir == 1 ? low[1] - stopDist : high[1] + stopDist
+    riskPerShare = math.abs(close - stopPrice)
+    riskPerShare := math.max(riskPerShare, syminfo.mintick * 10)
+    
+    // FULL EQUITY - NO CAPS
+    availableEquity = strategy.equity - strategy.openprofit
+    
+    // 97% RISK ALLOCATION
+    riskAmount = availableEquity * (riskPerTradePct / 100)
+    qtyRisk = riskAmount / riskPerShare
+    
+    // HYPER EFFICIENCY - 97% capital usage, 3% slippage buffer
+    efficiency = 0.97
+    bufferMult = 0.0  // NO ATR BUFFER IN HYPER MODE
+    
+    qtyMax = math.floor(availableEquity * efficiency / (close + atr[1] * bufferMult))
+    
+    finalQty = math.min(qtyRisk, qtyMax)
+    finalQty := finalQty > 0 ? finalQty : 0
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  EXECUTION - NO BRAKES
+// ══════════════════════════════════════════════════════════════════════════════
+
+if longEntry and inDateRange and allowLong and strategy.position_size == 0
+    qty = calcSize(1)
+    if qty > 0
+        stopLoss = low[1] - atr[1] * atr_mult_use
+        comment = isHyperPhase ? '🚀 HYPER 97%' : 'Standard 97%'
+        strategy.entry('long', strategy.long, qty = qty, comment = comment)
+        strategy.exit('exit long', from_entry = 'long', stop = stopLoss, trail_points = activeActivation, trail_offset = activeOffset)
+        lastEntryBar := bar_index
+
+if shortEntry and inDateRange and allowShort and strategy.position_size == 0
+    qty = calcSize(-1)
+    if qty > 0
+        stopLoss = high[1] + atr[1] * atr_mult_use
+        comment = isHyperPhase ? '🚀 HYPER 97%' : 'Standard 97%'
+        strategy.entry('short', strategy.short, qty = qty, comment = comment)
+        strategy.exit('exit short', from_entry = 'short', stop = stopLoss, trail_points = activeActivation, trail_offset = activeOffset)
+        lastEntryBar := bar_index
+
+// Trend Reversal Close
+if ta.crossunder(fastEMA, medmEMA) and strategy.position_size > 0
+    strategy.close_all(comment = 'Trend Change')
+if ta.crossover(fastEMA, medmEMA) and strategy.position_size < 0
+    strategy.close_all(comment = 'Trend Change')
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ALERT CONDITIONS (Webhook Ready)
+// ══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(longEntry, title = '🟢 Long Entry Signal', message = 'Eve Engine v1 - Long Entry Detected')
+alertcondition(shortEntry, title = '🔴 Short Entry Signal', message = 'Eve Engine v1 - Short Entry Detected')
+alertcondition(isHyperPhase, title = '🚀 Hyper Phase Active', message = 'Eve Engine v1 - Hyper Growth Mode Engaged')
+alertcondition(progressPct >= 100, title = '🎯 Growth Target Hit', message = 'Eve Engine v1 - Target Achieved')
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  VISUALIZATION
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Adaptive Multiplier (Visual Only)
+multScaled = (multAdaptive - 1.0) * close * 0.05 + close
+plot(multScaled, title = 'ATR Multiplier (visual)', color = color.new(color.orange, 0), style = plot.style_line, linewidth = 1)
+
+// Background Highlights
+bgcolor(isStrategyCold and useEquityGuard ? color.new(#768afc, 80) : na, title = 'Equity Guard Active (Cold)')
+bgcolor(isHyperPhase ? color.new(color.purple, 90) : na, title = 'Hyper Phase')
+
+// Plot Moving Averages
+plot(fastEMA, color = color.new(color.red, 0), title = 'Fast EMA', linewidth = 1)
+plot(medmEMA, color = color.new(color.blue, 0), title = 'Medium EMA', linewidth = 1)
+plot(slowSMA, color = color.new(color.green, 0), title = 'Slow SMA', linewidth = 1)
+
+// Pin Bar Markers
+plotshape(bullishPinBar, style = shape.triangleup, location = location.belowbar, color = color.new(color.green, 0), size = size.tiny, title = 'Bullish Pin Bar')
+plotshape(bearishPinBar, style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0), size = size.tiny, title = 'Bearish Pin Bar')
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PERFORMANCE TABLE
+// ══════════════════════════════════════════════════════════════════════════════
+
+if barstate.islast
+    winRate = strategy.closedtrades > 0 ? strategy.wintrades / strategy.closedtrades * 100 : 0
+    profitFactor = strategy.grossloss != 0 ? strategy.grossprofit / math.abs(strategy.grossloss) : 0
+    netProfit = strategy.netprofit
+    totalTrades = strategy.closedtrades
+    
+    d_str = (dayofmonth(time) < 10 ? '0' : '') + str.tostring(dayofmonth(time))
+    m_str = (month(time) < 10 ? '0' : '') + str.tostring(month(time))
+    dateStr = d_str + '/' + m_str + '/' + str.tostring(year(time))
+    
+    c_gold = color.rgb(212, 175, 55)
+    c_black = color.rgb(10, 10, 10)
+    c_gray = color.rgb(30, 30, 30)
+    c_text = color.rgb(220, 220, 220)
+    c_green = color.rgb(0, 230, 118)
+    c_red = color.rgb(255, 82, 82)
+    c_purple = color.rgb(189, 63, 255)
+    
+    pnlColor = netProfit >= 0 ? c_green : c_red
+    
+    // Main Performance Table (Bottom Left)
+    var table perfTable = table.new(position.bottom_left, 2, 8, border_width = 1, border_color = c_gold, frame_color = c_gold, frame_width = 1)
+    
+    table.cell(perfTable, 0, 0, '✦ EVE ENGINE ✦', text_color = c_black, bgcolor = c_gold, text_size = size.normal, text_halign = text.align_center)
+    table.cell(perfTable, 1, 0, 'v1.0 UNLEASHED', text_color = c_black, bgcolor = c_gold, text_size = size.normal, text_halign = text.align_center)
+    
+    table.cell(perfTable, 0, 1, 'Equity USDT', text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 1, str.tostring(strategy.equity, '#.##'), text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 2, 'PnL Total', text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 2, str.tostring(netProfit, '#.##'), text_color = pnlColor, bgcolor = c_black, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 3, 'Win Rate %', text_color = c_text, bgcolor = c_gray, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 3, str.tostring(winRate, '#.#') + '%', text_color = c_gold, bgcolor = c_gray, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 4, 'Profit Factor', text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 4, str.tostring(profitFactor, '#.##'), text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 5, 'Total Trades', text_color = c_text, bgcolor = c_gray, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 5, str.tostring(totalTrades), text_color = c_text, bgcolor = c_gray, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 6, 'Risk Per Trade', text_color = c_text, bgcolor = c_black, text_size = size.small, text_halign = text.align_left)
+    table.cell(perfTable, 1, 6, str.tostring(riskPerTradePct, '#.#') + '%', text_color = c_purple, bgcolor = c_black, text_size = size.small, text_halign = text.align_right)
+    
+    table.cell(perfTable, 0, 7, 'Date', text_color = c_gold, bgcolor = c_black, text_size = size.tiny, text_halign = text.align_left)
+    table.cell(perfTable, 1, 7, dateStr, text_color = c_gold, bgcolor = c_black, text_size = size.tiny, text_halign = text.align_right)
+    
+    // Mode & Growth Table (Bottom Right)
+    startTime = startDate
+    elapsedMs = time - startTime
+    float elapsedYears = elapsedMs / (1000 * 60 * 60 * 24 * 365)
+    elapsedYears := math.max(elapsedYears, FLOAT_EPSILON)
+    
+    finalEquity = strategy.equity
+    initEquity = strategy.initial_capital
+    geoGrowth = (math.pow(finalEquity / initEquity, 1 / elapsedYears) - 1) * 100
+    
+    var table modeTable = table.new(position.bottom_right, 2, 5, bgcolor = color.black, frame_width = 1)
+    
+    table.cell(modeTable, 0, 0, 'Modus', text_color = color.white, text_size = size.small)
+    table.cell(modeTable, 1, 0, isHyperPhase ? '🚀 HYPER' : '🛡️ CONSERVATIVE', text_color = isHyperPhase ? c_purple : color.gray, text_size = size.tiny)
+    
+    table.cell(modeTable, 0, 1, 'Position Size', text_color = color.white, text_size = size.tiny)
+    table.cell(modeTable, 1, 1, '97% FULL SEND', text_color = c_purple, text_size = size.tiny)
+    
+    table.cell(modeTable, 0, 2, 'Geo Growth', text_color = color.white, text_size = size.small)
+    table.cell(modeTable, 1, 2, str.tostring(geoGrowth, '#.##') + '%', text_color = color.new(color.teal, 0), text_size = size.small)
+    
+    table.cell(modeTable, 0, 3, 'Years', text_color = color.white, text_size = size.tiny)
+    table.cell(modeTable, 1, 3, str.tostring(elapsedYears, '#.##'), text_color = color.new(color.yellow, 0), text_size = size.tiny)
+    
+    table.cell(modeTable, 0, 4, 'Progress to Target', text_color = color.white, text_size = size.tiny)
+    table.cell(modeTable, 1, 4, str.tostring(progressPct, '#.#') + '%', text_color = progressPct >= 100 ? c_green : c_gold, text_size = size.tiny)

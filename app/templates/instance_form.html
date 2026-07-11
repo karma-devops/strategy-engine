@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Instance — Strategy Engine</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>➕ Add Instance</h1>
+            <a href="/" class="btn-secondary" style="text-decoration:none;">← Back</a>
+        </header>
+
+        <div class="card">
+            <form id="instance-form">
+                <div class="row">
+                    <span>Preset Fleet</span>
+                    <select id="preset-select" name="preset">
+                        <option value="" selected>Custom / Manual</option>
+                        <optgroup label="6-Engine Default Fleet" id="fleet-optgroup">
+                            <!-- populated by JS -->
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <span>Slug</span>
+                    <input type="text" id="slug" name="slug" value="" placeholder="engine-N (auto if empty)">
+                </div>
+
+                <div class="row">
+                    <span>Name</span>
+                    <input type="text" id="name" name="name" value="FARTCOIN Scalp v1.3" required>
+                </div>
+
+                <div class="row">
+                    <span>Token</span>
+                    <input type="text" id="token" name="token" value="FARTCOIN" required>
+                </div>
+
+                <div class="row">
+                    <span>Strategy</span>
+                    <select id="strategy_id" name="strategy_id" required>
+                        <option value="engine_v1_3">Engine v1.3 (Scalp)</option>
+                        <option value="engine_v1">Engine v1 (Swing)</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <span>Mode</span>
+                    <select id="mode" name="mode">
+                        <option value="Scalp">Scalp</option>
+                        <option value="Swing">Swing</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <span>Profile</span>
+                    <input type="text" id="profile" name="profile" value="aggressive_8_3">
+                </div>
+
+                <div class="row">
+                    <span>Timeframe</span>
+                    <select id="timeframe" name="timeframe">
+                        <option value="5m">5m</option>
+                        <option value="15m" selected>15m</option>
+                        <option value="30m">30m</option>
+                        <option value="1h">1h</option>
+                        <option value="4h">4h</option>
+                    </select>
+                </div>
+
+                <div class="row">
+                    <span>Leverage (x)</span>
+                    <input type="number" id="leverage" name="leverage" value="10" min="1" max="50" required>
+                </div>
+
+                <div class="row">
+                    <span>Max Position %</span>
+                    <input type="number" id="max_position_pct" name="max_position_pct" value="0.97" step="0.01" min="0.01" max="1" required>
+                </div>
+
+                <div class="row">
+                    <span>Poll Interval (seconds)</span>
+                    <input type="number" id="poll_interval_seconds" name="poll_interval_seconds" value="30" min="5" required>
+                </div>
+
+                <div class="row">
+                    <span>Activation (ticks)</span>
+                    <input type="number" id="activation" name="activation" value="8" min="1">
+                </div>
+
+                <div class="row">
+                    <span>Offset (ticks)</span>
+                    <input type="number" id="offset" name="offset" value="3" min="1">
+                </div>
+
+                <div class="row">
+                    <span>HyperLiquid Private Key (optional, encrypted)</span>
+                    <input type="password" id="hyperliquid_private_key" name="hyperliquid_private_key" value="" placeholder="leave empty to use global env">
+                </div>
+
+                <div class="row">
+                    <span>Account Address (optional)</span>
+                    <input type="text" id="account_address" name="account_address" value="" placeholder="0x... (falls back to global env)">
+                </div>
+
+                <div class="row">
+                    <span>Withdrawal Address (optional)</span>
+                    <input type="text" id="withdrawal_address" name="withdrawal_address" value="" placeholder="0x... (falls back to account / global env)">
+                </div>
+
+                <div class="row">
+                    <span>Dry Run</span>
+                    <input type="checkbox" id="dry_run" name="dry_run" checked>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn-primary">Create Instance</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/instance_form.js"></script>
+</body>
+</html>

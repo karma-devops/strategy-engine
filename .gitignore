@@ -1,0 +1,32 @@
+# Local-only files
+CONTEXT.md
+NOTES.md
+SPECSHEET.md
+PIPE-ARCHITECTURE.md
+DEPLOYMENT.md
+HANDOVER.md
+
+# Backups
+backups/
+
+# Data
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+
+# Env
+.env
+*.env
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
