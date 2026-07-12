@@ -1,0 +1,304 @@
+/*
+ ════════════════════════════════════════════════════════════════
+ PULS-R DESIGN SYSTEM — TOKEN LAYER
+ Three-tier architecture: Primitive → Semantic → Component
+ ════════════════════════════════════════════════════════════════
+
+ Import this file FIRST in every page. All components reference
+ semantic/component tokens — never raw primitives.
+
+ Usage:
+   <link rel="stylesheet" href="/static/tokens.css">
+   <link rel="stylesheet" href="/static/style.css">
+*/
+
+/* ───────────────────────────────────────────
+   LAYER 1: PRIMITIVE TOKENS (raw values)
+   Never reference these directly in components.
+   ─────────────────────────────────────────── */
+
+:root {
+  /* ── Color Primitives ── */
+  /* Warm dark brown scale (not green-tinted, not pure black) */
+  --brown-950: #0F0A07;
+  --brown-900: #15100B;
+  --brown-850: #1A140F;
+  --brown-800: #221A13;
+  --brown-750: #2A2018;
+  --brown-700: #332A1F;
+  --brown-650: #3D3325;
+  --brown-600: #4A3E2E;
+  --brown-500: #5A4E3D;
+  --brown-400: #6B5E4A;
+  --brown-300: #8A7A64;
+  --brown-200: #A89880;
+  --brown-100: #C4B498;
+  --brown-50:  #E8DCC4;
+  --brown-25:  #F5EDDE;
+
+  /* Accent: Emerald (profit, success, go) */
+  --emerald-600: #10B981;
+  --emerald-500: #34D399;
+  --emerald-400: #6EE7B7;
+  --emerald-050: rgba(52, 211, 153, 0.08);
+  --emerald-100: rgba(52, 211, 153, 0.12);
+  --emerald-200: rgba(52, 211, 153, 0.20);
+  --emerald-300: rgba(52, 211, 153, 0.30);
+
+  /* Accent: Coral (loss, danger, stop) */
+  --coral-600: #E5484D;
+  --coral-500: #FB7185;
+  --coral-400: #FCA5A5;
+  --coral-050: rgba(251, 113, 133, 0.08);
+  --coral-100: rgba(251, 113, 133, 0.12);
+  --coral-200: rgba(251, 113, 133, 0.20);
+  --coral-300: rgba(251, 113, 133, 0.30);
+
+  /* Accent: Sky (info, neutral, link) */
+  --sky-600: #2B8AD8;
+  --sky-500: #6BA4D5;
+  --sky-400: #93C5E8;
+  --sky-050: rgba(107, 164, 213, 0.08);
+  --sky-100: rgba(107, 164, 213, 0.12);
+  --sky-200: rgba(107, 164, 213, 0.20);
+  --sky-300: rgba(107, 164, 213, 0.30);
+
+  /* Accent: Amber (warning, attention) */
+  --amber-600: #D99B16;
+  --amber-500: #F0B90B;
+  --amber-400: #FACA4B;
+  --amber-050: rgba(240, 185, 11, 0.08);
+  --amber-100: rgba(240, 185, 11, 0.12);
+  --amber-200: rgba(240, 185, 11, 0.20);
+
+  /* ── Typography Primitives ── */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+
+  /* Type scale (1.250 ratio — Major Third) */
+  --text-xs:   0.625rem;   /* 10px */
+  --text-sm:   0.75rem;    /* 12px */
+  --text-base: 0.8125rem;  /* 13px */
+  --text-md:   0.875rem;   /* 14px */
+  --text-lg:   1rem;        /* 16px */
+  --text-xl:   1.25rem;     /* 20px */
+  --text-2xl:  1.5625rem;  /* 25px */
+  --text-3xl:  1.953rem;    /* 31px */
+  --text-4xl:  2.441rem;    /* 39px */
+
+  /* Font weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Line heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  /* Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+
+  /* ── Spacing Primitives (4pt base scale) ── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── Radii ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-normal: 200ms;
+  --dur-slow: 350ms;
+
+  /* ── Z-Index Scale ── */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-overlay: 20;
+  --z-modal: 40;
+  --z-toast: 100;
+  --z-dropdown: 1000;
+
+  /* ── Breakpoints (reference only — use in media queries) ── */
+  /* Mobile-first: base styles = mobile, min-width queries scale up */
+  /* sm: 375px, md: 768px, lg: 1024px, xl: 1440px */
+}
+
+/* ───────────────────────────────────────────
+   LAYER 2: SEMANTIC TOKENS (purpose aliases)
+   Components reference these. Theme switching
+   changes these, not primitives.
+   ─────────────────────────────────────────── */
+
+:root,
+[data-mode="dark"] {
+  /* ── Surfaces ── */
+  --surface-page:    var(--brown-950);
+  --surface-card:    var(--brown-900);
+  --surface-raised:  var(--brown-800);
+  --surface-hover:   var(--brown-750);
+  --surface-inset:   var(--brown-950);
+
+  /* ── Text ── */
+  --text-primary:    var(--brown-25);
+  --text-secondary:  var(--brown-100);
+  --text-muted:      var(--brown-300);
+  --text-faint:      var(--brown-500);
+
+  /* ── Borders ── */
+  --border-default:  var(--brown-700);
+  --border-subtle:    var(--brown-800);
+  --border-strong:   var(--brown-600);
+
+  /* ── Semantic Colors ── */
+  --color-profit:    var(--emerald-500);
+  --color-loss:      var(--coral-500);
+  --color-info:      var(--sky-500);
+  --color-warn:      var(--amber-500);
+  --color-profit-bg: var(--emerald-100);
+  --color-loss-bg:   var(--coral-100);
+  --color-info-bg:   var(--sky-100);
+  --color-warn-bg:   var(--amber-100);
+  --color-profit-border: var(--emerald-300);
+  --color-loss-border:   var(--coral-300);
+  --color-info-border:   var(--sky-300);
+
+  /* ── Interactive ── */
+  --btn-primary-bg:      var(--emerald-500);
+  --btn-primary-text:    var(--brown-950);
+  --btn-primary-hover:   var(--emerald-600);
+  --btn-secondary-bg:    var(--brown-750);
+  --btn-secondary-text:  var(--text-secondary);
+  --btn-secondary-hover: var(--brown-700);
+  --btn-danger-bg:       var(--coral-100);
+  --btn-danger-text:     var(--coral-500);
+  --btn-danger-hover:    var(--coral-500);
+  --btn-danger-hover-text: #fff;
+
+  /* ── Input ── */
+  --input-bg:        var(--brown-750);
+  --input-border:    var(--border-default);
+  --input-focus:     var(--sky-500);
+  --input-text:      var(--text-primary);
+  --input-placeholder: var(--text-faint);
+
+  /* ── Layout ── */
+  --content-width:   1280px;
+  --content-narrow:  768px;
+  --grid-gap:        var(--space-4);
+  --card-padding:    var(--space-4);
+}
+
+/* Light mode (PWA landing pages) */
+[data-mode="light"] {
+  --surface-page:    #F5F0EB;
+  --surface-card:    #FFFFFF;
+  --surface-raised:  #EDE6DE;
+  --surface-hover:   #E5DCD2;
+  --surface-inset:   #F0EBE5;
+
+  --text-primary:    #1A1410;
+  --text-secondary:  #4A3E2E;
+  --text-muted:      #8A7A64;
+  --text-faint:      #B5A890;
+
+  --border-default:  rgba(0, 0, 0, 0.08);
+  --border-subtle:   rgba(0, 0, 0, 0.04);
+  --border-strong:   rgba(0, 0, 0, 0.15);
+
+  --color-profit-bg: rgba(16, 185, 129, 0.10);
+  --color-loss-bg:   rgba(229, 72, 77, 0.10);
+  --color-info-bg:   rgba(43, 138, 216, 0.10);
+  --color-warn-bg:   rgba(217, 155, 22, 0.10);
+
+  --btn-primary-bg:      var(--emerald-600);
+  --btn-primary-text:    #FFFFFF;
+  --btn-secondary-bg:    var(--brown-100);
+  --btn-secondary-text:  var(--text-secondary);
+  --btn-secondary-hover: var(--brown-200);
+
+  --input-bg:        var(--surface-card);
+  --input-border:    var(--border-default);
+  --input-focus:     var(--sky-600);
+  --input-text:      var(--text-primary);
+  --input-placeholder: var(--text-faint);
+}
+
+/* ───────────────────────────────────────────
+   LAYER 3: COMPONENT TOKENS (specific elements)
+   Override these for fine-grained control.
+   ─────────────────────────────────────────── */
+
+:root,
+[data-mode="dark"] {
+  /* ── Top Bar ── */
+  --topbar-bg: var(--surface-card);
+  --topbar-border: var(--border-subtle);
+  --topbar-height: 56px;
+
+  /* ── Stats Bar ── */
+  --stat-bg: var(--surface-card);
+  --stat-label-color: var(--text-muted);
+  --stat-value-size: var(--text-xl);
+  --stat-value-weight: var(--weight-bold);
+
+  /* ── Card ── */
+  --card-bg: var(--surface-card);
+  --card-border: var(--border-subtle);
+  --card-radius: var(--radius-lg);
+  --card-shadow: var(--shadow-sm);
+  --card-head-border: var(--border-subtle);
+
+  /* ── Tag / Badge ── */
+  --tag-neutral-bg: var(--brown-750);
+  --tag-neutral-text: var(--text-secondary);
+  --tag-running-bg: var(--emerald-100);
+  --tag-running-text: var(--emerald-500);
+  --tag-running-border: var(--emerald-300);
+  --tag-stopped-bg: var(--coral-100);
+  --tag-stopped-text: var(--coral-500);
+  --tag-stopped-border: var(--coral-300);
+
+  /* ── Tab ── */
+  --tab-color: var(--text-muted);
+  --tab-active-color: var(--text-primary);
+  --tab-active-border: var(--emerald-500);
+
+  /* ── Log Area ── */
+  --log-bg: var(--surface-inset);
+  --log-text: var(--text-secondary);
+  --log-border: var(--border-subtle);
+
+  /* ── Trade Row ── */
+  --trade-row-bg: var(--surface-raised);
+  --trade-row-hover: var(--surface-hover);
+  --trade-row-border: var(--border-subtle);
+}
