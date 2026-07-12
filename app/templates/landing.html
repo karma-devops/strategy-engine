@@ -114,10 +114,12 @@
             filter: drop-shadow(0 0 6px var(--brand));
         }
         .login-form { display: flex; flex-direction: column; gap: var(--space-4); }
+        .login-form .field { display: flex; flex-direction: column; gap: var(--space-1); }
         .login-form label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
-        .login-form input { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-3); font-family: var(--font-body); font-size: var(--text-md); outline: none; transition: border-color var(--dur-fast) var(--ease-out); min-height: 44px; }
+        .login-form input { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-family: var(--font-body); font-size: var(--text-sm); outline: none; transition: border-color var(--dur-fast) var(--ease-out); height: 36px; }
         .login-form input:focus { border-color: var(--input-focus); }
-        .login-form button { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--brand); color: #fff; border: none; font-family: var(--font-body); font-size: var(--text-md); font-weight: var(--weight-semibold); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); min-height: 44px; margin-top: var(--space-2); }
+        .login-form input::placeholder { color: var(--input-placeholder); }
+        .login-form button { padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); background: var(--brand); color: #fff; border: none; font-family: var(--font-body); font-size: var(--text-sm); font-weight: var(--weight-semibold); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); height: 36px; margin-top: var(--space-2); }
         .login-form button:hover { background: var(--brand-hover); }
         .login-back { text-align: center; margin-top: var(--space-4); }
         .login-back a { font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
@@ -274,13 +276,13 @@
                 <div class="logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></div>
                 <h1>Sign In</h1>
                 <form class="login-form" onsubmit="event.preventDefault(); doLogin();">
-                    <div>
+                    <div class="field">
                         <label>Username</label>
-                        <input type="text" id="login-user" autocomplete="username">
+                        <input type="text" id="login-user" autocomplete="username" placeholder="operator">
                     </div>
-                    <div>
+                    <div class="field">
                         <label>Password</label>
-                        <input type="password" id="login-pass" autocomplete="current-password">
+                        <input type="password" id="login-pass" autocomplete="current-password" placeholder="••••••••">
                     </div>
                     <div class="login-error" id="login-error"></div>
                     <button type="submit">Sign In</button>
