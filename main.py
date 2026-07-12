@@ -39,6 +39,12 @@ add_rate_limiting(app)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+# Public landing page (no auth required)
+@app.get("/app", response_class=HTMLResponse)
+@limiter.limit(READ_LIMIT)
+def landing_page(request: Request):
+    return templates.TemplateResponse(request, "landing.html", context={"request": request})
+
 # Health (public + rate limited)
 @app.get("/health")
 @limiter.limit(READ_LIMIT)

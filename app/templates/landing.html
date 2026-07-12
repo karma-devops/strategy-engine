@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0F0A07">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/tokens.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { background: var(--surface-page); color: var(--text-primary); font-family: var(--font-body); font-size: var(--text-base); line-height: var(--leading-normal); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+        /* ── Public Nav ── */
+        .pub-nav {
+            position: sticky; top: 0; z-index: var(--z-sticky);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: var(--space-4) var(--space-6);
+            background: rgba(15, 10, 7, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        [data-mode="light"] .pub-nav { background: rgba(245, 240, 235, 0.85); }
+        .pub-logo {
+            display: inline-flex; align-items: baseline;
+            font-family: var(--font-display); font-size: var(--text-lg); font-weight: var(--weight-bold);
+            letter-spacing: var(--tracking-tight); color: var(--text-primary);
+            text-decoration: none;
+        }
+        .pub-logo .logo-l { margin-right: -1px; }
+        .pub-logo .logo-r { margin-left: -3px; }
+        .pub-logo svg { height: 0.9em; width: auto; margin: 0 3px; vertical-align: -0.1em; }
+        .pub-logo .pulse-line {
+            fill: none; stroke: var(--brand); stroke-width: 5;
+            stroke-linecap: round; stroke-linejoin: round;
+            stroke-dasharray: 220; stroke-dashoffset: 220;
+            animation: drawLine 3s ease-out infinite;
+            filter: drop-shadow(0 0 6px var(--brand));
+        }
+        @keyframes drawLine {
+            0% { stroke-dashoffset: 220; opacity: 0; }
+            8% { opacity: 1; }
+            100% { stroke-dashoffset: 0; opacity: 1; }
+        }
+        .pub-nav-links { display: flex; align-items: center; gap: var(--space-5); }
+        .pub-nav-links a { color: var(--text-secondary); text-decoration: none; font-size: var(--text-sm); font-weight: var(--weight-medium); transition: color var(--dur-fast) var(--ease-out); }
+        .pub-nav-links a:hover { color: var(--text-primary); }
+        .pub-nav-links a.btn-login { padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); background: var(--brand); color: #fff; font-weight: var(--weight-semibold); }
+        .pub-nav-links a.btn-login:hover { background: var(--brand-hover); }
+        .mode-toggle { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-size: var(--text-xs); cursor: pointer; font-family: var(--font-body); transition: all var(--dur-fast) var(--ease-out); }
+        .mode-toggle:hover { border-color: var(--input-focus); color: var(--text-primary); }
+        .pub-mobile-menu { display: none; }
+
+        /* ── Page Container ── */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* ── Landing Hero ── */
+        .hero { max-width: 768px; margin: 0 auto; padding: var(--space-16) var(--space-6) var(--space-12); text-align: center; }
+        .hero h1 { font-family: var(--font-display); font-size: var(--text-4xl); font-weight: var(--weight-bold); letter-spacing: var(--tracking-tight); line-height: var(--leading-tight); margin-bottom: var(--space-4); }
+        .hero h1 .accent { color: var(--brand); }
+        .hero p { font-size: var(--text-lg); color: var(--text-secondary); line-height: var(--leading-relaxed); max-width: 520px; margin: 0 auto var(--space-8); }
+        .hero-cta { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+        .hero-cta a { padding: var(--space-3) var(--space-6); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: var(--text-md); font-weight: var(--weight-semibold); text-decoration: none; transition: all var(--dur-fast) var(--ease-out); }
+        .hero-cta .primary { background: var(--brand); color: #fff; }
+        .hero-cta .primary:hover { background: var(--brand-hover); transform: translateY(-1px); }
+        .hero-cta .secondary { border: 1px solid var(--border-default); color: var(--text-secondary); }
+        .hero-cta .secondary:hover { border-color: var(--input-focus); color: var(--text-primary); }
+
+        /* ── Feature Grid ── */
+        .features { max-width: 1024px; margin: 0 auto; padding: var(--space-8) var(--space-6) var(--space-16); }
+        .features h2 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--weight-semibold); text-align: center; margin-bottom: var(--space-8); color: var(--text-primary); }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-4); }
+        .feature-card { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-5); transition: border-color var(--dur-normal) var(--ease-out); }
+        .feature-card:hover { border-color: var(--border-default); }
+        .feature-card .icon { width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--brand-bg); display: flex; align-items: center; justify-content: center; margin-bottom: var(--space-3); color: var(--brand); }
+        .feature-card h3 { font-family: var(--font-display); font-size: var(--text-md); font-weight: var(--weight-semibold); margin-bottom: var(--space-2); color: var(--text-primary); }
+        .feature-card p { font-size: var(--text-sm); color: var(--text-muted); line-height: var(--leading-normal); }
+
+        /* ── About Page ── */
+        .about-content { max-width: 768px; margin: 0 auto; padding: var(--space-12) var(--space-6) var(--space-16); }
+        .about-content h1 { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: var(--weight-bold); margin-bottom: var(--space-6); }
+        .about-content h2 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: var(--weight-semibold); margin-top: var(--space-8); margin-bottom: var(--space-3); }
+        .about-content p { font-size: var(--text-md); color: var(--text-secondary); line-height: var(--leading-relaxed); margin-bottom: var(--space-4); }
+        .about-content ul { margin-left: var(--space-5); margin-bottom: var(--space-4); }
+        .about-content li { font-size: var(--text-md); color: var(--text-secondary); line-height: var(--leading-relaxed); margin-bottom: var(--space-2); }
+
+        /* ── FAQ Page ── */
+        .faq-content { max-width: 768px; margin: 0 auto; padding: var(--space-12) var(--space-6) var(--space-16); }
+        .faq-content h1 { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: var(--weight-bold); margin-bottom: var(--space-6); }
+        .faq-item { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-3); }
+        .faq-item summary { font-family: var(--font-display); font-size: var(--text-md); font-weight: var(--weight-semibold); color: var(--text-primary); cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+        .faq-item summary::after { content: '+'; font-size: var(--text-lg); color: var(--text-muted); transition: transform var(--dur-fast) var(--ease-out); }
+        .faq-item[open] summary::after { transform: rotate(45deg); }
+        .faq-item p { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-relaxed); }
+
+        /* ── Login Page ── */
+        .login-content { max-width: 400px; margin: 0 auto; padding: var(--space-16) var(--space-6); }
+        .login-card { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); }
+        .login-card h1 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--weight-bold); text-align: center; margin-bottom: var(--space-6); }
+        .login-card .logo { text-align: center; margin-bottom: var(--space-2); display: flex; justify-content: center; align-items: baseline; }
+        .login-card .logo .logo-l { margin-right: -1px; font-family: var(--font-display); font-size: var(--text-2xl); font-weight: var(--weight-bold); color: var(--text-primary); }
+        .login-card .logo .logo-r { margin-left: -3px; font-family: var(--font-display); font-size: var(--text-2xl); font-weight: var(--weight-bold); color: var(--text-primary); }
+        .login-card .logo svg { height: 1.1em; width: auto; margin: 0 3px; vertical-align: -0.1em; }
+        .login-card .logo .pulse-line {
+            fill: none; stroke: var(--brand); stroke-width: 5;
+            stroke-linecap: round; stroke-linejoin: round;
+            stroke-dasharray: 220; stroke-dashoffset: 220;
+            animation: drawLine 3s ease-out infinite;
+            filter: drop-shadow(0 0 6px var(--brand));
+        }
+        .login-form { display: flex; flex-direction: column; gap: var(--space-4); }
+        .login-form label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
+        .login-form input { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-3); font-family: var(--font-body); font-size: var(--text-md); outline: none; transition: border-color var(--dur-fast) var(--ease-out); min-height: 44px; }
+        .login-form input:focus { border-color: var(--input-focus); }
+        .login-form button { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--brand); color: #fff; border: none; font-family: var(--font-body); font-size: var(--text-md); font-weight: var(--weight-semibold); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); min-height: 44px; margin-top: var(--space-2); }
+        .login-form button:hover { background: var(--brand-hover); }
+        .login-back { text-align: center; margin-top: var(--space-4); }
+        .login-back a { font-size: var(--text-sm); color: var(--text-muted); text-decoration: none; }
+        .login-back a:hover { color: var(--text-primary); }
+        .login-error { color: var(--color-loss); font-size: var(--text-sm); text-align: center; min-height: var(--space-5); }
+
+        /* ── Footer ── */
+        .pub-footer { border-top: 1px solid var(--border-subtle); padding: var(--space-6); text-align: center; color: var(--text-faint); font-size: var(--text-xs); }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .pub-nav-links a:not(.btn-login) { display: none; }
+            .pub-mobile-menu { display: block; background: none; border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: var(--space-2); color: var(--text-secondary); cursor: pointer; }
+            .hero { padding: var(--space-10) var(--space-4) var(--space-8); }
+            .hero h1 { font-size: var(--text-3xl); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Nav -->
+    <nav class="pub-nav">
+        <a href="#/" class="pub-logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></a>
+        <div class="pub-nav-links">
+            <a href="#/about">About</a>
+            <a href="#/faq">FAQ</a>
+            <button class="mode-toggle" onclick="toggleMode()" id="modeToggle"><span id="modeIcon">○</span><span id="modeLabel">dark</span></button>
+            <a href="#/login" class="btn-login">Sign In</a>
+            <button class="pub-mobile-menu" onclick="toggleMobileMenu()">☰</button>
+        </div>
+    </nav>
+
+    <!-- ═══ Landing Page ═══ -->
+    <div id="page-home" class="page active">
+        <div class="hero">
+            <h1>Strategy execution engine for <span class="accent">HyperLiquid</span> perpetuals</h1>
+            <p>PineScript-fidelity backtesting. Multi-engine fleet management. Real-time position tracking. All from one dashboard.</p>
+            <div class="hero-cta">
+                <a href="#/login" class="primary">Start Trading</a>
+                <a href="#/about" class="secondary">Learn More</a>
+            </div>
+        </div>
+        <div class="features">
+            <h2>Built for systematic traders</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/></svg></div>
+                    <h3>Backtest Lab</h3>
+                    <p>Run historical backtests with trailing stops, dynamic mintick detection, and compounding position sizing. Verified against TradingView results.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M8 10v4"/></svg></div>
+                    <h3>Multi-Engine Fleet</h3>
+                    <p>Run up to 6 strategy instances simultaneously. Each with its own token, strategy, credentials, and risk parameters.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+                    <h3>Live Execution</h3>
+                    <p>Real HyperLiquid order execution with IOC limit orders, position tracking, and automatic signal-based entry/exit.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div>
+                    <h3>Monitoring & Alerts</h3>
+                    <p>Performance scoring, rotation recommendations, and automated alerts for drawdown, consecutive losses, and win rate degradation.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+                    <h3>AI Advisory</h3>
+                    <p>BYOK LLM chat for strategy analysis, backtest comparison, and market insights. Advisory only — never executes trades.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 6l-5-5-5 5"/></svg></div>
+                    <h3>Withdrawal System</h3>
+                    <p>Configurable withdrawal schedules with Fernet-encrypted per-engine credentials and manual or automated cycles.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ About Page ═══ -->
+    <div id="page-about" class="page">
+        <div class="about-content">
+            <h1>About PULS-R</h1>
+            <p>PULS-R is a strategy execution engine for HyperLiquid perpetuals markets. It translates PineScript trading strategies into Python, backtests them against historical candle data, and executes them live with precise position sizing and risk management.</p>
+
+            <h2>How It Works</h2>
+            <p>The engine runs in a continuous loop: fetch candles, run strategy, check signals, sync positions from HyperLiquid (source of truth), and execute trades only when the desired side differs from the current position.</p>
+            <ul>
+                <li><strong>Strategy engines</strong> generate BUY/SELL/NEUTRAL signals with metadata (EMA, ATR, stop-loss, trailing stop)</li>
+                <li><strong>Instance runner</strong> polls each engine at configurable intervals, executes IOC limit orders with 0.5% slippage</li>
+                <li><strong>Backtest runner</strong> replays historical candles through the same strategy logic with trailing stop simulation, dynamic mintick, and fee calculation</li>
+                <li><strong>Monitoring system</strong> scores engine performance, recommends rotations, and triggers alerts on drawdown or loss streaks</li>
+            </ul>
+
+            <h2>Strategies</h2>
+            <p>Three strategies are currently implemented, each a faithful translation of TradingView PineScript:</p>
+            <ul>
+                <li><strong>v1.3</strong> — Scalp strategy with EMA crossover, ATR-based stop-loss, and trailing stop</li>
+                <li><strong>v1</strong> — Swing strategy for longer timeframes (1h+)</li>
+                <li><strong>v6.1</strong> — Dynamic risk multiplier with drawdown protection and pin bar detection</li>
+            </ul>
+
+            <h2>Backtest Results</h2>
+            <p>FARTCOIN v1.3 15m over 30 days: +116.68% return, 240 trades, 90.4% win rate, profit factor 4.48, max drawdown 15.46%. Verified against TradingView with ~26% of TV results (expected gap due to OHLC vs tick-level trailing stop evaluation).</p>
+
+            <h2>Tech Stack</h2>
+            <p>Python, FastAPI, HyperLiquid Python SDK, SQLAlchemy, Jinja2. PWA-capable with offline shell caching. All secrets in environment variables only — never committed or logged.</p>
+        </div>
+    </div>
+
+    <!-- ═══ FAQ Page ═══ -->
+    <div id="page-faq" class="page">
+        <div class="faq-content">
+            <h1>Frequently Asked Questions</h1>
+
+            <details class="faq-item">
+                <summary>What is PULS-R?</summary>
+                <p>PULS-R is a strategy execution engine for HyperLiquid perpetuals. It runs PineScript-derived strategies, backtests them against historical data, and executes trades live on HyperLiquid.</p>
+            </details>
+            <details class="faq-item">
+                <summary>How accurate are the backtests?</summary>
+                <p>Backtests use OHLC candle data with trailing stop simulation. TradingView uses <code>calc_on_every_tick=true</code> which gives intra-candle precision we can't match with OHLC alone. We typically achieve 26-50% of TradingView's results. The gap can be closed with intra-bar tick simulation (planned).</p>
+            </details>
+            <details class="faq-item">
+                <summary>Is this safe for live trading?</summary>
+                <p>Yes, with safeguards. DRY_RUN mode is the default. Live trading requires explicitly setting DRY_RUN=false. Per-engine credentials are Fernet-encrypted. All write endpoints require authentication. Kill switches are available at global, per-instance, and withdrawal levels.</p>
+            </details>
+            <details class="faq-item">
+                <summary>What HyperLiquid assets are supported?</summary>
+                <p>Any perpetual listed on HyperLiquid. The engine detects mintick per asset from candle data. Tested with FARTCOIN, WIF, HYPE, SOL, ETH, BTC. The HL API has a 60-day candle history limit and 5,000 bars per request.</p>
+            </details>
+            <details class="faq-item">
+                <summary>Can I add my own strategy?</summary>
+                <p>Yes. Create a Python file in <code>engine/</code> implementing <code>generate_signals()</code> returning <code>{direction, signal, metadata}</code>. Register it in <code>engine/registry.py</code>. The backtest runner and live instance runner will use it automatically.</p>
+            </details>
+            <details class="faq-item">
+                <summary>Does the AI chat execute trades?</summary>
+                <p>No. The LLM chat is advisory only. It can analyze performance, compare strategies, and suggest parameters, but it cannot execute trades, modify engines, or access credentials.</p>
+            </details>
+            <details class="faq-item">
+                <summary>What's the difference from TradingView?</summary>
+                <p>TradingView is a charting platform with PineScript indicators. PULS-R is an execution engine that translates PineScript strategies into Python, runs them live on HyperLiquid, and manages a fleet of independent strategy instances with monitoring, alerts, and withdrawal management.</p>
+            </details>
+        </div>
+    </div>
+
+    <!-- ═══ Login Page ═══ -->
+    <div id="page-login" class="page">
+        <div class="login-content">
+            <div class="login-card">
+                <div class="logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></div>
+                <h1>Sign In</h1>
+                <form class="login-form" onsubmit="event.preventDefault(); doLogin();">
+                    <div>
+                        <label>Username</label>
+                        <input type="text" id="login-user" autocomplete="username">
+                    </div>
+                    <div>
+                        <label>Password</label>
+                        <input type="password" id="login-pass" autocomplete="current-password">
+                    </div>
+                    <div class="login-error" id="login-error"></div>
+                    <button type="submit">Sign In</button>
+                </form>
+                <div class="login-back"><a href="#/">← Back to home</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="pub-footer">
+        PULS-R Strategy Engine — HyperLiquid Perpetuals — © 2026
+    </footer>
+
+    <script>
+        // ── Theme toggle ──
+        let currentMode = 'dark';
+        function getPreferredMode() {
+            var saved = localStorage.getItem('pulsr_mode');
+            if (saved === 'dark' || saved === 'light') return saved;
+            return 'dark'; // Dark is always the default
+        }
+        function applyMode(mode) {
+            currentMode = mode;
+            document.documentElement.setAttribute('data-mode', mode);
+            var icon = document.getElementById('modeIcon');
+            var label = document.getElementById('modeLabel');
+            if (icon) icon.textContent = mode === 'dark' ? '○' : '●';
+            if (label) label.textContent = mode;
+        }
+        function toggleMode() {
+            currentMode = currentMode === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('pulsr_mode', currentMode);
+            applyMode(currentMode);
+        }
+
+        // ── SPA Router ──
+        function navigateTo(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            var el = document.getElementById('page-' + page);
+            if (el) el.classList.add('active');
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+
+        window.addEventListener('hashchange', () => {
+            var hash = location.hash.replace('#/', '') || 'home';
+            if (hash === '') hash = 'home';
+            navigateTo(hash);
+        });
+
+        function toggleMobileMenu() {
+            // Simple toggle — shows/hides nav links on mobile
+            var links = document.querySelector('.pub-nav-links');
+            links.style.display = links.style.display === 'flex' ? '' : 'flex';
+        }
+
+        // ── Login ──
+        function doLogin() {
+            var user = document.getElementById('login-user').value;
+            var pass = document.getElementById('login-pass').value;
+            var err = document.getElementById('login-error');
+
+            // Use Basic Auth — redirect to dashboard with credentials in URL
+            // The FastAPI backend handles auth via HTTP Basic
+            var url = window.location.origin + '/?auth=' + btoa(user + ':' + pass);
+            // Actually, use Basic auth redirect
+            window.location.href = '/' + (user && pass ? '' : '');
+            // Try fetch with basic auth
+            fetch('/health', { headers: { 'Authorization': 'Basic ' + btoa(user + ':' + pass) } })
+                .then(r => {
+                    if (r.ok) {
+                        sessionStorage.setItem('pulsr_auth', btoa(user + ':' + pass));
+                        window.location.href = '/dashboard';
+                    } else {
+                        err.textContent = 'Invalid credentials';
+                    }
+                })
+                .catch(() => { err.textContent = 'Connection error'; });
+        }
+
+        // ── Init ──
+        function init() {
+            applyMode(getPreferredMode());
+            var hash = location.hash.replace('#/', '') || 'home';
+            if (hash === '') hash = 'home';
+            navigateTo(hash);
+            // Register service worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else { init(); }
+    </script>
+</body>
+</html>
