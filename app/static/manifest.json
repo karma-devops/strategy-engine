@@ -3,8 +3,9 @@
   "short_name": "PULS-R",
   "description": "Strategy execution engine for HyperLiquid perpetuals",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "theme_color": "#0F0A07",
   "background_color": "#0F0A07",
   "icons": [
