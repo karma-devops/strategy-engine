@@ -152,7 +152,8 @@ Font: `--text-xs` (10px), `--weight-bold`, `--tracking-wide`.
 | Placeholder | `--input-placeholder` |
 | Radius | `--radius-sm` (6px) |
 | Padding | 8px 10px |
-| Min height | 36px (mobile: 44px) |
+| Height | 36px (all inputs, all pages) |
+| Label | Above input, left-aligned, `--text-xs` uppercase |
 
 ### 5.5 Tab
 
