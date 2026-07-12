@@ -45,6 +45,12 @@ templates = Jinja2Templates(directory="app/templates")
 def landing_page(request: Request):
     return templates.TemplateResponse(request, "landing.html", context={"request": request})
 
+# App shell (requires auth)
+@app.get("/shell", response_class=HTMLResponse)
+@limiter.limit(READ_LIMIT)
+def app_shell(request: Request, username: str = Depends(verify_ui_credentials)):
+    return templates.TemplateResponse(request, "app-shell.html", context={"request": request, "api_key": config.AGENT_API_KEY or ""})
+
 # Health (public + rate limited)
 @app.get("/health")
 @limiter.limit(READ_LIMIT)
