@@ -126,6 +126,11 @@
         .login-back a:hover { color: var(--text-primary); }
         .login-error { color: var(--color-loss); font-size: var(--text-sm); text-align: center; min-height: var(--space-5); }
 
+        /* ── Signup Page ── */
+        .signup-content { max-width: 440px; margin: 0 auto; padding: var(--space-12) var(--space-6); }
+        .signup-card { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); text-align: center; }
+        .signup-card h1 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: var(--weight-bold); margin: var(--space-4) 0; }
+
         /* ── Footer ── */
         .pub-footer { border-top: 1px solid var(--border-subtle); padding: var(--space-6); text-align: center; color: var(--text-faint); font-size: var(--text-xs); }
         .footer-trust { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-bottom: var(--space-2); font-size: var(--text-sm); color: var(--text-muted); }
@@ -251,6 +256,10 @@
                 <p>Yes, with safeguards. DRY_RUN mode is the default. Live trading requires explicitly setting DRY_RUN=false. Per-engine credentials are Fernet-encrypted. All write endpoints require authentication. Kill switches are available at global, per-instance, and withdrawal levels.</p>
             </details>
             <details class="faq-item">
+                <summary>How do I connect my wallet?</summary>
+                <p>We recommend using MetaMask. Any wallet that connects to the HyperLiquid DEX will work the same way — PULS-R uses the same signing keys. You can use your existing HL wallet by importing your private key into the engine settings. The key is encrypted with Fernet and never logged or committed. Alternatively, generate a dedicated trading wallet via MetaMask, fund it with USDC on HyperLiquid, and import that key for per-engine credentials.</p>
+            </details>
+            <details class="faq-item">
                 <summary>What HyperLiquid assets are supported?</summary>
                 <p>Any perpetual listed on HyperLiquid. The engine detects mintick per asset from candle data. Tested with FARTCOIN, WIF, HYPE, SOL, ETH, BTC. The HL API has a 60-day candle history limit and 5,000 bars per request.</p>
             </details>
@@ -287,6 +296,36 @@
                     <div class="login-error" id="login-error"></div>
                     <button type="submit">Sign In</button>
                 </form>
+                <div style="text-align:center;margin-top:var(--space-4);font-size:var(--text-sm);color:var(--text-muted)">
+                    No account? <a href="#/signup" style="color:var(--brand);text-decoration:none">Sign up</a>
+                </div>
+                <div class="login-back"><a href="#/">← Back to home</a></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Signup Page (Coming Soon) ═══ -->
+    <div id="page-signup" class="page">
+        <div class="signup-content">
+            <div class="signup-card">
+                <div class="logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></div>
+                <h1>Coming Soon</h1>
+                <p style="font-size:var(--text-md);color:var(--text-secondary);line-height:var(--leading-relaxed);margin-bottom:var(--space-6);max-width:320px">
+                    Self-serve account creation is on the way. For now, PULS-R runs as a self-hosted instance — bring your own HyperLiquid wallet and deploy.
+                </p>
+                <div style="display:flex;gap:var(--space-3);justify-content:center;flex-wrap:wrap;margin-bottom:var(--space-6)">
+                    <a href="https://hyperliquid.xyz" target="_blank" rel="noopener" style="padding:var(--space-2) var(--space-4);border-radius:var(--radius-sm);border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-size:var(--text-sm);font-weight:var(--weight-semibold);display:inline-flex;align-items:center;gap:var(--space-2);height:36px">
+                        <svg width="18" height="18" viewBox="0 0 21 15"><path d="M20.4523 7.53888C20.471 9.21764 20.1196 10.8218 19.4292 12.3544C18.4434 14.5368 16.0799 16.3213 13.9218 14.4218C12.1616 12.8736 11.8351 9.73059 9.19798 9.27049C5.7088 8.84769 5.62483 12.8923 3.34536 13.3492C0.804661 13.8653 -0.0380915 9.59381 -0.000774032 7.65391C0.0365434 5.71401 0.552769 2.98759 2.76072 2.98759C5.30142 2.98759 5.47245 6.83318 8.69731 6.62489C11.8911 6.40728 11.947 2.40624 14.0337 0.693288C15.8343 -0.786505 17.952 0.298469 19.0125 2.07982C19.9952 3.72749 20.4274 5.66116 20.4492 7.53888H20.4523Z" fill="currentColor"/></svg>
+                        Get a HyperLiquid Wallet
+                    </a>
+                    <a href="https://metamask.io" target="_blank" rel="noopener" style="padding:var(--space-2) var(--space-4);border-radius:var(--radius-sm);border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-size:var(--text-sm);font-weight:var(--weight-semibold);display:inline-flex;align-items:center;gap:var(--space-2);height:36px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                        Get MetaMask
+                    </a>
+                </div>
+                <div style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-4)">
+                    Already have access? <a href="#/login" style="color:var(--brand);text-decoration:none">Sign in</a>
+                </div>
                 <div class="login-back"><a href="#/">← Back to home</a></div>
             </div>
         </div>
