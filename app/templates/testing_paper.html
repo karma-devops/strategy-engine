@@ -35,6 +35,30 @@
             {# Per-instance sparkline container (populated by buildSparkline in scripts block) #}
             <div id="spark-{{ inst.slug }}" data-equity="[]"></div>
             <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+            {# Per-instance action buttons — event.stopPropagation() prevents card-level navigation #}
+            <div class="fleet-actions" onclick="event.stopPropagation()" style="display:flex;gap:var(--space-1);margin-top:var(--space-2);flex-wrap:wrap;">
+                {% if inst.status == 'running' %}
+                <button class="fleet-btn btn-stop" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/stop', '{{ inst.name }}')"
+                        aria-label="Stop engine {{ inst.name }}"
+                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">⏹ Stop</button>
+                <button class="fleet-btn btn-close" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/close', '{{ inst.name }}')"
+                        aria-label="Close position for {{ inst.name }}"
+                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">✕ Close</button>
+                {% else %}
+                <button class="fleet-btn btn-start" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/start', '{{ inst.name }}')"
+                        aria-label="Start engine {{ inst.name }}"
+                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">▶ Start</button>
+                {% endif %}
+                <button class="fleet-btn btn-restart" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/restart', '{{ inst.name }}')"
+                        aria-label="Restart engine {{ inst.name }}"
+                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">↻ Restart</button>
+                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" aria-label="Edit settings for {{ inst.name }}"
+                   style="height:32px;width:32px;display:flex;align-items:center;justify-content:center;background:var(--surface-inset);border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-size:13px;flex-shrink:0;">⚙</a>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -49,6 +73,42 @@
 // API credentials + base — mirrors engines.html pattern.
 const API_KEY = "{{ api_key or '' }}";
 const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+
+// paperApiPost — fire-and-forget action on a paper engine. Reuses the
+// same endpoint as live engines, just with dry_run=true on the instance.
+// Refreshes the page after 800ms so the user sees the new status.
+function paperApiPost(path, label) {
+    fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+        .then(r => r.json())
+        .then(j => {
+            const ok = (j && j.ok);
+            showPaperToast((label || path) + ' → ' + (j.message || (ok ? 'ok' : 'failed')), ok);
+            if (ok) setTimeout(() => location.reload(), 800);
+        })
+        .catch(e => showPaperToast((label || path) + ' failed: ' + e, false));
+}
+
+// Minimal toast — uses a single fixed div created on first call.
+let _paperToast = null;
+function showPaperToast(msg, ok) {
+    if (!_paperToast) {
+        _paperToast = document.createElement('div');
+        _paperToast.setAttribute('role', 'status');
+        _paperToast.setAttribute('aria-live', 'polite');
+        Object.assign(_paperToast.style, {
+            position: 'fixed', bottom: '20px', right: '20px', zIndex: '9999',
+            padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+            fontWeight: '500', color: '#fff', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            maxWidth: '320px', opacity: '0', transition: 'opacity .15s ease-out',
+        });
+        document.body.appendChild(_paperToast);
+    }
+    _paperToast.style.background = (ok === false) ? '#dc2626' : '#08798E';
+    _paperToast.textContent = msg;
+    _paperToast.style.opacity = '1';
+    clearTimeout(_paperToast._t);
+    _paperToast._t = setTimeout(() => { _paperToast.style.opacity = '0'; }, 2200);
+}
 
 // Lightweight Charts v5.2.0 — wrapped via PulsRChart (see app/static/pulsr-chart.js)
 // Renders the paper portfolio equity curve. Live-updates every 3s.
