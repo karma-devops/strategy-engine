@@ -279,6 +279,7 @@ class Signal(Base):
     executed = Column(Boolean, default=False)
     metadata_json = Column(JSON, default=dict)
     reasoning_text = Column(Text, nullable=True)
+    dry_run = Column(Boolean, default=True)  # P14: paper vs live separation
     timestamp = Column(DateTime, default=_now_utc)
 
 
@@ -336,6 +337,7 @@ class Trade(Base):
     fee = Column(Float, default=0.0)  # total HL fees (maker + taker) for both legs
     price_diff = Column(Float, default=0.0)   # exit - entry
     signal_id = Column(String(36), nullable=True)
+    dry_run = Column(Boolean, default=True)  # P14: paper vs live separation
     timestamp = Column(DateTime, default=_now_utc)
 
 
@@ -361,6 +363,7 @@ class AccountSnapshot(Base):
     user_id = Column(String(36), nullable=True, index=True)  # owning User (multi-tenant)
     account_value = Column(Float, default=0.0)
     withdrawable = Column(Float, default=0.0)
+    dry_run = Column(Boolean, default=True)  # P14: paper vs live separation
     timestamp = Column(DateTime, default=_now_utc)
 
 
@@ -531,14 +534,15 @@ def _migrate_columns(engine):
     from sqlalchemy import inspect, text
     desired = {
         "instances": [("user_id", "VARCHAR(36)"), ("hl_credential_id", "VARCHAR(36)"), ("strategy_config", "JSON"), ("snapshot_data", "JSON"), ("snapshot_image_url", "VARCHAR(512)"), ("snapshot_at", "DATETIME")],
-        "account_snapshots": [("user_id", "VARCHAR(36)")],
+        "account_snapshots": [("user_id", "VARCHAR(36)"), ("dry_run", "BOOLEAN")],
         "backtests": [
             ("user_id", "VARCHAR(36)"),
             ("kind", "VARCHAR(16)"),
             ("is_paper", "BOOLEAN"),
         ],
         "strategies": [("parent_strategy_id", "VARCHAR(64)"), ("version", "VARCHAR(16)")],
-        "trades": [("user_id", "VARCHAR(36)")],
+        "trades": [("user_id", "VARCHAR(36)"), ("dry_run", "BOOLEAN")],
+        "signals": [("dry_run", "BOOLEAN")],
         "users": [
             ("api_key", "TEXT"),
             ("api_key_hash", "VARCHAR(64)"),
