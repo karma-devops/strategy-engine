@@ -244,3 +244,127 @@ Both `--green` (#34d399) and `--bg-1` (#FFFFFF in light) and `--text-1` (#1A1410
 - `app/templates/engine_detail.html` — most complex page (11+ chart-cards)
 - `design-system/MASTER.md` — design spec (some drift from code)
 - `backups/v101_design-system-reconcile_2026-07-16_1300/snapshot.tar.gz` — pre-DS1 backup
+
+---
+
+## Deep-Dive: Settings Page + Engine Settings Edit
+
+Operator reported an issue editing engine settings previously. This section goes deeper than the per-page walk above.
+
+### A. `/app/settings` — Account Settings (POST handler analysis)
+
+**File:** `app/routes.py` lines 868-923
+
+#### Functional Findings
+
+| # | Severity | Issue | Location | Fix |
+|---|----------|-------|----------|-----|
+| 1 | **🔴 CRITICAL** | Password stored as `hashlib.sha256(new_pw.encode()).hexdigest()` — no salt, no bcrypt, no argon2. Rainbow-table crack in seconds. | line 891-892 | Use `bcrypt` or `argon2-cffi`. Library not in `requirements.txt` — needs install. |
+| 2 | **🟡 MED** | `form.get("default_dry_run") in ("on", "true", "1", True)` — `True` is a Python bool, never matches a form string. Dead check. | line 881, 893 | Simplify to `in ("on", "true", "1")` |
+| 3 | **🟡 MED** | `saved: True` flag is set in template context (line 919) but the `settings.html` template does NOT check for it — no success toast or banner on save. | template | Add `{% if saved %}<div class="toast success">Settings saved</div>{% endif %}` |
+| 4 | **🟡 MED** | `start_balance = float(form.get(...))` silently catches `ValueError` (line 877-880). If operator types `abc`, nothing happens, no error feedback. | line 877-880 | Validate explicitly: try/except → return 400 with message |
+| 5 | **🟢 LOW** | Email field accepts any string (line 884). No format validation. | line 884 | Add `@` check |
+| 6 | **🟢 LOW** | `withdrawal_eth_address` accepts any string (line 895). No 0x prefix check. | line 895 | Validate `^0x[a-fA-F0-9]{40}$` |
+| 7 | **🟢 LOW** | 2FA checkbox is a boolean but no 2FA flow is implemented anywhere. Setting it to `True` does nothing functional. | line 893 | Either implement 2FA or remove the field |
+
+#### Design Findings
+
+- **Form sections (PROFILE, SECURITY, TRADING, WALLET, PLAN & BILLING) are h2s without card containers** — same `.chart-card` bug applies. Form will be visually flat.
+- **16-emoji avatar radio grid has no `aria-label`** — accessibility fail. Each radio should have `aria-label="Avatar {emoji}"`.
+- **Save Settings button is at the bottom of a long form** — no "sticky save bar" (F12 mentioned in CONTEXT §"UX Overhaul" but not visible here).
+- **No "Cancel" or "Discard" button** — operator can't back out without refreshing the page.
+- **No visual feedback that the password field is being updated** — operator can't tell if their password was actually changed.
+
+### B. `/app/engines/{slug}` — Engine Settings Modal
+
+**File:** `app/templates/engine_detail.html` lines 304-757 (form + JS) · `api/instances.py` lines 318-337 (PUT handler)
+
+#### Modal Design (lines 6-20 inline CSS)
+
+- ✅ Clean modal overlay (rgba black 0.55)
+- ✅ Card surface uses `var(--surface-card)` + border + radius
+- ✅ Input height: 36px (matches spec)
+- ✅ Focus ring: `outline: 2px solid var(--brand)` (uses brand, not broken --input-focus)
+- ✅ Read-only fields in `.modal-readonly` block (Activation/Offset/Poll/Mode) — good UX
+- ⚠️ `.modal-field label` uses `--text-xs` 10px uppercase — readable but very small
+- ⚠️ No validation feedback inline — operator types a value, hits Save, no preview of "this is what'll change"
+
+#### Save Flow (lines 705-757)
+
+```
+saveSettings(e)
+  → PUT /api/v2/instances/{slug} with body
+  → if ok: PUT /api/v2/instances/{slug}/strategy-config with collected [data-param] values
+  → toast success → closeSettings() → refresh()
+```
+
+**Functional bugs in the JS:**
+
+| # | Severity | Issue | Line | Fix |
+|---|----------|-------|------|-----|
+| 1 | **🟡 MED** | `parseInt(...) \|\| 1` for leverage — typing `0` silently becomes `1`. No min/max validation. | 712 | Add min/max attrs + check: `const v = parseInt(...); if (isNaN(v) \|\| v < 1 \|\| v > 50) { showToast('Leverage 1-50', 'error'); return; }` |
+| 2 | **🟡 MED** | `max_position_pct: ... / 100` — assumes operator enters 97 for 97%. Unit not documented in label. | 713 | Update label: `Max Position (% of account, e.g. 97)` |
+| 3 | **🟡 MED** | `dry_run` toggle sends immediately even if engine is `running`. The change saves to DB but **the running runner doesn't pick it up** without restart. Operator gets false feedback. | 714 | If `inst.status === "running" && dry_run changed`: `showToast('Stop engine to change dry_run', 'warning'); return;` |
+| 4 | **🟢 LOW** | If PUT 1 fails AND strategy_config had values, the operator sees "Save error" but the form is still populated with old values. No clear retry path. | 740-755 | Disable form, show "Retrying…" spinner |
+| 5 | **🟢 LOW** | No loading state on Save button — operator can click Save multiple times, firing duplicate PUTs. | — | `button.disabled = true` while in flight |
+
+#### PUT Handler (`api/instances.py:318-337`)
+
+```python
+@router.put("/instances/{instance_id}")
+def update_instance(...):
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        if key == "hyperliquid_private_key" and value:
+            inst.set_private_key(value)
+        elif key in {"account_address", "withdrawal_address"} and value:
+            setattr(inst, key, value)
+        elif hasattr(inst, key):
+            setattr(inst, key, value)
+    db.commit()
+    return {"ok": True, "message": f"Updated {inst.slug}"}
+```
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | **🔴 HIGH** | `hasattr(inst, key)` lets through ANY attribute — `user_id`, `id`, `created_at`, `api_key`, etc. Auth bypass risk if operator sends the right payload. | Whitelist allowed fields: `{"name", "token", "strategy_id", "timeframe", "leverage", "max_position_pct", "dry_run", "start_balance", "activation", "offset", "hl_credential_id", "hyperliquid_private_key", "account_address", "withdrawal_address", "poll_interval"}` |
+| 2 | **🟡 MED** | No validation of `leverage` (can be 0, negative, or 1000) | Add `1 <= payload.leverage <= 50` check |
+| 3 | **🟡 MED** | No validation of `max_position_pct` (can be > 1.0 = 100%) | Add `0 < payload.max_position_pct <= 1.0` |
+| 4 | **🟡 MED** | No validation of `token` (must be valid HL token, not random string) | Verify against `meta_and_asset_ctxs` or `/api/v2/metadata` |
+| 5 | **🟢 LOW** | Returns `{"ok": True}` — no payload of what was actually saved. UI can't show "Saved: leverage=3x, dry_run=false" | Return `{ok: True, saved: {field: value, ...}}` |
+| 6 | **🟢 LOW** | No audit log — operator changes dry_run on running engine, no record in DB | Add `AuditLog` row on every PUT |
+
+#### Strategy Config PUT (`api/instances.py:340`)
+
+Different endpoint (`/strategy-config`), likely has its own validation. **Not audited this pass** — would need a separate review.
+
+### C. Recommended Fix Sequence (Settings + Engine Edit)
+
+| Phase | Fix | Effort | Risk |
+|---|---|---|---|
+| **DS15** | Whitelist allowed fields in `update_instance` (security) | 15 min | low — additive guard |
+| **DS16** | Add `leverage` and `max_position_pct` validation in `update_instance` | 15 min | low |
+| **DS17** | Replace SHA256 password with bcrypt in `settings_app_save` | 30 min | medium — needs `bcrypt` install, migration of existing hash |
+| **DS18** | Add `saved: True` success banner to `settings.html` | 10 min | low |
+| **DS19** | Fix `saveSettings()` JS — add min/max validation, dry-run-stop-first guard, disable-during-save | 30 min | low |
+| **DS20** | Add `aria-label` to 16 avatar emojis in Settings | 5 min | low |
+| **DS21** | Add `is_running` check in `update_instance` PUT for dry_run changes | 15 min | low |
+
+**Total: ~2 hours** to bring both Settings and Engine Edit to a safe + clear state.
+
+### D. Why the operator hit an issue editing engine settings
+
+Based on the code, the most likely failure mode is:
+1. Operator opens engine settings modal
+2. Changes `dry_run` toggle
+3. Clicks Save
+4. PUT to `/api/v2/instances/{slug}` succeeds (DB updated)
+5. PUT to `/strategy-config` succeeds (no values, returns ok)
+6. Toast: "Settings saved" ✓
+7. Modal closes, page refreshes
+8. **But the engine is still running with the OLD dry_run** — runner doesn't read DB dynamically for dry_run; it has the value at instantiation
+9. Operator sees the **same status** (running) and **same behavior** → thinks "Save didn't work"
+
+**This is a real UX bug.** The fix is either (a) auto-stop+restart on dry_run change, or (b) clear warning "Dry run changes take effect on next engine restart."
