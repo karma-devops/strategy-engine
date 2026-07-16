@@ -490,6 +490,14 @@
         .mobile-nav { display: none; }
         @media (max-width: 768px) {
             .sidebar { display: none; }
+            /* Lean mobile topbar — hide clock + status pill, keep only icons */
+            .topbar-clock { display: none; }
+            .status-pill { display: none; }
+            .topbar { padding: 0 var(--space-2); height: 44px; }
+            .topbar-icon-btn { width: 36px; height: 36px; }
+            .topbar-icon-btn svg { width: 18px; height: 18px; }
+            .topbar-avatar { width: 28px; height: 28px; font-size: var(--text-xs); }
+            .topbar-title { font-size: var(--text-sm); }
             .mobile-nav {
                 display: flex; position: fixed; bottom: 0; left: 0; right: 0;
                 background: var(--surface-card); border-top: 1px solid var(--border-subtle);
@@ -782,6 +790,7 @@
                                 <div class="user-dropdown-info">
                                     <div class="user-dropdown-name">Karma</div>
                                     <div class="user-dropdown-email">{{ email | default('karmaworks.asia@gmail.com') }}</div>
+                                    <div class="user-dropdown-clock" id="dropdown-clock" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:2px;font-family:var(--font-mono);"></div>
                                 </div>
                             </div>
                             <div class="user-dropdown-body">
@@ -941,6 +950,13 @@
         function updateClock() {
             const el = document.getElementById('clock');
             if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+            const dropdownEl = document.getElementById('dropdown-clock');
+            if (dropdownEl) {
+                const now = new Date();
+                const time = now.toLocaleTimeString('en-US', { hour12: false });
+                const date = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                dropdownEl.textContent = date + ' · ' + time;
+            }
         }
         updateClock(); setInterval(updateClock, 1000);
 
