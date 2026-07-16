@@ -98,22 +98,28 @@ class EngineV6_1Strategy(BaseStrategy):
 
     @classmethod
     def get_parameters(cls):
-        """Declare configurable parameters (Pine input.* equivalent)."""
+        """Declare configurable parameters (Pine input.* equivalent).
+
+        Per operator directive (2026-07-16): no min/max/step bounds. Trust the
+        type — int, float, or bool — and let the strategy decide what to do
+        with the value. Browser HTML5 type=number still prevents non-numeric
+        input, but no upper/lower validation blocks the submit.
+        """
         return [
             {"name": "engine_mode", "type": "select", "default": "Scalp", "options": ["Swing", "Scalp"], "label": "Engine Mode"},
             {"name": "risk_profile", "type": "select", "default": "Manual", "options": ["Manual", "Sniper", "Aggressive"], "label": "Risk Profile"},
-            {"name": "risk_per_trade_pct", "type": "float", "default": 97.0, "min": 10.0, "max": 100.0, "step": 1.0, "label": "Risk % Per Trade"},
-            {"name": "atr_mult_input", "type": "float", "default": 1.8, "min": 0.5, "max": 3.0, "step": 0.1, "label": "ATR Multiplier"},
-            {"name": "atr_mult_guard", "type": "float", "default": 0.9, "min": 0.3, "max": 2.0, "step": 0.1, "label": "ATR Guard Multiplier"},
-            {"name": "growth_target_x", "type": "float", "default": 50.0, "min": 2.0, "max": 200.0, "step": 5.0, "label": "Growth Target (x)"},
+            {"name": "risk_per_trade_pct", "type": "float", "default": 97.0, "label": "Risk % Per Trade"},
+            {"name": "atr_mult_input", "type": "float", "default": 1.8, "label": "ATR Multiplier"},
+            {"name": "atr_mult_guard", "type": "float", "default": 0.9, "label": "ATR Guard Multiplier"},
+            {"name": "growth_target_x", "type": "float", "default": 50.0, "label": "Growth Target (x)"},
             {"name": "use_momentum", "type": "bool", "default": True, "label": "Use Momentum Filter"},
-            {"name": "momentum_thresh", "type": "int", "default": 18, "min": 5, "max": 50, "label": "Momentum Threshold"},
+            {"name": "momentum_thresh", "type": "int", "default": 18, "label": "Momentum Threshold"},
             {"name": "trade_direction", "type": "select", "default": "Both", "options": ["Both", "Long Only", "Short Only"], "label": "Trade Direction"},
-            {"name": "man_activation", "type": "int", "default": 18, "min": 2, "max": 100, "label": "Trail Activation (ticks)"},
-            {"name": "man_offset", "type": "int", "default": 6, "min": 1, "max": 50, "label": "Trail Offset (ticks)"},
-            {"name": "aggressive_drawdown_threshold", "type": "float", "default": 0.10, "min": 0.01, "max": 0.50, "step": 0.01, "label": "Aggressive Drawdown Threshold"},
-            {"name": "aggressive_multiplier", "type": "float", "default": 1.20, "min": 0.5, "max": 2.0, "step": 0.05, "label": "Aggressive Multiplier"},
-            {"name": "peak_protect_multiplier", "type": "float", "default": 0.30, "min": 0.1, "max": 1.0, "step": 0.05, "label": "Peak Protect Multiplier"},
+            {"name": "man_activation", "type": "int", "default": 18, "label": "Trail Activation (ticks)"},
+            {"name": "man_offset", "type": "int", "default": 6, "label": "Trail Offset (ticks)"},
+            {"name": "aggressive_drawdown_threshold", "type": "float", "default": 0.10, "label": "Aggressive Drawdown Threshold"},
+            {"name": "aggressive_multiplier", "type": "float", "default": 1.20, "label": "Aggressive Multiplier"},
+            {"name": "peak_protect_multiplier", "type": "float", "default": 0.30, "label": "Peak Protect Multiplier"},
         ]
 
     @classmethod

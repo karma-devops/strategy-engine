@@ -382,10 +382,10 @@
                         </select>
                         {% elif p.type == 'int' %}
                         <input id="sp-{{ p.name }}" name="sp_{{ p.name }}" type="number" data-param="{{ p.name }}" data-type="int"
-                               min="{{ p.min or '' }}" max="{{ p.max or '' }}" value="{{ strategy_config.get(p.name, p.default) }}">
+                               value="{{ strategy_config.get(p.name, p.default) }}">
                         {% elif p.type == 'float' %}
-                        <input id="sp-{{ p.name }}" name="sp_{{ p.name }}" type="number" step="{{ p.step or '0.1' }}" data-param="{{ p.name }}" data-type="float"
-                               min="{{ p.min or '' }}" max="{{ p.max or '' }}" value="{{ strategy_config.get(p.name, p.default) }}">
+                        <input id="sp-{{ p.name }}" name="sp_{{ p.name }}" type="number" step="any" data-param="{{ p.name }}" data-type="float"
+                               value="{{ strategy_config.get(p.name, p.default) }}">
                         {% endif %}
                         {% if p.group %}<span class="modal-hint">{{ p.group }}</span>{% endif %}
                     </div>
@@ -716,6 +716,9 @@
             hl_credential_id: document.getElementById('s-hlcred').value || null,
         };
         // Collect strategy parameters (Port 1: strategy_config)
+        // Per operator directive (2026-07-16): trust the type, no bounds.
+        // Empty fields are skipped (server keeps existing value). Unparseable
+        // values are skipped (operator can fix the field before saving).
         const strategyConfig = {};
         document.querySelectorAll('[data-param]').forEach(el => {
             const name = el.dataset.param;
@@ -723,9 +726,15 @@
             if (type === 'bool') {
                 strategyConfig[name] = el.value === 'true';
             } else if (type === 'int') {
-                strategyConfig[name] = parseInt(el.value) || 0;
+                if (el.value === '') return;
+                const v = parseInt(el.value, 10);
+                if (Number.isNaN(v)) return;
+                strategyConfig[name] = v;
             } else if (type === 'float') {
-                strategyConfig[name] = parseFloat(el.value) || 0;
+                if (el.value === '') return;
+                const v = parseFloat(el.value);
+                if (Number.isNaN(v)) return;
+                strategyConfig[name] = v;
             } else {
                 strategyConfig[name] = el.value;
             }

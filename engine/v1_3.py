@@ -46,6 +46,13 @@ class EngineV1_3Strategy(BaseStrategy):
 
     @classmethod
     def get_parameters(cls) -> list[dict]:
+        """Declare configurable parameters (Pine input.* equivalent).
+
+        Per operator directive (2026-07-16): no min/max/step bounds. Trust the
+        type — int, float, or bool — and let the strategy decide what to do
+        with the value. Browser HTML5 type=number still prevents non-numeric
+        input, but no upper/lower validation blocks the submit.
+        """
         return [
             {"name": "engine_mode", "label": "Engine Mode", "type": "select",
              "options": ["Swing", "Scalp"], "default": "Swing", "group": "Configuration"},
@@ -53,29 +60,29 @@ class EngineV1_3Strategy(BaseStrategy):
              "options": list(cls._PROFILES.keys()),
              "default": "Scalp Default (10/4)", "group": "Risk Management"},
             {"name": "risk_per_trade_pct", "label": "Risk % Per Trade", "type": "float",
-             "min": 50.0, "max": 100.0, "step": 1.0, "default": 97.0, "group": "Risk Management"},
+             "default": 97.0, "group": "Risk Management"},
             {"name": "atr_mult_input", "label": "Stop Loss Base (x ATR)", "type": "float",
-             "min": 0.5, "max": 3.0, "step": 0.1, "default": 1.8, "group": "Risk Management"},
+             "default": 1.8, "group": "Risk Management"},
             {"name": "atr_mult_guard", "label": "Stop Loss Guard (x ATR)", "type": "float",
-             "min": 0.5, "max": 2.0, "step": 0.1, "default": 0.9, "group": "Risk Management"},
+             "default": 0.9, "group": "Risk Management"},
             {"name": "growth_target_x", "label": "Hyper-Growth Target (x)", "type": "float",
-             "min": 1.1, "step": 0.5, "default": 50.0, "group": "Hyper-Growth Protocol"},
+             "default": 50.0, "group": "Hyper-Growth Protocol"},
             {"name": "use_momentum", "label": "Exploit Momentum Entry?", "type": "bool",
              "default": True, "group": "Hyper-Growth Protocol"},
             {"name": "momentum_thresh", "label": "Momentum Threshold (ADX)", "type": "int",
-             "min": 10, "max": 40, "default": 18, "group": "Hyper-Growth Protocol"},
+             "default": 18, "group": "Hyper-Growth Protocol"},
             {"name": "use_fixed_tp", "label": "Use Fixed Take-Profit?", "type": "bool",
              "default": False, "group": "Scalp Features"},
             {"name": "tp_multiplier", "label": "TP Multiplier (x ATR)", "type": "float",
-             "min": 1.0, "max": 5.0, "step": 0.1, "default": 1.5, "group": "Scalp Features"},
+             "default": 1.5, "group": "Scalp Features"},
             {"name": "use_time_exit", "label": "Use Time-Based Exit?", "type": "bool",
              "default": False, "group": "Scalp Features"},
             {"name": "max_bars_in_trade", "label": "Max Bars In Trade", "type": "int",
-             "min": 5, "max": 100, "default": 20, "group": "Scalp Features"},
+             "default": 20, "group": "Scalp Features"},
             {"name": "use_volume_confirm", "label": "Require Volume Confirmation?", "type": "bool",
              "default": False, "group": "Filters"},
             {"name": "volume_lookback", "label": "Volume SMA Length", "type": "int",
-             "min": 5, "max": 100, "default": 20, "group": "Filters"},
+             "default": 20, "group": "Filters"},
             {"name": "trade_direction", "label": "Trade Direction", "type": "select",
              "options": ["Both", "Long Only", "Short Only"], "default": "Both", "group": "Filters"},
         ]
