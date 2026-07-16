@@ -228,6 +228,14 @@ html, body {
 .stat-value.positive { color: var(--green); }
 .stat-value.negative { color: var(--red); }
 
+/* B.7 — Global PnL color: applies wherever a bare .positive / .negative
+   class is used (paper trading fleet-row, KPI deltas, etc.). Uses the
+   modern --color-profit / --color-loss tokens (emerald-600, coral-500)
+   so the shade is consistent across the entire app, not just the
+   --green legacy alias. */
+.positive { color: var(--color-profit); }
+.negative { color: var(--color-loss); }
+
 /* --- Card --- */
 .card {
     background: var(--bg-1);
