@@ -14,12 +14,17 @@ router = APIRouter()
 
 @router.get("/metrics")
 @limiter.limit(READ_LIMIT)
-def get_metrics(request: Request, db: Session = Depends(get_db)):
-    total_signals = db.query(Signal).count()
-    buy_signals = db.query(Signal).filter(Signal.direction == "BUY").count()
-    sell_signals = db.query(Signal).filter(Signal.direction == "SELL").count()
+def get_metrics(request: Request, dry_run: bool = None, db: Session = Depends(get_db)):
+    q_signals = db.query(Signal)
+    q_trades = db.query(Trade)
+    if dry_run is not None:
+        q_signals = q_signals.filter(Signal.dry_run == dry_run)
+        q_trades = q_trades.filter(Trade.dry_run == dry_run)
+    total_signals = q_signals.count()
+    buy_signals = q_signals.filter(Signal.direction == "BUY").count()
+    sell_signals = q_signals.filter(Signal.direction == "SELL").count()
 
-    trades = db.query(Trade).all()
+    trades = q_trades.all()
     realized_pnl = sum(t.pnl_usd for t in trades)
     winning_trades = [t for t in trades if t.pnl_usd > 0]
     losing_trades = [t for t in trades if t.pnl_usd <= 0]
@@ -52,14 +57,12 @@ def get_metrics(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/metrics/account")
 @limiter.limit(READ_LIMIT)
-def get_account_snapshots(request: Request, db: Session = Depends(get_db)):
-    """Return account snapshots for the Pulse Graph and hero stats."""
-    snapshots = (
-        db.query(AccountSnapshot)
-        .order_by(AccountSnapshot.timestamp.asc())
-        .limit(500)
-        .all()
-    )
+def get_account_snapshots(request: Request, dry_run: bool = None, db: Session = Depends(get_db)):
+    """Return account snapshots for the Pulse Graph and hero stats. Filter by dry_run if provided."""
+    q = db.query(AccountSnapshot)
+    if dry_run is not None:
+        q = q.filter(AccountSnapshot.dry_run == dry_run)
+    snapshots = q.order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
     active = db.query(Instance).filter(Instance.status == "running").count()
     total_instances = db.query(Instance).count()
     latest = snapshots[-1] if snapshots else None

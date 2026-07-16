@@ -371,16 +371,13 @@ def close_instance_position(request: Request, instance_id: str, db: Session = De
 
 @router.get("/instances/{instance_id}/trades")
 @limiter.limit(READ_LIMIT)
-def get_trades(request: Request, instance_id: str, limit: int = 50, db: Session = Depends(get_db)):
-    """Get trade history for an instance, most recent first."""
+def get_trades(request: Request, instance_id: str, limit: int = 50, dry_run: bool = None, db: Session = Depends(get_db)):
+    """Get trade history for an instance, most recent first. Filter by dry_run if provided."""
     from instances.models import Trade
-    rows = (
-        db.query(Trade)
-        .filter(Trade.instance_id == instance_id)
-        .order_by(Trade.timestamp.desc())
-        .limit(limit)
-        .all()
-    )
+    q = db.query(Trade).filter(Trade.instance_id == instance_id)
+    if dry_run is not None:
+        q = q.filter(Trade.dry_run == dry_run)
+    rows = q.order_by(Trade.timestamp.desc()).limit(limit).all()
     return {
         "ok": True,
         "trades": [
@@ -395,6 +392,7 @@ def get_trades(request: Request, instance_id: str, limit: int = 50, db: Session 
                 "price_diff": t.price_diff,
                 "entry_cost": t.entry_cost,
                 "exit_cost": t.exit_cost,
+                "dry_run": t.dry_run,
                 "timestamp": t.timestamp.isoformat() if t.timestamp else None,
             }
             for t in rows
@@ -404,15 +402,13 @@ def get_trades(request: Request, instance_id: str, limit: int = 50, db: Session 
 
 @router.get("/trades")
 @limiter.limit(READ_LIMIT)
-def get_all_trades(request: Request, limit: int = 50, db: Session = Depends(get_db)):
-    """Get recent trades across all instances, most recent first."""
+def get_all_trades(request: Request, limit: int = 50, dry_run: bool = None, db: Session = Depends(get_db)):
+    """Get recent trades across all instances, most recent first. Filter by dry_run if provided."""
     from instances.models import Trade
-    rows = (
-        db.query(Trade)
-        .order_by(Trade.timestamp.desc())
-        .limit(limit)
-        .all()
-    )
+    q = db.query(Trade)
+    if dry_run is not None:
+        q = q.filter(Trade.dry_run == dry_run)
+    rows = q.order_by(Trade.timestamp.desc()).limit(limit).all()
     return {
         "ok": True,
         "trades": [
@@ -426,6 +422,7 @@ def get_all_trades(request: Request, limit: int = 50, db: Session = Depends(get_
                 "pnl_usd": t.pnl_usd,
                 "pnl_pct": t.pnl_pct,
                 "price_diff": t.price_diff,
+                "dry_run": t.dry_run,
                 "timestamp": t.timestamp.isoformat() if t.timestamp else None,
             }
             for t in rows
