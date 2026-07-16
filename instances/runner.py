@@ -69,12 +69,12 @@ class InstanceRunner:
     # ------------------------------------------------------------------
     def _loop(self):
         print(f"[RUNNER {self.id}] Started for {self.instance.token}")
-        add_log(f"[RUNNER {self.id}] Started for {self.instance.token}", "info")
+        add_log(f"[RUNNER {self.id}] Started for {self.instance.token}", "info", dry_run=self.instance.dry_run)
 
         strategy_class = get_strategy(self.instance.strategy_id)
         if not strategy_class:
             print(f"[RUNNER {self.id}] Unknown strategy {self.instance.strategy_id}")
-            add_log(f"Unknown strategy {self.instance.strategy_id}", "error")
+            add_log(f"Unknown strategy {self.instance.strategy_id}", "error", dry_run=self.instance.dry_run)
             self.instance.status = "error"
             self._persist_status(self.instance, "error")
             return
@@ -90,11 +90,11 @@ class InstanceRunner:
             except Exception as e:
                 print(f"[RUNNER {self.id}] Tick error: {e}")
                 traceback.print_exc()
-                add_log(f"Tick error in {self.instance.token}: {e}", "error")
+                add_log(f"Tick error in {self.instance.token}: {e}", "error", dry_run=self.instance.dry_run)
             self._stop_event.wait(self.instance.poll_interval_seconds)
 
         print(f"[RUNNER {self.id}] Stopped")
-        add_log(f"[RUNNER {self.id[:8]}] Stopped for {self.instance.token}", "info")
+        add_log(f"[RUNNER {self.id[:8]}] Stopped for {self.instance.token}", "info", dry_run=self.instance.dry_run)
 
     def _tick(self, strategy, hl):
         db = Session()
@@ -106,7 +106,7 @@ class InstanceRunner:
                 bars=100,
             )
             if df.empty:
-                add_log(f"[RUNNER {self.id}] No candles for {self.instance.token}", "warn")
+                add_log(f"[RUNNER {self.id}] No candles for {self.instance.token}", "warn", dry_run=self.instance.dry_run)
                 return
 
             # Generate signal
@@ -173,7 +173,7 @@ class InstanceRunner:
                     f"[{self.instance.token}] ADOPTED POS {current_side} "
                     f"{adopt_size:.4f}@{float(position.get('entryPx', 0)):.6f} | "
                     f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
-                    "trade",
+                    "trade", dry_run=self.instance.dry_run,
                 )
             elif current_side and self._active_trade and current_side != self._active_trade["side"]:
                 # Side flipped externally — adopt new side with current signal's exit_config
@@ -267,7 +267,7 @@ class InstanceRunner:
                         add_log(
                             f"[{self.instance.token}] ENTRY {desired_side} @ {entry_px:.6f} | "
                             f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
-                            "trade",
+                            "trade", dry_run=self.instance.dry_run,
                         )
                         trade_active = True
                         self._last_entry_bar_time = current_bar_time
@@ -327,7 +327,7 @@ class InstanceRunner:
                                     add_log(
                                         f"[{self.instance.token}] RE-ENTRY {desired_side} @ {entry_px:.6f} (reversal from {exit_reason}) | "
                                         f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
-                                        "trade",
+                                        "trade", dry_run=self.instance.dry_run,
                                     )
                                     trade_active = True
 
@@ -354,10 +354,10 @@ class InstanceRunner:
             state_label = "IN TRADE" if trade_active else "IDLE"
             add_log(
                 f"[{self.instance.token}] {direction} signal (strength={signal_val:.2f}) | {state_label}",
-                "signal" if direction != "NEUTRAL" else "info",
+                "signal" if direction != "NEUTRAL" else "info", dry_run=self.instance.dry_run,
             )
             if reasoning_text:
-                add_log(f"[{self.instance.token}] reasoning: {reasoning_text}", "info")
+                add_log(f"[{self.instance.token}] reasoning: {reasoning_text}", "info", dry_run=self.instance.dry_run)
 
             # Persist position snapshot
             self._sync_position(db, position, current_side)
@@ -467,7 +467,7 @@ class InstanceRunner:
         # as an early bail for zero/negative values.
         max_notional = account_value * self.instance.leverage * self.instance.max_position_pct
         if max_notional <= 0:
-            add_log(f"[{self.instance.token}] Position limit blocks {desired_side}: no notional allowance", "warn")
+            add_log(f"[{self.instance.token}] Position limit blocks {desired_side}: no notional allowance", "warn", dry_run=self.instance.dry_run)
             return False, 0.0
 
         notional = PositionSizer.notional_from_free_balance(
@@ -476,7 +476,7 @@ class InstanceRunner:
             self.instance.max_position_pct,
         )
         if notional <= 0:
-            add_log(f"[RUNNER {self.id}] Insufficient balance to open {desired_side}", "warn")
+            add_log(f"[RUNNER {self.id}] Insufficient balance to open {desired_side}", "warn", dry_run=self.instance.dry_run)
             return False, 0.0
 
         # Bug #1 fix: generate cloid once so retries get the same id
@@ -497,7 +497,7 @@ class InstanceRunner:
         add_log(
             f"[{self.instance.token}] {'[DRY RUN] ' if dr else ''}OPEN {desired_side} ${notional:.2f} "
             f"cost=${entry_cost:.4f} (ok={open_result is not None})",
-            "trade",
+            "trade", dry_run=self.instance.dry_run,
         )
         event_bus.emit(
             {
@@ -539,7 +539,7 @@ class InstanceRunner:
             add_log(
                 f"[RUNNER {self.id}] exit_cost fallback: using entry_cost ${self._active_trade['entry_cost']:.4f} "
                 f"→ estimated notional ${notional:.2f}",
-                "warn",
+                "warn", dry_run=self.instance.dry_run,
             )
         exit_cost = notional * 0.00035  # taker fee estimate
 
@@ -552,7 +552,7 @@ class InstanceRunner:
         add_log(
             f"[{self.instance.token}] {'[DRY RUN] ' if dr else ''}CLOSE {current_side} reason={exit_reason} "
             f"cost=${exit_cost:.4f} (ok={close_result is not None})",
-            "trade",
+            "trade", dry_run=self.instance.dry_run,
         )
         event_bus.emit(
             {
@@ -608,7 +608,7 @@ class InstanceRunner:
         )
         db.add(trade)
         db.commit()
-        add_log(f"[{self.instance.token}] Trade closed: {reason} | {side} {size:.4f} PnL=${pnl:.4f}", "info")
+        add_log(f"[{self.instance.token}] Trade closed: {reason} | {side} {size:.4f} PnL=${pnl:.4f}", "info", dry_run=self.instance.dry_run)
 
     def _evaluate_exit(
         self,
@@ -730,7 +730,7 @@ class InstanceRunner:
                 add_log(
                     f"[{self.instance.token}] Skipping anomalous account snapshot: "
                     f"${account_value:.2f} vs last ${self._last_good_account_value:.2f} (ratio={ratio:.2f})",
-                    "warn",
+                    "warn", dry_run=self.instance.dry_run,
                 )
                 return
         # Record good values

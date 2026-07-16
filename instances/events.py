@@ -33,11 +33,12 @@ LOG_BUFFER = deque(maxlen=200)
 MAX_LOGS = 200
 
 
-def add_log(message: str, level: str = "info"):
+def add_log(message: str, level: str = "info", dry_run: bool = None):
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "message": message,
         "level": level,
+        "dry_run": dry_run,
     }
     LOG_BUFFER.append(entry)
     event_bus.emit({"type": "log", "log": entry})

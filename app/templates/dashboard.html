@@ -393,7 +393,11 @@
             if (sseDot) sseDot.className = 'sse-dot live';
             try {
                 const e = JSON.parse(ev.data);
-                if (e.type === 'log') addConsole(e.log.level || 'info', e.log.message);
+                if (e.type === 'log') {
+                    // P14f: dashboard shows only LIVE logs (dry_run=false)
+                    if (e.log.dry_run === true) return;
+                    addConsole(e.log.level || 'info', e.log.message);
+                }
                 else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
                 else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
                 else if (e.type === 'ping') { /* keepalive */ }
