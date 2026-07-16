@@ -32,8 +32,8 @@
              style="cursor:pointer;">
             <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}" id="status-{{ inst.slug }}" data-status="{{ inst.status }}">{{ inst.status }}</span></div>
             <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
-            {# Per-instance sparkline container (populated by buildSparkline in scripts block) #}
-            <div id="spark-{{ inst.slug }}" data-equity="[]"></div>
+            {# Per-instance sparkline container — populated by PulsRChart.createSparkline #}
+            <div id="spark-{{ inst.slug }}" data-equity='{{ inst.equity | default([]) | tojson }}' style="width:100%;height:36px;margin:var(--space-1) 0;"></div>
             <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
             {# Per-instance action buttons — event.stopPropagation() prevents card-level navigation #}
             <div class="fleet-actions" onclick="event.stopPropagation()" style="display:flex;gap:var(--space-2);margin-top:var(--space-3);flex-wrap:wrap;">
@@ -158,6 +158,19 @@ const paperChart = (typeof PulsRChart !== 'undefined')
 if (paperChart) {
     paperChart.setData(equityData);
 }
+
+// B.9 — Per-engine sparklines. Each fleet card has a #spark-{slug} div
+// with data-equity='[...]' (JSON array of {time, value} from the route).
+// PulsRChart.createSparkline renders a tiny LWC line chart (no axes).
+document.querySelectorAll('[id^="spark-"]').forEach(function(el) {
+    var raw = el.getAttribute('data-equity') || '[]';
+    var data;
+    try { data = JSON.parse(raw); } catch (e) { data = []; }
+    if (data && data.length >= 2 && typeof PulsRChart !== 'undefined') {
+        var spark = PulsRChart.createSparkline(el, { height: 36, width: el.clientWidth || 200 });
+        if (spark) spark.setData(data);
+    }
+});
 
 // Live update via /api/v2/instances summary (3s poll) — re-render last point
 let lastEquityValue = (equityData && equityData.length) ? parseFloat(equityData[equityData.length - 1].value) : null;

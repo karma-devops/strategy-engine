@@ -78,29 +78,32 @@ class InstanceManager:
             return True
 
     def stop_instance(self, instance_id: str) -> bool:
+        """Stop a runner and/or clear a zombie DB status.
+
+        If the in-memory runner is gone (e.g. thread crashed), the API call
+        still falls back to resetting the DB status to stopped so the UI
+        and CLI don't trust a dead engine.
+        """
         with self._lock:
             runner = self._runners.pop(instance_id, None)
-            if not runner:
-                return False
-            runner.stop()
-            self._persist_status(runner.instance, "stopped")
-            return True
-
-    def stop_instance_by_slug(self, slug: str) -> bool:
-        """Stop a runner by slug; also updates DB status even if no runner exists."""
-        with self._lock:
-            runner = self._runners.pop(slug, None)
             if runner:
                 runner.stop()
+                self._persist_status(runner.instance, "stopped")
+                return True
+            # Fallback: runner thread is gone but DB still says running (zombie)
             db = Session()
             try:
-                inst = db.query(Instance).filter(Instance.slug == slug).first()
+                inst = db.query(Instance).filter(Instance.slug == instance_id).first()
                 if inst and inst.status == "running":
                     inst.status = "stopped"
                     db.commit()
             finally:
                 db.close()
             return True
+
+    def stop_instance_by_slug(self, slug: str) -> bool:
+        """Alias that guarantees DB status is cleared."""
+        return self.stop_instance(slug)
 
     def stop_all(self):
         """Stop every running engine."""
@@ -233,16 +236,19 @@ def seed_default_fleet():
                 db.add(inst)
                 created_or_updated.append(("created", inst.slug))
             else:
-                # Ensure fleet metadata stays aligned; preserve credentials/status
+                # Ensure fleet metadata stays aligned for NEW fields; preserve
+                # operator-edited fields (timeframe, leverage, max_position_pct, etc.)
+                # so UI changes survive a server restart.
                 inst.name = preset["name"]
                 inst.token = preset["token"]
                 inst.strategy_id = preset["strategy_id"]
                 inst.mode = preset["mode"]
                 inst.profile = preset["profile"]
-                inst.timeframe = preset["timeframe"]
-                inst.leverage = preset["leverage"]
-                inst.max_position_pct = preset["max_position_pct"]
-                inst.poll_interval_seconds = preset["poll_interval_seconds"]
+                # DO NOT overwrite operator-edited config across fleet sync
+                # inst.timeframe = preset["timeframe"]
+                # inst.leverage = preset["leverage"]
+                # inst.max_position_pct = preset["max_position_pct"]
+                # inst.poll_interval_seconds = preset["poll_interval_seconds"]
                 if inst.user_id is None:
                     inst.user_id = operator.id
                 # NOTE: do NOT overwrite inst.dry_run here — preserve operator's DB setting

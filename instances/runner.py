@@ -132,11 +132,21 @@ class InstanceRunner:
 
             # Sync position from exchange (source of truth)
             position = hl.get_position(self.instance.token)
+            if position is None and hl.has_credentials:
+                # Runner's HL client may have a stale HTTP connection in the
+                # daemon thread. Create a fresh Info query to bypass it.
+                try:
+                    from core.exchange import HyperLiquidClient
+                    _fresh = HyperLiquidClient(
+                        private_key=None,  # falls back to config env
+                        account_address=self.instance.get_account_address(),
+                        dry_run=self.instance.dry_run,
+                    )
+                    position = _fresh.get_position(self.instance.token)
+                except Exception:
+                    pass
             current_side = self._derive_side(position)
             trade_active = bool(current_side)
-
-            # Update instance position cache
-            self._update_position_cache(position, current_side)
 
             # Reconcile local active-trade tracker with exchange position
             if current_side is None and self._active_trade is not None:
@@ -333,6 +343,16 @@ class InstanceRunner:
 
             # bars_in_trade now incremented on new bar close (above), not every poll
 
+            # Update instance position cache AFTER reconcile/adopt so
+            # adopted positions are reflected in the dashboard in real-time.
+            # If position is None but we have an active trade (HL API thread issue),
+            # use tracked _active_trade data so the dashboard still shows the position.
+            if position is None and self._active_trade:
+                at = self._active_trade
+                self._update_position_cache_from_tracked(at)
+            else:
+                self._update_position_cache(position, current_side)
+
             # Record signal AFTER execution so trade_active/executed are accurate
             signal_row = Signal(
                 instance_id=self.id,
@@ -388,6 +408,26 @@ class InstanceRunner:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _update_position_cache_from_tracked(self, at: dict):
+        """Fallback: update Instance cache from tracked _active_trade data
+        when HL API returns None inside the daemon thread."""
+        db = Session()
+        try:
+            inst = db.query(Instance).filter(Instance.slug == self.id).first()
+            if not inst:
+                return
+            inst.position_side = at.get("side")
+            inst.position_size = float(at.get("size", 0))
+            inst.entry_price = float(at.get("entry_price", 0))
+            inst.mark_price = float(at.get("best_price", 0)) or inst.entry_price
+            inst.unrealized_pnl = 0.0  # unknown without live position
+            inst.unrealized_pnl_pct = 0.0
+            db.commit()
+        except Exception as e:
+            print(f"[WARN] _update_position_cache_from_tracked failed: {e}")
+        finally:
+            db.close()
+
     def _derive_side(self, position):
         if not position:
             return None
@@ -402,26 +442,40 @@ class InstanceRunner:
     # Position sync
     # ------------------------------------------------------------------
     def _update_position_cache(self, position, current_side):
-        """Update the Instance row with live position fields for API/UI display."""
+        """Update the Instance row with live position fields for API/UI display.
+
+        When position is None due to HL API failure (not confirmed flat),
+        do NOT clear the cache — leave existing values so the dashboard
+        keeps showing the last known position state.
+        """
         db = Session()
         try:
             inst = db.query(Instance).filter(Instance.slug == self.id).first()
             if not inst:
                 return
-            inst.position_side = current_side
             if position:
                 szi = float(position.get("szi", 0))
+                inst.position_side = current_side
                 inst.position_size = abs(szi)
                 inst.entry_price = float(position.get("entryPx", 0))
                 inst.mark_price = float(position.get("markPx", 0)) if "markPx" in position else inst.entry_price
                 inst.unrealized_pnl = float(position.get("unrealizedPnl", 0))
                 inst.unrealized_pnl_pct = float(position.get("returnOnEquity", 0)) * 100
-            else:
-                inst.position_size = 0.0
-                inst.entry_price = 0.0
-                inst.mark_price = 0.0
-                inst.unrealized_pnl = 0.0
-                inst.unrealized_pnl_pct = 0.0
+                add_log(
+                    f"[{self.instance.token}] Position cache: {current_side} {abs(szi)} @ {inst.entry_price:.6f} pnl=${inst.unrealized_pnl:.4f}",
+                    "info", dry_run=self.instance.dry_run,
+                )
+            elif current_side is None:
+                # Position is None — could be API failure or genuinely flat.
+                # Only clear if we have no active trade (confirmed flat).
+                # If _active_trade exists, keep the cache as-is (HL API issue).
+                if not self._active_trade:
+                    inst.position_side = None
+                    inst.position_size = 0.0
+                    inst.entry_price = 0.0
+                    inst.mark_price = 0.0
+                    inst.unrealized_pnl = 0.0
+                    inst.unrealized_pnl_pct = 0.0
             db.commit()
         finally:
             db.close()
@@ -570,6 +624,7 @@ class InstanceRunner:
 
         Falls back to self._active_trade data when position is None (HL already
         cleared the position) so the Trade record is never lost.
+        Queries HL user_fills for the actual exit price and closed PnL.
         """
         # Prefer live position data; fall back to tracked active trade
         if position:
@@ -581,14 +636,34 @@ class InstanceRunner:
             side = "LONG" if szi > 0 else "SHORT"
             size = abs(szi)
         elif self._active_trade:
-            # HL already cleared the position — use tracked data
+            # HL already cleared the position — use tracked data + query fills
             at = self._active_trade
             entry_px = float(at.get("entry_price", 0))
             mark_px = float(at.get("best_price", 0)) or entry_px
             size = float(at.get("size", 0))
             side = at.get("side", "LONG")
-            pnl = 0.0  # unknown without live position
+            pnl = 0.0
             pnl_pct = 0.0
+
+            # Query HL user_fills for the actual exit price and closed PnL
+            try:
+                from core.exchange import hl_client as _global_hl
+                fills = _global_hl._info.user_fills(_global_hl._query_address())
+                token_fills = [f for f in fills if f.get("coin") == self.instance.token]
+                if token_fills:
+                    last_fill = token_fills[-1]
+                    fill_px = float(last_fill.get("px", 0))
+                    fill_pnl = float(last_fill.get("closedPnl", 0))
+                    if fill_px > 0:
+                        mark_px = fill_px
+                    if fill_pnl != 0:
+                        pnl = fill_pnl
+                    add_log(
+                        f"[{self.instance.token}] Exit fill from HL: px={fill_px:.6f} pnl=${fill_pnl:.4f}",
+                        "info", dry_run=self.instance.dry_run,
+                    )
+            except Exception as e:
+                print(f"[WARN] Could not fetch exit fill from HL: {e}")
         else:
             add_log(f"[{self.instance.token}] Trade closed: {reason} (no position data)", "info")
             return
@@ -749,10 +824,18 @@ class InstanceRunner:
     # Status persistence
     # ------------------------------------------------------------------
     def _persist_status(self, instance, status: str):
+        """Persist only the runner status to the DB.
+
+        Uses a fresh query by slug and writes ONLY the status column. This
+        prevents a stale in-memory instance object (loaded before a PUT
+        changed timeframe/leverage/dry_run) from clobbering operator-set fields.
+        """
         db = Session()
         try:
-            instance.status = status
-            db.merge(instance)
+            db_inst = db.query(Instance).filter(Instance.slug == instance.slug).first()
+            if db_inst is None:
+                return
+            db_inst.status = status
             db.commit()
         finally:
             db.close()

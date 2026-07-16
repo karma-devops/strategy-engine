@@ -29,11 +29,34 @@
 <div class="chart-card">
     <div class="card-head">
         <h2>Engine Fleet</h2>
-        <a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);">+ Add Engine</a>
+        <div class="card-actions">
+            <a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);">+ Add Engine</a>
+        </div>
+    </div>
+    {# ── Sort & Filter Controls ── #}
+    <div class="fleet-controls" style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3);flex-wrap:wrap;">
+        <div class="filter-chips" id="filter-chips" style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="chip active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="chip" data-filter="running" onclick="setFilter('running')">Running</button>
+            <button class="chip" data-filter="stopped" onclick="setFilter('stopped')">Stopped</button>
+            <button class="chip" data-filter="paper" onclick="setFilter('paper')">Paper</button>
+            <button class="chip" data-filter="live" onclick="setFilter('live')">Live</button>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-2);">
+            <label for="sort-select" style="font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide);font-weight:var(--weight-semibold);">Sort</label>
+            <select id="sort-select" onchange="setSort(this.value)" style="background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:4px 8px;font-size:var(--text-xs);font-family:var(--font-body);height:28px;">
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="status">Status</option>
+                <option value="pnl-desc">PnL (high→low)</option>
+                <option value="pnl-asc">PnL (low→high)</option>
+                <option value="token">Token</option>
+            </select>
+        </div>
     </div>
     <div class="fleet-grid" id="fleet-grid">
         {% for inst in instances %}
-        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="window.location='/app/engines/{{ inst.slug }}'" style="cursor:pointer;">
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="window.location='/app/engines/{{ inst.slug }}'" style="cursor:pointer;" data-name="{{ inst.name }}" data-token="{{ inst.token }}" data-pnl="{{ inst.unrealized_pnl }}" data-mode="{% if inst.dry_run %}paper{% else %}live{% endif %}">
             <div class="fleet-head">
                 <h3>{{ inst.name }}</h3>
                 <span class="tag tag-{{ inst.status }}">{{ inst.status }}</span>
@@ -208,6 +231,62 @@
         svg.innerHTML = content;
     }
     buildDonut();
+
+    // ── Sort & Filter ──
+    let currentFilter = 'all';
+    let currentSort = 'name-asc';
+
+    function setFilter(filter) {
+        currentFilter = filter;
+        document.querySelectorAll('#filter-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filter));
+        applySortFilter();
+    }
+
+    function setSort(sort) {
+        currentSort = sort;
+        applySortFilter();
+    }
+
+    function applySortFilter() {
+        const grid = document.getElementById('fleet-grid');
+        if (!grid) return;
+        const cards = Array.from(grid.children);
+        // Filter
+        const filtered = cards.filter(card => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'running') return card.classList.contains('running');
+            if (currentFilter === 'stopped') return !card.classList.contains('running');
+            if (currentFilter === 'paper') return card.dataset.mode === 'paper';
+            if (currentFilter === 'live') return card.dataset.mode === 'live';
+            return true;
+        });
+        // Sort
+        filtered.sort((a, b) => {
+            const nameA = (a.dataset.name || '').toLowerCase();
+            const nameB = (b.dataset.name || '').toLowerCase();
+            const pnlA = parseFloat(a.dataset.pnl) || 0;
+            const pnlB = parseFloat(b.dataset.pnl) || 0;
+            const statusA = a.classList.contains('running') ? 0 : 1;
+            const statusB = b.classList.contains('running') ? 0 : 1;
+            const tokenA = (a.dataset.token || '').toLowerCase();
+            const tokenB = (b.dataset.token || '').toLowerCase();
+            switch (currentSort) {
+                case 'name-asc': return nameA.localeCompare(nameB);
+                case 'name-desc': return nameB.localeCompare(nameA);
+                case 'status': return statusA - statusB;
+                case 'pnl-desc': return pnlB - pnlA;
+                case 'pnl-asc': return pnlA - pnlB;
+                case 'token': return tokenA.localeCompare(tokenB);
+                default: return 0;
+            }
+        });
+        // Re-append in sorted order
+        filtered.forEach(card => grid.appendChild(card));
+        // Hide non-filtered
+        cards.forEach(card => {
+            card.style.display = filtered.includes(card) ? '' : 'none';
+        });
+    }
 
     // ── Live API loop ──
     const API_KEY = "{{ api_key }}";

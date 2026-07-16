@@ -97,6 +97,7 @@ def get_signals(request: Request, instance_id: str, limit: int = 50, db: Session
                 "executed": s.executed,
                 "metadata": s.metadata_json,
                 "reasoning": s.reasoning_text,
+                "dry_run": s.dry_run,
                 "timestamp": s.timestamp.isoformat() if s.timestamp else None,
             }
             for s in rows

@@ -103,26 +103,36 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
             "pnl_usd": t.pnl_usd or 0.0,
         } for t in trades]
 
+        # Realized PnL + best engine (from live trades)
+        from collections import defaultdict
+        live_trades = db.query(Trade).filter(Trade.dry_run == False).all()
+        realized_pnl = round(sum(t.pnl_usd for t in live_trades), 2) if live_trades else 0.0
+        engine_pnl = defaultdict(float)
+        for t in live_trades:
+            engine_pnl[t.instance_id] += t.pnl_usd
+        best_engine = None; best_engine_pnl = 0.0; best_engine_token = None; best_engine_strategy = None
+        if engine_pnl:
+            bs = max(engine_pnl, key=engine_pnl.get)
+            best_engine = bs; best_engine_pnl = round(engine_pnl[bs], 2)
+            bi = db.query(Instance).filter(Instance.slug == bs).first()
+            if bi:
+                best_engine_token = bi.token; best_engine_strategy = bi.strategy_id
+        user = db.query(User).first()
+        start_balance = user.start_balance if user and user.start_balance > 0 else 0.0
+
         # If no snapshots, try live exchange value as fallback
         account_value = latest.account_value if latest else 0.0
         has_hl_credentials = False
-        if not latest:
-            try:
-                from core.exchange import get_hyperliquid_client
-                hl = get_hyperliquid_client()
-                has_hl_credentials = getattr(hl, 'has_credentials', False)
-                if has_hl_credentials:
-                    live_val = hl.get_account_value()
-                    if live_val > 0:
-                        account_value = round(live_val, 2)
-            except Exception:
-                pass
-        else:
-            try:
-                from core.exchange import get_hyperliquid_client
-                has_hl_credentials = getattr(get_hyperliquid_client(), 'has_credentials', False)
-            except Exception:
-                has_hl_credentials = False
+        try:
+            from core.exchange import get_hyperliquid_client
+            hl = get_hyperliquid_client()
+            has_hl_credentials = getattr(hl, 'has_credentials', False)
+            if has_hl_credentials:
+                live_val = hl.get_account_value()
+                if live_val > 0:
+                    account_value = round(live_val, 2)
+        except Exception:
+            pass
 
         return templates.TemplateResponse(
             request,
@@ -131,6 +141,12 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
                 "request": request,
                 "api_key": config.AGENT_API_KEY or "",
                 "account_value": account_value,
+                "realized_pnl": realized_pnl,
+                "best_engine": best_engine,
+                "best_engine_pnl": best_engine_pnl,
+                "best_engine_token": best_engine_token,
+                "best_engine_strategy": best_engine_strategy,
+                "start_balance": start_balance,
                 "drawdown_pct": round(max_dd * 100.0, 2),
                 "active_engines": active,
                 "total_engines": len(instances),
@@ -304,6 +320,7 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
             inst_data.append({
                 "slug": i.slug, "name": i.name, "token": i.token, "status": i.status,
                 "unrealized_pnl": i.unrealized_pnl or 0.0, "start_balance": i.start_balance or 0.0,
+                "equity": series,  # B.9: per-instance equity for sparkline
             })
         equity_series.sort(key=lambda x: x["time"])
         # P14d: paper trades for this user's dry_run instances

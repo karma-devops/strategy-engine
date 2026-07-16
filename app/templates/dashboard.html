@@ -6,25 +6,19 @@
 {% block heading %}Dashboard{% endblock %}
 {% block content %}
 <div class="kpi-grid">
-    <div class="kpi">
-        <div class="kpi-label">Account Value <span class="tip-i" data-tip="Total account value across all engines (equity + unrealized PnL)">ⓘ</span></div>
-        <div class="kpi-value" id="kpi-account">{{ account_value | format_usd }}</div>
+    <div class="kpi kpi-primary">
+        <div class="kpi-label">Account Value <span class="tip-i" data-tip="Total portfolio value from HyperLiquid (live)">ⓘ</span></div>
+        <div class="kpi-value kpi-large" id="kpi-account">{{ account_value | format_usd }}</div>
+        <div class="kpi-sub" id="kpi-engines-sub">{{ active_engines }} / {{ total_engines }} engines active</div>
     </div>
     <div class="kpi">
-        <div class="kpi-label">Drawdown (30D) <span class="tip-i" data-tip="Maximum drawdown from peak equity over the last 30 days">ⓘ</span></div>
-        <div class="kpi-value negative" id="kpi-drawdown">{{ drawdown_pct | format_pct }}</div>
+        <div class="kpi-label">Realized PnL <span class="tip-i" data-tip="Total profit/loss from all closed live trades">ⓘ</span></div>
+        <div class="kpi-value {% if realized_pnl is defined and realized_pnl >= 0 %}positive{% elif realized_pnl is defined %}negative{% endif %}" id="kpi-realized">{{ realized_pnl | default(0.0) | format_usd }}</div>
     </div>
     <div class="kpi">
-        <div class="kpi-label">Active Engines <span class="tip-i" data-tip="Running engine count vs total configured engines">ⓘ</span></div>
-        <div class="kpi-value" id="kpi-active">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
-    </div>
-    <div class="kpi">
-        <div class="kpi-label">Open PnL <span class="tip-i" data-tip="Sum of unrealized profit/loss across all open positions">ⓘ</span></div>
-        <div class="kpi-value {% if open_pnl >= 0 %}positive{% else %}negative{% endif %}" id="kpi-pnl">{{ open_pnl | format_usd }}</div>
-    </div>
-    <div class="kpi">
-        <div class="kpi-label">Mode <span class="tip-i" data-tip="DRY RUN uses simulated orders. LIVE trades real money on HyperLiquid.">ⓘ</span></div>
-        <div class="kpi-value" id="kpi-dry">{% if dry_run_global %}DRY RUN{% else %}LIVE{% endif %}</div>
+        <div class="kpi-label">Best Engine <span class="tip-i" data-tip="Engine with highest realized PnL">ⓘ</span></div>
+        <div class="kpi-value" id="kpi-best-engine" style="font-size:var(--text-md);">{{ best_engine | default('—') }}</div>
+        <div class="kpi-sub" id="kpi-best-pnl">{{ best_engine_token | default('') }} · {{ best_engine_strategy | default('') }} · {{ best_engine_pnl | default(0.0) | format_usd }}</div>
     </div>
 </div>
 <div id="connect-prompt" class="chart-card" style="display:none;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);border:1px dashed var(--brand);background:var(--brand-bg);margin-bottom:var(--space-3);">
@@ -102,15 +96,25 @@
     <div class="fleet-grid" id="fleet-grid">
         {% for inst in instances %}
         <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="location.href='/app/engines/{{ inst.slug }}'" style="cursor:pointer;">
-            <h3>{{ inst.name }}</h3>
-            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            <div class="fleet-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <h3>{{ inst.name }}</h3>
+                    <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+                </div>
+                <div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
+                    {% if inst.status == 'running' %}
+                    <button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/stop')">⏹</button>
+                    {% else %}
+                    <button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">▶</button>
+                    {% endif %}
+                    <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;">⚙</a>
+                </div>
+            </div>
             <div class="fleet-row"><span class="label">Status</span><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
+            <div class="fleet-row"><span class="label">Position</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.position_side or 'FLAT' }} {{ '%.1f' | format(inst.position_size or 0) }}</span></div>
             <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
             <div class="fleet-row"><span class="label">Leverage</span><span style="font-family:var(--font-mono);">{{ inst.leverage }}x</span></div>
-            <div class="fleet-row"><span class="label">Size</span><span style="font-family:var(--font-mono);">{{ '%.4f' | format(inst.position_size or 0) }}</span></div>
-            <div class="fleet-row"><span class="label">Mark</span><span style="font-family:var(--font-mono);">{{ '%.4f' | format(inst.mark_price or 0) }}</span></div>
-            <div class="fleet-row"><span class="label">Max Pos</span><span style="font-family:var(--font-mono);">{{ (inst.max_position_pct * 100) | format_pct | replace('+','') | replace('%','') }}%</span></div>
-            <div class="fleet-row"><span class="label">Dry Run</span><span>{{ 'Yes' if inst.dry_run else 'No (LIVE)' }}</span></div>
+            <div class="fleet-row"><span class="label">Mode</span><span class="tag tag-{% if inst.dry_run %}paper{% else %}live{% endif %}">{% if inst.dry_run %}PAPER{% else %}LIVE{% endif %}</span></div>
         </div>
         {% endfor %}
     </div>
@@ -306,28 +310,28 @@
         instances.forEach(inst => {
             const card = document.createElement('div');
             card.className = 'fleet-card' + (inst.status === 'running' ? ' running' : '');
+            card.style.cursor = 'pointer';
+            card.onclick = () => location.href = '/app/engines/' + inst.slug;
             const pnlCls = (inst.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative';
+            const modeTag = inst.dry_run ? 'PAPER' : 'LIVE';
+            const modeCls = inst.dry_run ? 'tag-paper' : 'tag-live';
+            const startStopBtn = inst.status === 'running'
+                ? '<button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" onclick="event.stopPropagation();apiPost(\'/api/v2/instances/' + inst.slug + '/stop\')">⏹</button>'
+                : '<button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="event.stopPropagation();apiPost(\'/api/v2/instances/' + inst.slug + '/start\')">▶</button>';
             card.innerHTML =
-                '<h3>' + inst.name + '</h3>' +
-                '<div class="fleet-sub">' + inst.token + ' · ' + inst.strategy_id + ' · ' + inst.timeframe + '</div>' +
+                '<div class="fleet-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+                    '<div><h3>' + inst.name + '</h3>' +
+                    '<div class="fleet-sub">' + inst.token + ' · ' + inst.strategy_id + ' · ' + inst.timeframe + '</div></div>' +
+                    '<div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;">' +
+                        startStopBtn +
+                        '<a href="/app/engines/' + inst.slug + '" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation()">⚙</a>' +
+                    '</div>' +
+                '</div>' +
                 '<div class="fleet-row"><span class="label">Status</span><span class="tag tag-' + inst.status + '">' + inst.status + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Position</span><span class="' + pnlCls + '" style="font-family:var(--font-mono);">' + (inst.position_side || 'FLAT') + ' ' + (parseFloat(inst.position_size) || 0).toFixed(1) + '</span></div>' +
                 '<div class="fleet-row"><span class="label">Unrealized PnL</span><span class="' + pnlCls + '" style="font-family:var(--font-mono);">' + fmtUsd(inst.unrealized_pnl) + '</span></div>' +
                 '<div class="fleet-row"><span class="label">Leverage</span><span style="font-family:var(--font-mono);">' + inst.leverage + 'x</span></div>' +
-                '<div class="fleet-row"><span class="label">Size</span><span style="font-family:var(--font-mono);">' + (parseFloat(inst.position_size) || 0).toFixed(4) + '</span></div>' +
-                '<div class="fleet-row"><span class="label">Mark</span><span style="font-family:var(--font-mono);">' + (parseFloat(inst.mark_price) || 0).toFixed(4) + '</span></div>' +
-                '<div class="fleet-row"><span class="label">Max Pos</span><span style="font-family:var(--font-mono);">' + ((inst.max_position_pct * 100) || 0).toFixed(0) + '%</span></div>' +
-                '<div class="fleet-row"><span class="label">Dry Run</span><span>' + (inst.dry_run ? 'Yes' : 'No (LIVE)') + '</span></div>';
-            const actions = document.createElement('div');
-            actions.className = 'fleet-actions';
-            const slug = inst.slug;
-            if (inst.status === 'running') {
-                actions.appendChild(ctrlBtn('Stop', 'btn-stop', () => apiPost('/api/v2/instances/' + slug + '/stop')));
-                actions.appendChild(ctrlBtn('Close', 'btn-close', () => apiPost('/api/v2/instances/' + slug + '/close')));
-            } else {
-                actions.appendChild(ctrlBtn('Start', 'btn-start', () => apiPost('/api/v2/instances/' + slug + '/start')));
-            }
-            actions.appendChild(ctrlBtn('Restart', 'btn-restart', () => apiPost('/api/v2/instances/' + slug + '/restart')));
-            card.appendChild(actions);
+                '<div class="fleet-row"><span class="label">Mode</span><span class="tag ' + modeCls + '">' + modeTag + '</span></div>';
             grid.appendChild(card);
         });
     }
@@ -345,13 +349,12 @@
             .then(d => {
                 if (!d.ok) return;
                 document.getElementById('kpi-account').textContent = fmtUsd(d.account_value);
-                document.getElementById('kpi-drawdown').textContent = fmtPct(d.drawdown_pct);
-                document.getElementById('kpi-active').innerHTML = d.active_engines + ' <span style="font-size:var(--text-sm);color:var(--text-muted);">/ ' + d.total_engines + '</span>';
-                const pnlEl = document.getElementById('kpi-pnl');
-                pnlEl.textContent = fmtUsd(d.open_pnl);
-                pnlEl.className = 'kpi-value ' + (d.open_pnl >= 0 ? 'positive' : 'negative');
-                document.getElementById('kpi-dry').textContent = d.dry_run_global ? 'DRY RUN' : 'LIVE';
-                document.getElementById('kpi-dry').className = 'kpi-value ' + (d.dry_run_global ? 'positive' : 'negative');
+                document.getElementById('kpi-engines-sub').textContent = d.active_engines + ' / ' + d.total_engines + ' engines active';
+                const realEl = document.getElementById('kpi-realized');
+                realEl.textContent = fmtUsd(d.realized_pnl || 0);
+                realEl.className = 'kpi-value ' + ((d.realized_pnl || 0) >= 0 ? 'positive' : 'negative');
+                document.getElementById('kpi-best-engine').textContent = d.best_engine || '—';
+                document.getElementById('kpi-best-pnl').textContent = (d.best_engine_token || '') + ' · ' + (d.best_engine_strategy || '') + ' · ' + fmtUsd(d.best_engine_pnl || 0);
                 renderFleet(d.instances);
                 renderPositions(d.instances);
                 renderTradesCompact(d.trades || []);

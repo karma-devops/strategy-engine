@@ -38,6 +38,11 @@ class CreateInstanceRequest(BaseModel):
 
 class UpdateInstanceRequest(BaseModel):
     name: Optional[str] = None
+    token: Optional[str] = None
+    strategy_id: Optional[str] = None
+    timeframe: Optional[str] = None
+    mode: Optional[str] = None
+    profile: Optional[str] = None
     leverage: Optional[int] = None
     max_position_pct: Optional[float] = Field(None, ge=0.01, le=1.0)
     poll_interval_seconds: Optional[int] = None
@@ -51,6 +56,20 @@ class UpdateInstanceRequest(BaseModel):
     account_address: Optional[str] = None
     withdrawal_address: Optional[str] = None
     hl_credential_id: Optional[str] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "timeframe": "5m",
+                    "leverage": 3,
+                    "dry_run": False,
+                    "max_position_pct": 0.97,
+                    "poll_interval_seconds": 30,
+                }
+            ]
+        }
+    }
 
 
 @router.get("/instances")
@@ -105,23 +124,16 @@ def get_summary_data():
         active = sum(1 for i in instances if i.status == "running")
         account_value = latest.account_value if latest else 0.0
         has_hl_credentials = False
-        if not latest:
-            try:
-                from core.exchange import get_hyperliquid_client
-                hl = get_hyperliquid_client()
-                has_hl_credentials = getattr(hl, 'has_credentials', False)
-                if has_hl_credentials:
-                    live_val = hl.get_account_value()
-                    if live_val > 0:
-                        account_value = round(live_val, 2)
-            except Exception:
-                pass
-        else:
-            try:
-                from core.exchange import get_hyperliquid_client
-                has_hl_credentials = getattr(get_hyperliquid_client(), 'has_credentials', False)
-            except Exception:
-                pass
+        try:
+            from core.exchange import get_hyperliquid_client
+            hl = get_hyperliquid_client()
+            has_hl_credentials = getattr(hl, 'has_credentials', False)
+            if has_hl_credentials:
+                live_val = hl.get_account_value()
+                if live_val > 0:
+                    account_value = round(live_val, 2)
+        except Exception:
+            pass
         return {
             "account_value": account_value,
             "active_engines": active,
@@ -176,35 +188,62 @@ def summary(request: Request, db: Session = Depends(get_db)):
             dd = (peak - v) / peak
             if dd > max_dd:
                 max_dd = dd
+    # Always query HL live for real-time portfolio value; fall back to snapshot
     latest = snapshots[-1] if snapshots else None
     active = sum(1 for i in instances if i.status == "running")
     open_pnl = round(sum((i.unrealized_pnl or 0.0) for i in instances), 2)
 
-    # If no snapshots, try live exchange value as fallback
     account_value = latest.account_value if latest else 0.0
     has_hl_credentials = False
-    if not latest:
-        try:
-            from core.exchange import get_hyperliquid_client
-            hl = get_hyperliquid_client()
-            has_hl_credentials = getattr(hl, 'has_credentials', False)
-            if has_hl_credentials:
-                live_val = hl.get_account_value()
-                if live_val > 0:
-                    account_value = round(live_val, 2)
-        except Exception:
-            pass
-    else:
-        # Even with snapshots, check if HL creds exist for the prompt
-        try:
-            from core.exchange import get_hyperliquid_client
-            has_hl_credentials = getattr(get_hyperliquid_client(), 'has_credentials', False)
-        except Exception:
-            has_hl_credentials = False
+    try:
+        from core.exchange import get_hyperliquid_client
+        hl = get_hyperliquid_client()
+        has_hl_credentials = getattr(hl, 'has_credentials', False)
+        if has_hl_credentials:
+            live_val = hl.get_account_value()
+            if live_val > 0:
+                account_value = round(live_val, 2)
+    except Exception:
+        pass
+
+    # Realized PnL: sum of all closed live trades
+    from instances.models import Trade
+    realized_pnl = round(sum(
+        t.pnl_usd for t in db.query(Trade).filter(Trade.dry_run == False).all()
+    ), 2) if db.query(Trade).filter(Trade.dry_run == False).first() else 0.0
+
+    # Best performing engine: highest realized PnL per instance
+    from collections import defaultdict
+    engine_pnl = defaultdict(float)
+    for t in db.query(Trade).filter(Trade.dry_run == False).all():
+        engine_pnl[t.instance_id] += t.pnl_usd
+    best_engine_slug = None
+    best_engine_pnl = 0.0
+    best_engine_token = None
+    best_engine_strategy = None
+    if engine_pnl:
+        best_slug = max(engine_pnl, key=engine_pnl.get)
+        best_engine_slug = best_slug
+        best_engine_pnl = round(engine_pnl[best_slug], 2)
+        best_inst = db.query(Instance).filter(Instance.slug == best_slug).first()
+        if best_inst:
+            best_engine_token = best_inst.token
+            best_engine_strategy = best_inst.strategy_id
+
+    # User start balance for pulse graph baseline
+    from instances.models import User
+    user = db.query(User).first()
+    start_balance = user.start_balance if user and user.start_balance > 0 else 0.0
 
     return {
         "ok": True,
         "account_value": account_value,
+        "realized_pnl": realized_pnl,
+        "best_engine": best_engine_slug,
+        "best_engine_pnl": best_engine_pnl,
+        "best_engine_token": best_engine_token,
+        "best_engine_strategy": best_engine_strategy,
+        "start_balance": start_balance,
         "drawdown_pct": round(max_dd * 100.0, 2),
         "active_engines": active,
         "total_engines": len(instances),
@@ -343,7 +382,9 @@ def start_instance(request: Request, instance_id: str, db: Session = Depends(get
     inst = db.query(Instance).filter(Instance.slug == instance_id).first()
     if not inst:
         return {"ok": False, "message": "Instance not found"}
-    manager.start_instance(inst)
+    ok = manager.start_instance(inst)
+    if not ok:
+        return {"ok": False, "message": f"Could not start {inst.name} (kill switch active, already running, or instance killed)"}
     return {"ok": True, "message": f"Started {inst.name}"}
 
 

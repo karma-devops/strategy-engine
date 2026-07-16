@@ -38,7 +38,9 @@ app = FastAPI(
     description="Algorithmic trading engine for HyperLiquid perps. Multi-instance runner with live/dry-run modes, real-time SSE streaming, server-rendered dashboard, and PWA support.",
     version="0.095",
     contact={"name": "Operator", "url": "https://karmaworks.asia"},
-    license_info={"name": "Proprietary"},
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 app.state.limiter = limiter
