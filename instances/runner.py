@@ -492,8 +492,10 @@ class InstanceRunner:
             cloid=open_cloid,
         )
         entry_cost = notional * 0.00035  # taker fee estimate
+        dr = getattr(hl, "dry_run", False)
         add_log(
-            f"[{self.instance.token}] OPEN {desired_side} ${notional:.2f} cost=${entry_cost:.4f} (ok={open_result is not None})",
+            f"[{self.instance.token}] {'[DRY RUN] ' if dr else ''}OPEN {desired_side} ${notional:.2f} "
+            f"cost=${entry_cost:.4f} (ok={open_result is not None})",
             "trade",
         )
         event_bus.emit(
@@ -545,8 +547,9 @@ class InstanceRunner:
                                       stable_id=str(int(time.time() * 1000)))
 
         close_result = hl.market_close(self.instance.token, cloid=close_cloid)
+        dr = getattr(hl, "dry_run", False)
         add_log(
-            f"[{self.instance.token}] CLOSE {current_side} reason={exit_reason} "
+            f"[{self.instance.token}] {'[DRY RUN] ' if dr else ''}CLOSE {current_side} reason={exit_reason} "
             f"cost=${exit_cost:.4f} (ok={close_result is not None})",
             "trade",
         )
