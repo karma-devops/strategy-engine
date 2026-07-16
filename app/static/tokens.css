@@ -215,7 +215,7 @@
   /* ── Input ── */
   --input-bg:        var(--brown-750);
   --input-border:    var(--border-default);
-  --input-focus:     var(--sky-500);
+  --input-focus:     var(--brand);
   --input-text:      var(--text-primary);
   --input-placeholder: var(--text-faint);
 
@@ -256,7 +256,7 @@
 
   --input-bg:        var(--surface-card);
   --input-border:    var(--border-default);
-  --input-focus:     var(--sky-600);
+  --input-focus:     var(--brand);
   --input-text:      var(--text-primary);
   --input-placeholder: var(--text-faint);
 }
@@ -368,4 +368,85 @@
   /* ── Inputs ── */
   --surface-input: var(--surface-inset);
   --surface-elevated: var(--surface-raised);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   LAYER 4: LEGACY-COMPAT ALIASES (DS1 — 2026-07-16)
+   Shim for style.css which still references the pre-refactor token
+   names. Each alias maps an old var to the new semantic equivalent.
+   New code should use the semantic names directly. These aliases
+   are kept so style.css keeps rendering correctly while the rest of
+   the system migrates to tokens.css. Remove once style.css is fully
+   refactored to the three-tier system.
+   ════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-mode="dark"],
+[data-mode="light"] {
+  /* ── Legacy surface (--bg-0..3) ── */
+  --bg-0:    var(--surface-page);
+  --bg-1:    var(--surface-card);
+  --bg-2:    var(--surface-raised);
+  --bg-3:    var(--surface-hover);
+  --bg-inset: var(--surface-inset);
+
+  /* ── Legacy text (--text-0..3) ── */
+  --text-0:  var(--text-primary);
+  --text-1:  var(--text-primary);
+  --text-2:  var(--text-secondary);
+  --text-3:  var(--text-muted);
+  --text-4:  var(--text-faint);
+
+  /* ── Legacy radii (--r-sm/md/lg) ── */
+  --r-sm:    var(--radius-sm);
+  --r-md:    var(--radius-md);
+  --r-lg:    var(--radius-lg);
+
+  /* ── Legacy borders ── */
+  --border:        var(--border-default);
+  --border-soft:   var(--border-subtle);
+
+  /* ── Legacy accent + palette ── */
+  --accent:        var(--brand);
+
+  /* Status: green/emerald ── */
+  --green:         var(--emerald-500);
+  --green-bg:      var(--color-profit-bg);
+  --green-border:  var(--color-profit-border);
+
+  /* Status: red/coral ── */
+  --red:           var(--coral-500);
+  --red-bg:        var(--color-loss-bg);
+  --red-border:    var(--color-loss-border);
+
+  /* Status: blue/info ── */
+  --blue:          var(--tb-600);
+  --blue-bg:       var(--color-info-bg);
+  --blue-border:   var(--color-info-border);
+
+  /* Status: yellow/amber ── */
+  --yellow:        var(--amber-500);
+  --amber:         var(--amber-500);
+  --amber-border:  var(--color-warn-border, var(--amber-300));
+
+  /* ── Legacy chart primitives (used by SVG pulse + sparkline) ── */
+  --arc-len:       125.66;   /* 2πr for r=20 — placeholder for circle math */
+  --spark-len:     0;        /* set inline by JS to dasharray length */
+
+  /* ── Legacy font shorthand ── */
+  --font:          var(--font-body);
+}
+/* ════════════════════════════════════════════════════════════════
+   LAYER 5: GLASS LEGACY ALIASES (DS5 — 2026-07-16)
+   --glass-bg and --glass-border were referenced in layout.html's
+   .chart-card rule but never defined. Aliasing them to proper
+   component tokens so any remaining references resolve cleanly.
+   ════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-mode="dark"],
+[data-mode="light"] {
+  --glass-bg:     var(--card-bg);
+  --glass-border: var(--card-border);
+  --glass-shadow: var(--card-shadow);
 }
