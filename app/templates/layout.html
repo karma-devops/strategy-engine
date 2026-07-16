@@ -457,6 +457,26 @@
         .empty-state .empty-title { font-size:var(--text-md);font-weight:var(--weight-semibold);color:var(--text-primary); }
         .empty-state .empty-desc { font-size:var(--text-sm);color:var(--text-muted);max-width:280px;line-height:var(--leading-normal); }
         .empty-state .empty-action { margin-top:var(--space-1); }
+
+        /* ── Chart Loading State (animated PULS-R logo) ── */
+        .chart-loading { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);min-height:120px; }
+        .chart-loading .pulsr-loading-logo svg { width:80px;height:60px; }
+        .chart-loading .pulsr-loading-logo .pulse-line {
+            fill:none;stroke:var(--brand);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;
+            stroke-dasharray:220;stroke-dashoffset:220;
+            animation:loadingDraw 2s ease-in-out infinite;
+            filter:drop-shadow(0 0 6px var(--brand));
+        }
+        @keyframes loadingDraw {
+            0% { stroke-dashoffset:220;opacity:0; }
+            15% { opacity:1; }
+            85% { stroke-dashoffset:0;opacity:1; }
+            100% { stroke-dashoffset:0;opacity:0; }
+        }
+        .chart-loading .loading-text { font-size:var(--text-xs);color:var(--text-muted);letter-spacing:var(--tracking-wide);text-transform:uppercase;font-weight:var(--weight-semibold); }
+        @media (prefers-reduced-motion: reduce) {
+            .chart-loading .pulsr-loading-logo .pulse-line { animation:none;stroke-dashoffset:0;opacity:0.6; }
+        }
         .muted { color: var(--text-muted); }
 
         /* ── Toasts ── */
@@ -971,6 +991,20 @@
             t.textContent = msg;
             c.appendChild(t);
             setTimeout(function() { t.classList.add('removing'); setTimeout(function() { t.remove(); }, 200); }, 4000);
+        }
+
+        // ── Chart Loading State (animated PULS-R logo) ──
+        const PULSR_LOGO_SVG = '<svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg>';
+        function showChartLoading(containerId, label) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.innerHTML = '<div class="chart-loading"><div class="pulsr-loading-logo">' + PULSR_LOGO_SVG + '</div><div class="loading-text">' + (label || 'Loading...') + '</div></div>';
+        }
+        function hideChartLoading(containerId) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            const loading = el.querySelector('.chart-loading');
+            if (loading) loading.remove();
         }
     </script>
 

@@ -77,7 +77,12 @@
 <div class="bt-split">
     <div class="chart-card">
         <div class="card-head"><h2>Equity Curve</h2><span id="eq-badge" class="tag tag-flat">latest</span></div>
-        <canvas id="equityChart" class="equity-canvas"></canvas>
+        <div id="equity-chart-wrap" style="position:relative;">
+            <canvas id="equityChart" class="equity-canvas"></canvas>
+            <div id="equity-loading" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+                <div class="chart-loading"><div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div><div class="loading-text">Running backtest...</div></div>
+            </div>
+        </div>
     </div>
     <div class="kpi-stack">
         <div class="kpi-mini">
@@ -153,7 +158,23 @@ function renderEquity(canvas, data) {
     canvas.width = W * dpr; canvas.height = H * dpr;
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
-    if (!data || data.length < 2) { ctx.fillStyle = '#9aa4b2'; ctx.font = '13px sans-serif'; ctx.fillText('No equity curve yet — run a backtest.', 20, H/2); return; }
+    if (!data || data.length < 2) {
+        // Show animated logo + CTA instead of flat text
+        ctx.clearRect(0, 0, W, H);
+        const wrap = canvas.parentElement;
+        if (wrap && !wrap.querySelector('.chart-loading')) {
+            wrap.style.position = 'relative';
+            const loading = document.createElement('div');
+            loading.className = 'chart-loading';
+            loading.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);';
+            loading.innerHTML = '<div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div><div class="loading-text">No equity data — run a backtest to see results</div>';
+            wrap.appendChild(loading);
+        }
+        return;
+    }
+    // Remove loading overlay if data arrived
+    const wrap = canvas.parentElement;
+    if (wrap) { const loading = wrap.querySelector('.chart-loading'); if (loading) loading.remove(); }
     const pts = data.map(d => ({ t: Math.floor((d.time || d[0]) / 1000), v: parseFloat(d.value || d.equity || d[1]) }));
     const vals = pts.map(p => p.v);
     let min = Math.min(...vals), max = Math.max(...vals);
@@ -197,6 +218,8 @@ async function runBacktest() {
     const btn = document.getElementById('bt-submit');
     const msg = document.getElementById('bt-msg');
     btn.disabled = true; msg.className = 'bt-msg'; msg.textContent = 'Running backtest...';
+    const loadingEl = document.getElementById('equity-loading');
+    if (loadingEl) loadingEl.style.display = 'flex';
     const payload = {
         token: document.getElementById('bt-token').value,
         strategy_id: document.getElementById('bt-strategy').value,
@@ -217,7 +240,7 @@ async function runBacktest() {
         setTimeout(() => location.reload(), 1500);
     } catch (e) {
         msg.className = 'bt-msg err'; msg.textContent = 'Error: ' + e.message;
-    } finally { btn.disabled = false; }
+    } finally { btn.disabled = false; if (loadingEl) loadingEl.style.display = 'none'; }
 }
 
 // Assistant chat (delegates to /api/v2/chat when available; graceful if not)

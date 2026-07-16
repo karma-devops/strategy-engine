@@ -48,7 +48,9 @@
                 <path class="pulse-path" id="pulse-path" d=""/>
                 <circle class="pulse-dot" id="pulse-dot" cx="0" cy="0" r="4"/>
             </svg>
-            <div id="pulse-empty" class="empty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;">No equity data yet.</div>
+            <div id="pulse-empty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;">
+                <div class="chart-loading"><div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div><div class="loading-text">Waiting for equity data</div></div>
+            </div>
         </div>
         <div class="pulse-stats" id="pulse-stats">
             <div class="pstat"><span class="pstat-label">Last</span><span class="pstat-value" id="ps-last">—</span></div>
