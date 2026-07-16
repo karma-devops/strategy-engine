@@ -45,7 +45,9 @@ def kill_global(request: Request, reason: Optional[str] = None, db: Session = De
     db.commit()
     # Stop every running engine
     manager.stop_all()
-    return {"ok": True, "message": "Global kill switch engaged. All engines stopped."}
+    # Flatten all open positions on the exchange
+    manager.close_all_positions()
+    return {"ok": True, "message": "Global kill switch engaged. All engines stopped and positions closed."}
 
 
 @router.post("/kill/global/reset")
@@ -65,9 +67,16 @@ def kill_instance(request: Request, slug: str, reason: Optional[str] = None, db:
     if not inst:
         return {"ok": False, "message": f"Instance {slug} not found"}
     manager.stop_instance_by_slug(slug)
+    # Flatten the open position on the exchange before marking killed
+    from core.exchange import get_hyperliquid_client
+    try:
+        client = get_hyperliquid_client(inst)
+        client.market_close(inst.token)
+    except Exception as e:
+        print(f"[KILL] Failed to close position for {slug}: {e}")
     inst.status = "killed"
     db.commit()
-    return {"ok": True, "message": f"Instance {slug} killed."}
+    return {"ok": True, "message": f"Instance {slug} killed and position closed."}
 
 
 @router.post("/kill/{slug}/reset")

@@ -25,18 +25,19 @@ router = APIRouter()
 
 
 class RunBacktestRequest(BaseModel):
-    instance_slug: str = Field(..., min_length=1)
+    instance_slug: str | None = None  # Optional — can run standalone with token+strategy
     days: int = Field(default=30, ge=1, le=365)
     initial_capital: float = Field(default=100.0, gt=0)
-    # Optional overrides (fall back to instance config if not provided)
+    # Required for standalone (no instance) — optional if instance provided
     token: str | None = None
     strategy_id: str | None = None
     timeframe: str | None = None
     mode: str | None = None
     profile: str | None = None
-    activation: int | None = None
+    activation: float | None = None
     offset: int | None = None
     leverage: int | None = None
+    tick_mode: int = Field(default=1, ge=1, le=28)  # 1=OHLC, 4=basic, 28=high
 
 
 @router.post("/backtests/run")
@@ -47,23 +48,38 @@ def run_backtest_endpoint(
     db: Session = Depends(get_db),
     api_key: str = Depends(verify_api_key),
 ):
-    instance = db.query(Instance).filter(Instance.slug == payload.instance_slug).first()
-    if not instance:
-        return {"ok": False, "message": f"Instance not found: {payload.instance_slug}"}
+    # Try to load instance if slug provided
+    instance = None
+    if payload.instance_slug:
+        instance = db.query(Instance).filter(Instance.slug == payload.instance_slug).first()
 
-    # Use payload overrides if provided, else fall back to instance config
+    # Build params: use payload overrides, fall back to instance config, then defaults
+    token = payload.token or (instance.token if instance else None)
+    strategy_id = payload.strategy_id or (instance.strategy_id if instance else None)
+    timeframe = payload.timeframe or (instance.timeframe if instance else "15m")
+    mode = payload.mode or (instance.mode if instance else "Scalp")
+    profile = payload.profile or (instance.profile if instance else "aggressive_8_3")
+    activation = payload.activation if payload.activation is not None else (instance.activation if instance else 8)
+    offset = payload.offset if payload.offset is not None else (instance.offset if instance else 3)
+    leverage = payload.leverage if payload.leverage is not None else (instance.leverage if instance else 1)
+    slug = payload.instance_slug or "standalone"
+
+    if not token or not strategy_id:
+        return {"ok": False, "message": "token and strategy_id are required for standalone backtests"}
+
     result = run_backtest(
-        instance_slug=instance.slug,
-        token=payload.token or instance.token,
-        strategy_id=payload.strategy_id or instance.strategy_id,
-        timeframe=payload.timeframe or instance.timeframe,
-        mode=payload.mode or instance.mode,
-        profile=payload.profile or instance.profile,
-        activation=payload.activation if payload.activation is not None else instance.activation,
-        offset=payload.offset if payload.offset is not None else instance.offset,
-        leverage=payload.leverage if payload.leverage is not None else instance.leverage,
+        instance_slug=slug,
+        token=token,
+        strategy_id=strategy_id,
+        timeframe=timeframe,
+        mode=mode,
+        profile=profile,
+        activation=activation,
+        offset=offset,
+        leverage=leverage,
         days=payload.days,
         initial_capital=payload.initial_capital,
+        tick_mode=payload.tick_mode,
     )
 
     record = Backtest(
@@ -164,4 +180,80 @@ def _row_to_dict(row: Backtest) -> dict:
         "error_message": row.error_message,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+    }
+
+
+class RunReplayRequest(BaseModel):
+    instance_slug: str = Field(..., min_length=1)
+    days: int = Field(default=30, ge=1, le=365)
+    initial_capital: float = Field(default=100.0, gt=0)
+    tick_mode: int = Field(default=1, ge=1, le=28)
+    speed: float = Field(default=1.0, ge=0.1, le=100.0)
+
+
+@router.post("/backtests/replay")
+@limiter.limit(WRITE_LIMIT)
+def replay_backtest(
+    request: Request,
+    payload: RunReplayRequest,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
+    """Bar-replay: replay historical candles through the backtest runner with tick simulation.
+    
+    More accurate than static backtest because it evaluates trailing stops
+    at intra-bar resolution (configurable tick_mode).
+    """
+    instance = db.query(Instance).filter(Instance.slug == payload.instance_slug).first()
+    if not instance:
+        return {"ok": False, "message": f"Instance not found: {payload.instance_slug}"}
+    
+    result = run_backtest(
+        instance_slug=instance.slug,
+        token=instance.token,
+        strategy_id=instance.strategy_id,
+        timeframe=instance.timeframe,
+        mode=instance.mode,
+        profile=instance.profile,
+        activation=instance.activation,
+        offset=instance.offset,
+        leverage=instance.leverage,
+        days=payload.days,
+        initial_capital=payload.initial_capital,
+        tick_mode=payload.tick_mode,
+    )
+    
+    record = Backtest(
+        id=result.id,
+        instance_slug=result.instance_slug,
+        token=result.token,
+        strategy_id=result.strategy_id,
+        timeframe=result.timeframe,
+        mode=result.mode,
+        profile=result.profile,
+        activation=result.activation,
+        offset=result.offset,
+        leverage=result.leverage,
+        start_date=result.start_date,
+        end_date=result.end_date,
+        status=result.status,
+        initial_capital=result.initial_capital,
+        final_capital=result.final_capital,
+        total_return_pct=result.total_return_pct,
+        win_rate=result.win_rate,
+        profit_factor=result.profit_factor,
+        max_drawdown_pct=result.max_drawdown_pct,
+        total_trades=result.total_trades,
+        sharpe_ratio=result.sharpe_ratio,
+        trades_json=result.to_dict()["trades"],
+        equity_curve_json=result.equity_curve,
+        error_message=result.error_message,
+    )
+    db.add(record)
+    db.commit()
+    
+    return {
+        "ok": True,
+        "message": f"Bar-replay {result.id} finished with status {result.status} (tick_mode={payload.tick_mode})",
+        "backtest": result.to_dict(),
     }

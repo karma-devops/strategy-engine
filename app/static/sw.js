@@ -4,8 +4,6 @@ const ASSETS = [
   '/',
   '/static/tokens.css',
   '/static/style.css',
-  '/static/app.js',
-  '/static/pages.js',
   '/static/manifest.json',
 ];
 

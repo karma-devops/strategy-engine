@@ -109,6 +109,23 @@ class InstanceManager:
             for slug in slugs:
                 self.stop_instance(slug)
 
+    def close_all_positions(self):
+        """Close open positions on the exchange for all running instances.
+
+        Used by the global kill switch so engaging it flattens exposure
+        instead of leaving positions open and unmanaged.
+        """
+        from core.exchange import get_hyperliquid_client
+        with self._lock:
+            for slug, runner in list(self._runners.items()):
+                try:
+                    inst = runner.instance
+                    client = get_hyperliquid_client(inst)
+                    result = client.market_close(inst.token)
+                    print(f"[MANAGER] Kill switch closed position for {slug} ({inst.token}): {result is not None}")
+                except Exception as e:
+                    print(f"[MANAGER] Failed to close position for {slug}: {e}")
+
     def restart_instance(self, instance_id: str) -> bool:
         with self._lock:
             runner = self._runners.get(instance_id)
@@ -133,11 +150,20 @@ class InstanceManager:
     # Helpers
     # ------------------------------------------------------------------
     def _persist_status(self, instance: Instance, status: str = None):
+        """Persist only the runner status to the DB.
+
+        Uses a fresh query by slug and writes ONLY the status column so a
+        stale in-memory instance object (e.g. one loaded before a PUT flipped
+        dry_run) cannot clobber operator-set fields like dry_run back to their
+        old value.
+        """
         db = Session()
         try:
+            db_inst = db.query(Instance).filter(Instance.slug == instance.slug).first()
+            if db_inst is None:
+                return
             if status:
-                instance.status = status
-            db.merge(instance)
+                db_inst.status = status
             db.commit()
         finally:
             db.close()
@@ -181,6 +207,8 @@ def seed_default_fleet():
     """Ensure the 6-engine default fleet exists. Upsert missing presets and stop all."""
     db = Session()
     try:
+        from instances.models import get_or_seed_operator
+        operator = get_or_seed_operator(db)
         created_or_updated = []
         existing = {i.slug: i for i in db.query(Instance).all()}
         for preset in DEFAULT_FLEET:
@@ -188,6 +216,7 @@ def seed_default_fleet():
             if inst is None:
                 inst = Instance(
                     slug=preset["slug"],
+                    user_id=operator.id,
                     name=preset["name"],
                     token=preset["token"],
                     strategy_id=preset["strategy_id"],
@@ -197,7 +226,7 @@ def seed_default_fleet():
                     leverage=preset["leverage"],
                     max_position_pct=preset["max_position_pct"],
                     poll_interval_seconds=preset["poll_interval_seconds"],
-                    dry_run=True,
+                    dry_run=operator.default_dry_run,  # default to Paper (per user setting)
                     enabled=True,
                     status="stopped",
                 )
@@ -214,6 +243,10 @@ def seed_default_fleet():
                 inst.leverage = preset["leverage"]
                 inst.max_position_pct = preset["max_position_pct"]
                 inst.poll_interval_seconds = preset["poll_interval_seconds"]
+                if inst.user_id is None:
+                    inst.user_id = operator.id
+                # NOTE: do NOT overwrite inst.dry_run here — preserve operator's DB setting
+                # (e.g. dry_run=True forced for safe testing) across fleet syncs.
                 if inst.status not in ("running", "killed"):
                     inst.status = "stopped"
                 created_or_updated.append(("synced", inst.slug))

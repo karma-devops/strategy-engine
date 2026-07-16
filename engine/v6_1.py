@@ -33,7 +33,7 @@ class EngineV6_1Strategy(BaseStrategy):
     - ATR sensitivity: switches length based on acceleration
     """
 
-    def __init__(self, name: str = "Engine v6.1 PRO"):
+    def __init__(self, name: str = "Engine v6.1 PRO", **kwargs):
         super().__init__(name)
 
         self.engine_mode = "Scalp"
@@ -87,9 +87,39 @@ class EngineV6_1Strategy(BaseStrategy):
         self.MAX_ADAPTIVE_LEN = 30
         self.VOLATILITY_FLOOR = 1.0
         self.EQUITY_CURVE_MIN_SAMPLES = 3
-        self.MAX_EQUITY_HISTORY = 100
+        self.MAX_EQUITY_HISTORY = 21  # Pine v6.1: array.size > eqLength (21) → shift
         self.er_len = 14
         self.z_score = 2.2
+
+        # Apply kwargs overrides (strategy_config from DB)
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k)
+
+    @classmethod
+    def get_parameters(cls):
+        """Declare configurable parameters (Pine input.* equivalent)."""
+        return [
+            {"name": "engine_mode", "type": "select", "default": "Scalp", "options": ["Swing", "Scalp"], "label": "Engine Mode"},
+            {"name": "risk_profile", "type": "select", "default": "Manual", "options": ["Manual", "Sniper", "Aggressive"], "label": "Risk Profile"},
+            {"name": "risk_per_trade_pct", "type": "float", "default": 97.0, "min": 10.0, "max": 100.0, "step": 1.0, "label": "Risk % Per Trade"},
+            {"name": "atr_mult_input", "type": "float", "default": 1.8, "min": 0.5, "max": 3.0, "step": 0.1, "label": "ATR Multiplier"},
+            {"name": "atr_mult_guard", "type": "float", "default": 0.9, "min": 0.3, "max": 2.0, "step": 0.1, "label": "ATR Guard Multiplier"},
+            {"name": "growth_target_x", "type": "float", "default": 50.0, "min": 2.0, "max": 200.0, "step": 5.0, "label": "Growth Target (x)"},
+            {"name": "use_momentum", "type": "bool", "default": True, "label": "Use Momentum Filter"},
+            {"name": "momentum_thresh", "type": "int", "default": 18, "min": 5, "max": 50, "label": "Momentum Threshold"},
+            {"name": "trade_direction", "type": "select", "default": "Both", "options": ["Both", "Long Only", "Short Only"], "label": "Trade Direction"},
+            {"name": "man_activation", "type": "int", "default": 18, "min": 2, "max": 100, "label": "Trail Activation (ticks)"},
+            {"name": "man_offset", "type": "int", "default": 6, "min": 1, "max": 50, "label": "Trail Offset (ticks)"},
+            {"name": "aggressive_drawdown_threshold", "type": "float", "default": 0.10, "min": 0.01, "max": 0.50, "step": 0.01, "label": "Aggressive Drawdown Threshold"},
+            {"name": "aggressive_multiplier", "type": "float", "default": 1.20, "min": 0.5, "max": 2.0, "step": 0.05, "label": "Aggressive Multiplier"},
+            {"name": "peak_protect_multiplier", "type": "float", "default": 0.30, "min": 0.1, "max": 1.0, "step": 0.05, "label": "Peak Protect Multiplier"},
+        ]
+
+    @classmethod
+    def get_default_config(cls):
+        """Default config for strategy_config column."""
+        return {p["name"]: p["default"] for p in cls.get_parameters()}
 
     @staticmethod
     def _rolling_sma(arr, window):
@@ -432,7 +462,26 @@ class EngineV6_1Strategy(BaseStrategy):
             "chan_adj": float(round(chan_adj, 6)),
         }
 
-        return {"token": symbol, "signal": signal, "direction": direction, "metadata": metadata}
+        # ── Exit contract: strategy declares its exits, consumers are neutral ──
+        # V6.1 Pine: strategy.exit(stop=stopLoss, trail_points=activeActivation, trail_offset=activeOffset)
+        # No fixed TP, no time-based exit. Only stop + trailing + trend reversal.
+        exit_config = {
+            "stop_loss_long": float(round(stop_price_long, 8)),
+            "stop_loss_short": float(round(stop_price_short, 8)),
+            "take_profit_long": None,   # V6.1 has no fixed TP
+            "take_profit_short": None,
+            "trail_activation": int(self.active_activation),
+            "trail_offset": int(self.active_offset),
+            "use_time_exit": False,      # V6.1 has no time-based exit
+            "time_exit_bars": None,
+            "engine_mode": self.engine_mode,
+            "fan_up_trend": fan_up_trend,
+            "fan_dn_trend": fan_dn_trend,
+            "fast_ema": float(round(fast_ema, 8)),
+            "medm_ema": float(round(medm_ema, 8)),
+        }
+
+        return {"token": symbol, "signal": signal, "direction": direction, "metadata": metadata, "exit_config": exit_config}
 
 
 if __name__ == "__main__":

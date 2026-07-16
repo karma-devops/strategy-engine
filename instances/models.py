@@ -37,10 +37,127 @@ def _get_fernet():
     return Fernet(key)
 
 
+class User(Base):
+    """Multi-tenant account aggregate root.
+
+    Owns global settings: portfolio start balance and default execution mode.
+    Instances and backtests reference a user via user_id. Currently a single
+    operator ("operator") is seeded; the model is tenant-ready (unique username).
+    """
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    username = Column(String(64), nullable=False, unique=True, index=True)
+    display_name = Column(String(128), nullable=True)
+    # Global portfolio baseline for equity-curve / drawdown math
+    start_balance = Column(Float, default=1000.0)
+    # Default execution mode for new instances (True = Paper Trading)
+    default_dry_run = Column(Boolean, default=True)
+    # Account settings (Phase 8b)
+    email = Column(String(256), nullable=True)              # for 2FA / notifications
+    password_hash = Column(String(256), nullable=True)       # for login auth (future)
+    withdrawal_eth_address = Column(String(64), nullable=True)  # same as metamask env
+    avatar_emoji = Column(String(16), nullable=True)         # emoji icon selector
+    avatar_url = Column(String(512), nullable=True)          # uploaded image (future)
+    plan = Column(String(32), default="free")                # billing: free/pro/enterprise
+    twofa_enabled = Column(Boolean, default=False)           # 2FA status
+    # Phase 9: per-user model selection
+    assistant_model = Column(String(64), default="glm-5.1")  # chat model (Assistant + dashboard)
+    coder_model = Column(String(64), default="glm-5.1")      # Pine->Python conversion model (Studio)
+    # Phase 18: per-user API key (auto-generated on signup)
+    api_key = Column(String(64), nullable=True, unique=True, index=True)  # puls_<uuid4>_key
+    created_at = Column(DateTime, default=_now_utc)
+    updated_at = Column(DateTime, default=_now_utc, onupdate=_now_utc)
+
+
+class Credential(Base):
+    """Multi-tenant encrypted credential store.
+
+    One table for all secret types (eth_wallet, hl_api, ai_provider, app_api_key).
+    encrypted_data is a Fernet-encrypted JSON blob. masked_preview stores a safe
+    display string (e.g. "0xA871...8078") so the frontend never sees raw secrets.
+    Multi-tenant: every row is scoped by user_id. Operator (user 1) gets env-var
+    fallback via config.get_credential(); other tenants must store in DB.
+    """
+    __tablename__ = "credentials"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False, index=True)
+    type = Column(String(32), nullable=False, index=True)  # eth_wallet | hl_api | ai_provider | app_api_key
+    label = Column(String(128), nullable=False)
+    priority = Column(Integer, default=0)  # 0=primary, 1=secondary, 2=tertiary
+    encrypted_data = Column(Text, nullable=False)  # Fernet-encrypted JSON
+    masked_preview = Column(String(128), nullable=True)  # safe display value
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=_now_utc)
+    updated_at = Column(DateTime, default=_now_utc, onupdate=_now_utc)
+
+    @staticmethod
+    def _mask(value: str, head: int = 6, tail: int = 4) -> str:
+        if not value:
+            return ""
+        if len(value) <= head + tail + 1:
+            return value
+        return value[:head] + "..." + value[-tail:]
+
+    def encrypt_and_store(self, data: dict, user_id: str, password: str = None):
+        """Encrypt a dict into encrypted_data. password=raw secret for masking."""
+        fernet = _get_fernet()
+        if not fernet:
+            raise RuntimeError("INSTANCE_SECRET_KEY not configured; cannot encrypt credential")
+        self.user_id = user_id
+        self.encrypted_data = fernet.encrypt(str(data).encode()).decode()
+        # masked_preview derived from type-specific field
+        if self.type == "eth_wallet":
+            self.masked_preview = self._mask(data.get("address", ""))
+        elif self.type == "hl_api":
+            self.masked_preview = self._mask(data.get("account_address", ""))
+        elif self.type == "ai_provider":
+            self.masked_preview = self._mask(data.get("api_key", ""), head=8, tail=0)
+        elif self.type == "app_api_key":
+            self.masked_preview = self._mask(data.get("key", ""), head=6, tail=0)
+        else:
+            self.masked_preview = "[encrypted]"
+
+    def decrypt(self) -> dict:
+        fernet = _get_fernet()
+        if not fernet:
+            raise RuntimeError("INSTANCE_SECRET_KEY not configured; cannot decrypt credential")
+        raw = fernet.decrypt(self.encrypted_data.encode()).decode()
+        # Convert Python dict string back to dict
+        import ast
+        return ast.literal_eval(raw)
+
+
+class ChatSession(Base):
+    """Per-user assistant chat session. Cap 10 per user (oldest pruned on create)."""
+    __tablename__ = "chat_sessions"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=False, index=True)
+    title = Column(String(128), default="New chat")
+    context = Column(String(32), default="assistant")  # assistant | studio | backtester | dashboard
+    created_at = Column(DateTime, default=_now_utc)
+    updated_at = Column(DateTime, default=_now_utc, onupdate=_now_utc)
+
+
+class ChatMessage(Base):
+    """A single turn in a chat session."""
+    __tablename__ = "chat_messages"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(36), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    role = Column(String(16), nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    model = Column(String(64), nullable=True)  # model used for assistant reply
+    created_at = Column(DateTime, default=_now_utc)
+
+
 class Instance(Base):
     __tablename__ = "instances"
 
     slug = Column(String(32), primary_key=True)
+    user_id = Column(String(36), nullable=True, index=True)  # owning User (multi-tenant)
+    hl_credential_id = Column(String(36), nullable=True, index=True)  # FK → credentials.id (per-engine HL key)
     name = Column(String(128), nullable=False)
     token = Column(String(64), nullable=False)
     strategy_id = Column(String(64), nullable=False)
@@ -54,6 +171,9 @@ class Instance(Base):
     offset = Column(Integer, default=3)
     dry_run = Column(Boolean, default=True)
     enabled = Column(Boolean, default=True)
+    # Manual start balance for PnL tracking (independent of HL account value)
+    start_balance = Column(Float, default=0.0)
+    balance_mode = Column(String(16), default="live")  # "live" or "manual"
     status = Column(String(32), default="stopped")  # stopped, running, error, killed
     hyperliquid_private_key_encrypted = Column(Text, nullable=True)
     account_address = Column(String(64), nullable=True)
@@ -68,6 +188,16 @@ class Instance(Base):
     mark_price = Column(Float, default=0.0)
     unrealized_pnl = Column(Float, default=0.0)
     unrealized_pnl_pct = Column(Float, default=0.0)
+
+    # Per-instance strategy parameter overrides (Pine input.* equivalent)
+    # JSON dict: {"engine_mode": "Scalp", "risk_profile": "Scalp Aggressive (8/3)", ...}
+    # Applied via strategy_class(**config) at instantiation.
+    strategy_config = Column(JSON, default=dict, nullable=True)
+
+    # Snapshot + image capture (per-instance visual + state snapshots)
+    snapshot_data = Column(JSON, default=dict, nullable=True)  # latest state snapshot
+    snapshot_image_url = Column(String(512), nullable=True)  # URL or path to snapshot image
+    snapshot_at = Column(DateTime, nullable=True)  # when last snapshot was taken
 
     def get_private_key(self) -> str | None:
         """Decrypt per-instance private key if present."""
@@ -100,6 +230,30 @@ class Instance(Base):
         if len(addr) <= 10:
             return addr
         return f"{addr[:6]}...{addr[-4:]}"
+
+    def get_resolved_hl_credentials(self) -> tuple[str | None, str | None]:
+        """Resolve HL private_key + account_address for this engine.
+
+        Priority:
+          1. If hl_credential_id is set, decrypt that Credential row (DB-stored).
+          2. Else fall back to this instance's own encrypted key (legacy path).
+          3. Else None -> caller falls back to global env client.
+        'Global' in the UI = hl_credential_id is NULL -> returns None -> env default.
+        """
+        if self.hl_credential_id:
+            db = SessionLocal()
+            try:
+                cred = db.query(Credential).filter(Credential.id == self.hl_credential_id).first()
+            finally:
+                db.close()
+            if cred and cred.is_active:
+                d = cred.decrypt()
+                return d.get("private_key"), d.get("account_address")
+        pk = self.get_private_key()
+        addr = self.get_account_address()
+        if pk or addr:
+            return pk, addr
+        return None, None
 
 
 class KillSwitchState(Base):
@@ -168,6 +322,7 @@ class Trade(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     instance_id = Column(String(32), nullable=False, index=True)
+    user_id = Column(String(36), nullable=True, index=True)  # owning User (multi-tenant)
     side = Column(String(8), nullable=False)
     size = Column(Float, default=0.0)
     entry_price = Column(Float, default=0.0)
@@ -176,6 +331,7 @@ class Trade(Base):
     pnl_pct = Column(Float, default=0.0)
     entry_cost = Column(Float, default=0.0)  # estimated exchange fees on entry
     exit_cost = Column(Float, default=0.0)   # estimated exchange fees on exit
+    fee = Column(Float, default=0.0)  # total HL fees (maker + taker) for both legs
     price_diff = Column(Float, default=0.0)   # exit - entry
     signal_id = Column(String(36), nullable=True)
     timestamp = Column(DateTime, default=_now_utc)
@@ -200,6 +356,7 @@ class AccountSnapshot(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     instance_id = Column(String(32), nullable=True, index=True)
+    user_id = Column(String(36), nullable=True, index=True)  # owning User (multi-tenant)
     account_value = Column(Float, default=0.0)
     withdrawable = Column(Float, default=0.0)
     timestamp = Column(DateTime, default=_now_utc)
@@ -210,6 +367,10 @@ class Backtest(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     instance_slug = Column(String(32), nullable=False, index=True)
+    user_id = Column(String(36), nullable=True, index=True)  # owning User (multi-tenant)
+    # Distinguishes historical backtests from live Paper-Trading forward tests
+    kind = Column(String(16), default="backtest")  # "backtest" | "forward_test"
+    is_paper = Column(Boolean, default=False)  # True when produced by a Paper-Trading instance
     token = Column(String(64), nullable=False)
     strategy_id = Column(String(64), nullable=False)
     timeframe = Column(String(16), nullable=False)
@@ -283,6 +444,66 @@ class RotationRecommendation(Base):
     created_at = Column(DateTime, default=_now_utc)
 
 
+
+class CandleCache(Base):
+    """Cache OHLCV candles from HL to enable longer backtests beyond the 60-day API limit."""
+    __tablename__ = "candle_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(64), nullable=False, index=True)
+    timeframe = Column(String(16), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)  # candle open time
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, default=0.0)
+    fetched_at = Column(DateTime, default=_now_utc)
+
+
+class Strategy(Base):
+    """User-uploaded strategy (PineScript-first, Python conversion via Studio)."""
+    __tablename__ = "strategies"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), nullable=True, index=True)
+    name = Column(String(128), nullable=False)
+    strategy_id = Column(String(64), nullable=False, unique=True, index=True)
+    pine_source = Column(Text, nullable=False)
+    python_source = Column(Text, nullable=True)
+    documentation = Column(Text, nullable=True)
+    status = Column(String(16), default="pending")  # pending, active, error
+    parameters = Column(JSON, default=dict)
+    # Clone/versioning support
+    parent_strategy_id = Column(String(64), nullable=True, index=True)  # FK to parent Strategy.strategy_id
+    version = Column(String(16), default="1.0")  # Semantic version (1.0, 1.1, 2.0)
+    created_at = Column(DateTime, default=_now_utc)
+    updated_at = Column(DateTime, default=_now_utc, onupdate=_now_utc)
+
+
+class OHLCData(Base):
+    """Persisted historical OHLCV candles per token + timeframe.
+
+    Accumulates over time so backtests can use longer history than a single
+    live fetch allows. Upserted by token/timeframe/timestamp (idempotent).
+    """
+    __tablename__ = "ohlc_data"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(64), nullable=False, index=True)
+    timeframe = Column(String(16), nullable=False, index=True)
+    timestamp = Column(DateTime, nullable=False, index=True)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, default=0.0)
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint("token", "timeframe", "timestamp", name="uq_ohlc_token_tf_ts"),
+    )
+
+
 def get_engine():
     engine = create_engine(
         config.DATABASE_URL,
@@ -297,8 +518,57 @@ def get_engine():
 
 def init_db():
     engine = get_engine()
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine)  # creates new tables; no-op for existing
+    # SQLite has no ALTER ADD COLUMN IF NOT EXISTS — apply migration idempotently
+    _migrate_columns(engine)
     return engine
+
+
+def _migrate_columns(engine):
+    """Add columns introduced after initial deploy (SQLite-safe, idempotent)."""
+    from sqlalchemy import inspect, text
+    desired = {
+        "instances": [("user_id", "VARCHAR(36)"), ("hl_credential_id", "VARCHAR(36)"), ("strategy_config", "JSON"), ("snapshot_data", "JSON"), ("snapshot_image_url", "VARCHAR(512)"), ("snapshot_at", "DATETIME")],
+        "account_snapshots": [("user_id", "VARCHAR(36)")],
+        "backtests": [
+            ("user_id", "VARCHAR(36)"),
+            ("kind", "VARCHAR(16)"),
+            ("is_paper", "BOOLEAN"),
+        ],
+        "strategies": [("parent_strategy_id", "VARCHAR(64)"), ("version", "VARCHAR(16)")],
+        "trades": [("user_id", "VARCHAR(36)")],
+        "users": [
+            ("api_key", "VARCHAR(64)"),
+            ("email", "VARCHAR(256)"),
+            ("password_hash", "VARCHAR(256)"),
+            ("withdrawal_eth_address", "VARCHAR(64)"),
+            ("avatar_emoji", "VARCHAR(16)"),
+            ("avatar_url", "VARCHAR(512)"),
+            ("plan", "VARCHAR(32)"),
+            ("twofa_enabled", "BOOLEAN"),
+            ("assistant_model", "VARCHAR(64)"),
+            ("coder_model", "VARCHAR(64)"),
+        ],
+        "chat_sessions": [
+            ("user_id", "VARCHAR(36)"),
+            ("title", "VARCHAR(128)"),
+            ("context", "VARCHAR(32)"),
+        ],
+        "chat_messages": [
+            ("session_id", "VARCHAR(36)"),
+            ("user_id", "VARCHAR(36)"),
+            ("role", "VARCHAR(16)"),
+            ("content", "TEXT"),
+            ("model", "VARCHAR(64)"),
+        ],
+    }
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table, cols in desired.items():
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for col, ctype in cols:
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ctype}"))
 
 
 engine = init_db()
@@ -311,3 +581,41 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def generate_api_key() -> str:
+    """Generate a PULS-R API key in the format puls_<uuid4>_key."""
+    return f"puls_{uuid.uuid4().hex[:24]}_key"
+
+
+def get_or_seed_operator(db=None) -> "User":
+    """Return the singleton operator user, seeding it on first run.
+
+    Multi-tenant ready: looks up username "operator"; creates if missing.
+    Pass an existing session or a transient one is opened/closed internally.
+    """
+    own = db is None
+    if own:
+        db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == "operator").first()
+        if user is None:
+            user = User(
+                username="operator",
+                display_name="Operator",
+                start_balance=1000.0,
+                default_dry_run=True,
+                api_key=generate_api_key(),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.api_key:
+            # Backfill: generate API key for existing users without one
+            user.api_key = generate_api_key()
+            db.commit()
+            db.refresh(user)
+        return user
+    finally:
+        if own:
+            db.close()

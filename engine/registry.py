@@ -25,7 +25,19 @@ DEFAULT_FLEET = [
         "timeframe": "15m",
         "leverage": 1,
         "max_position_pct": 0.97,
-        "poll_interval_seconds": 30,
+        "poll_interval_seconds": 3,
+    },
+    {
+        "slug": "engine-2",
+        "name": "HYPE Paper v1.3",
+        "token": "HYPE",
+        "strategy_id": "engine_v1_3",
+        "mode": "Scalp",
+        "profile": "aggressive_8_3",
+        "timeframe": "15m",
+        "leverage": 5,
+        "max_position_pct": 0.97,
+        "poll_interval_seconds": 3,
     },
 ]
 
@@ -75,3 +87,90 @@ def get_presets(strategy_id: str) -> dict:
 def get_default_fleet() -> list:
     """Return the default fleet spec (engine-1 only)."""
     return [dict(p) for p in DEFAULT_FLEET]
+
+
+def register_uploaded_strategy(strategy_id: str, strategy_cls) -> None:
+    """Register an uploaded/cloned strategy in the runtime registry."""
+    STRATEGIES[strategy_id] = strategy_cls
+
+
+def unregister_uploaded_strategy(strategy_id: str) -> None:
+    """Remove an uploaded/cloned strategy from the runtime registry."""
+    if strategy_id in STRATEGIES and strategy_id not in ("engine_v1_3", "engine_v1", "engine_v6_1"):
+        del STRATEGIES[strategy_id]
+
+
+def detect_mintick(df=None, token: str = None) -> float:
+    """
+    Detect the minimum price tick (syminfo.mintick equivalent) from HL API.
+    Uses the markPx string precision from metaAndAssetCtxs, which is the
+    authoritative source of HL's price tick size.
+
+    Falls back to L2 orderbook granularity, then candle data, then 0.00001.
+
+    Do NOT use szDecimals - that's quantity decimals, not price tick size.
+    """
+    import requests
+
+    # Method 1: markPx decimal precision from metaAndAssetCtxs (authoritative)
+    if token:
+        try:
+            resp = requests.post(
+                "https://api.hyperliquid.xyz/info",
+                headers={"Content-Type": "application/json"},
+                json={"type": "metaAndAssetCtxs"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                meta = data[0] if isinstance(data, list) and len(data) > 0 else {}
+                ctxs = data[1] if isinstance(data, list) and len(data) > 1 else []
+                for m, c in zip(meta.get("universe", []), ctxs):
+                    if m.get("name") == token:
+                        mark_px = c.get("markPx", "")
+                        if "." in mark_px:
+                            dec_places = len(mark_px.split(".")[1])
+                        else:
+                            dec_places = 0
+                        return 10 ** (-dec_places)
+        except Exception:
+            pass
+
+    # Method 2: L2 orderbook granularity (fallback)
+    if token:
+        try:
+            resp = requests.post(
+                "https://api.hyperliquid.xyz/info",
+                headers={"Content-Type": "application/json"},
+                json={"type": "l2Book", "coin": token},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                levels = data.get("levels", [])
+                if levels and levels[0]:
+                    bids = [float(l["px"]) for l in levels[0][:10]]
+                    diffs = [abs(bids[i + 1] - bids[i]) for i in range(len(bids) - 1)]
+                    pos_diffs = [d for d in diffs if d > 0]
+                    if pos_diffs:
+                        return float(min(pos_diffs))
+        except Exception:
+            pass
+
+    # Method 3: candle data detection (last resort fallback)
+    if df is not None:
+        try:
+            all_prices = set()
+            for col in ("close", "open", "high", "low"):
+                if col in df.columns:
+                    all_prices.update(df[col].dropna().unique())
+            sorted_prices = sorted(all_prices)
+            if len(sorted_prices) >= 2:
+                diffs = [sorted_prices[i + 1] - sorted_prices[i] for i in range(len(sorted_prices) - 1)]
+                pos_diffs = [d for d in diffs if d > 0]
+                if pos_diffs:
+                    return float(min(pos_diffs))
+        except Exception:
+            pass
+
+    return 0.00001

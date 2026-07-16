@@ -21,23 +21,29 @@ def main():
         if os.path.exists(f):
             os.remove(f)
 
-    # Basic auth helper
+    # Root is the public landing page
     r = client.get("/", auth=("operator", "testpass"))
-    assert r.status_code == 200, f"dashboard status {r.status_code}"
-    assert "Pulse Graph" in r.text, "missing Pulse Graph header"
-    assert "Fleet" in r.text, "missing Fleet header"
-    assert "Global Logs" in r.text, "missing Global Logs header"
-    print("Dashboard renders: OK")
+    assert r.status_code == 200, f"landing status {r.status_code}"
+    assert "PULS" in r.text, "missing brand on landing"
+    print("Landing renders: OK")
 
     r = client.get("/static/style.css")
     assert r.status_code == 200, "style.css missing"
-    assert "--panel" in r.text, "missing CSS variables"
+    assert "--bg-0" in r.text, "missing CSS variables"
     print("CSS serves: OK")
 
-    r = client.get("/static/app.js")
-    assert r.status_code == 200, "app.js missing"
-    assert "drawPulse" in r.text, "missing drawPulse function"
-    print("JS serves: OK")
+    # Server-rendered dashboard (Option B) — no SPA app.js
+    r = client.get("/app/dashboard", auth=("operator", "testpass"))
+    assert r.status_code == 200, f"dashboard status {r.status_code}"
+    assert "Account Value" in r.text, "missing Account Value KPI"
+    assert "Fleet" in r.text, "missing Fleet header"
+    assert "lightweight-charts" in r.text, "missing equity chart lib"
+    print("Server-rendered dashboard: OK")
+
+    r = client.get("/app/backtests", auth=("operator", "testpass"))
+    assert r.status_code == 200, f"backtests status {r.status_code}"
+    assert "Run Backtest" in r.text, "missing backtest form"
+    print("Server-rendered backtests: OK")
 
     # Cleanup
     for f in ["data/test_ui_overhaul.db", "data/test_ui_overhaul.db-wal", "data/test_ui_overhaul.db-shm"]:

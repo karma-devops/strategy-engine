@@ -19,6 +19,7 @@ import pandas as pd
 
 from core.market_data import HyperLiquidMarketData
 from engine.registry import get_strategy
+from instances.models import CandleCache, SessionLocal
 
 
 # Estimated trading costs for HyperLiquid perps (taker-heavy scalp/swing).
@@ -183,6 +184,146 @@ def _build_signal_series(df: pd.DataFrame, strategy, symbol: str, equity_history
     return signals
 
 
+
+
+def _save_candles_to_cache(df: pd.DataFrame, token: str, timeframe: str):
+    """Save fetched OHLCV candles to DB cache for future use."""
+    try:
+        db = SessionLocal()
+        for _, row in df.iterrows():
+            ts = row["timestamp"]
+            existing = db.query(CandleCache).filter(
+                CandleCache.token == token,
+                CandleCache.timeframe == timeframe,
+                CandleCache.timestamp == ts,
+            ).first()
+            if not existing:
+                db.add(CandleCache(
+                    token=token, timeframe=timeframe, timestamp=ts,
+                    open=float(row["open"]), high=float(row["high"]),
+                    low=float(row["low"]), close=float(row["close"]),
+                    volume=float(row.get("volume", 0)),
+                ))
+        db.commit()
+        db.close()
+    except Exception as e:
+        print(f"[BACKTEST] Candle cache save failed: {e}")
+
+
+def _load_cached_candles(token: str, timeframe: str, start_date, end_date) -> pd.DataFrame | None:
+    """Load cached candles for a date range. Returns None if insufficient data."""
+    try:
+        db = SessionLocal()
+        rows = db.query(CandleCache).filter(
+            CandleCache.token == token,
+            CandleCache.timeframe == timeframe,
+            CandleCache.timestamp >= start_date,
+            CandleCache.timestamp <= end_date,
+        ).order_by(CandleCache.timestamp).all()
+        db.close()
+        if len(rows) < 30:
+            return None
+        import pandas as pd2
+        data = [{
+            "timestamp": r.timestamp, "open": r.open, "high": r.high,
+            "low": r.low, "close": r.close, "volume": r.volume,
+        } for r in rows]
+        return pd2.DataFrame(data)
+    except Exception:
+        return None
+
+
+
+def _generate_intra_bar_ticks(open_p: float, high: float, low: float, close: float, n_ticks: int = 28) -> list[float]:
+    """Generate n synthetic intra-bar ticks via Brownian bridge from open to close,
+    ensuring high and low are touched."""
+    if n_ticks <= 1:
+        return [close]
+    if n_ticks == 4:
+        # Basic: O, H, L, C in order
+        return [open_p, high, low, close]
+    
+    # Brownian bridge: random walk from open to close, touching high and low
+    rng = np.random.default_rng()
+    ticks = []
+    # Split into 4 segments: O→H, H→L, L→C, with remaining ticks distributed
+    # Place high at ~25% and low at ~75% of the bar
+    high_idx = max(1, n_ticks // 4)
+    low_idx = min(n_ticks - 2, (3 * n_ticks) // 4)
+    
+    segments = []
+    # Segment 1: open → high
+    for i in range(high_idx):
+        frac = (i + 1) / high_idx
+        ticks.append(open_p + (high - open_p) * frac + rng.normal(0, abs(high - open_p) * 0.1))
+    # Segment 2: high → low
+    for i in range(low_idx - high_idx):
+        frac = (i + 1) / (low_idx - high_idx)
+        ticks.append(high + (low - high) * frac + rng.normal(0, abs(low - high) * 0.1))
+    # Segment 3: low → close
+    remaining = n_ticks - low_idx - 1
+    for i in range(remaining):
+        frac = (i + 1) / (remaining + 1)
+        ticks.append(low + (close - low) * frac + rng.normal(0, abs(close - low) * 0.1))
+    ticks.append(close)
+    
+    # Clamp to [low, high] range
+    ticks = [max(low, min(high, t)) for t in ticks]
+    # Ensure first = open, last = close
+    if ticks:
+        ticks[0] = open_p
+        ticks[-1] = close
+    return ticks
+
+
+def _check_trailing_stop_on_ticks(position: BacktestTrade, ticks: list[float], mintick: float, leverage: int, equity: float) -> tuple[bool, float, float]:
+    """Evaluate trailing stop on intra-bar ticks. Returns (hit, exit_price, pnl_usd)."""
+    for tick_price in ticks:
+        if position.side == "LONG":
+            if tick_price > position.best_price:
+                position.best_price = tick_price
+            if not position.trail_active:
+                activation_price = position.entry_price + position.trail_activation * mintick
+                if tick_price >= activation_price:
+                    position.trail_active = True
+            if position.trail_active:
+                trail_stop = position.best_price - position.trail_offset * mintick
+                position.trail_stop_price = trail_stop
+                if trail_stop > position.stop_loss_price and tick_price <= trail_stop:
+                    exit_cost = position.qty * trail_stop * TAKER_FEE
+                    raw_pnl = (trail_stop - position.entry_price) / position.entry_price
+                    pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
+                    return True, trail_stop, pnl_usd
+            # Also check stop-loss on ticks
+            if position.stop_loss_price is not None and tick_price <= position.stop_loss_price:
+                exit_cost = position.qty * position.stop_loss_price * TAKER_FEE
+                raw_pnl = (position.stop_loss_price - position.entry_price) / position.entry_price
+                pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
+                return True, position.stop_loss_price, pnl_usd
+        elif position.side == "SHORT":
+            if position.best_price == 0 or tick_price < position.best_price:
+                position.best_price = tick_price
+            if not position.trail_active:
+                activation_price = position.entry_price - position.trail_activation * mintick
+                if tick_price <= activation_price:
+                    position.trail_active = True
+            if position.trail_active:
+                trail_stop = position.best_price + position.trail_offset * mintick
+                position.trail_stop_price = trail_stop
+                if trail_stop < position.stop_loss_price and tick_price >= trail_stop:
+                    exit_cost = position.qty * trail_stop * TAKER_FEE
+                    raw_pnl = (position.entry_price - trail_stop) / position.entry_price
+                    pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
+                    return True, trail_stop, pnl_usd
+            if position.stop_loss_price is not None and tick_price >= position.stop_loss_price:
+                exit_cost = position.qty * position.stop_loss_price * TAKER_FEE
+                raw_pnl = (position.stop_loss_price - position.entry_price) / position.entry_price
+                pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
+                return True, position.stop_loss_price, pnl_usd
+    return False, 0.0, 0.0
+
+
+
 def run_backtest(
     instance_slug: str,
     token: str,
@@ -198,6 +339,7 @@ def run_backtest(
     risk_per_trade_pct: float = 97.0,
     market_data: HyperLiquidMarketData | None = None,
     use_saved_ohlcv: pd.DataFrame | None = None,
+    tick_mode: int = 1,  # 1=OHLC only, 4=basic O/H/L/C, 28=Brownian bridge
 ) -> BacktestResult:
     """Run a historical backtest and return a BacktestResult."""
     backtest_id = str(uuid.uuid4())
@@ -233,10 +375,27 @@ def run_backtest(
         if use_saved_ohlcv is not None and not use_saved_ohlcv.empty:
             df = use_saved_ohlcv.copy()
         else:
-            md = market_data or HyperLiquidMarketData()
-            # Request enough bars for warmup + the requested backtest length.
-            bars_needed = int((days * 24 * 60) / _minutes_for_timeframe(timeframe)) + 50
-            df = md.get_candles(symbol=token, timeframe=timeframe, bars=bars_needed)
+            # Try cached candles first (enables backtests beyond HL 60-day API limit)
+            cached = _load_cached_candles(token, timeframe, start_date, end_date)
+            if cached is not None and len(cached) >= 30:
+                # Merge cache with fresh data for any newer candles
+                md = market_data or HyperLiquidMarketData()
+                bars_needed = int((days * 24 * 60) / _minutes_for_timeframe(timeframe)) + 50
+                fresh = md.get_candles(symbol=token, timeframe=timeframe, bars=bars_needed)
+                if not fresh.empty:
+                    # Save fresh candles to cache for future use
+                    _save_candles_to_cache(fresh, token, timeframe)
+                    # Combine: use cached for old data, fresh for new
+                    df = pd.concat([cached, fresh]).drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+                else:
+                    df = cached
+            else:
+                md = market_data or HyperLiquidMarketData()
+                bars_needed = int((days * 24 * 60) / _minutes_for_timeframe(timeframe)) + 50
+                df = md.get_candles(symbol=token, timeframe=timeframe, bars=bars_needed)
+                # Save fetched candles to cache for future use
+                if not df.empty:
+                    _save_candles_to_cache(df, token, timeframe)
 
         if df.empty or len(df) < 50:
             result.status = "error"
@@ -277,6 +436,7 @@ def run_backtest(
 
             # Generate signal for this bar (if enough warmup data)
             direction = "NEUTRAL"
+            sig = None
             sig_metadata = {}
             if i >= min_rows:
                 window = df.iloc[: i + 1].copy()
@@ -285,9 +445,11 @@ def run_backtest(
                 sig_metadata = sig.get("metadata", {}) if sig else {}
 
             # Trend reversal close (Pine: ta.crossunder/crossover fastEMA vs medmEMA)
+            # Read EMA values from exit_config (neutral receiver)
+            ec_current = sig.get("exit_config", {}) or {} if sig else {}
             if position is not None and prev_fast_ema is not None and prev_medm_ema is not None:
-                curr_fast = sig_metadata.get("fast_ema")
-                curr_medm = sig_metadata.get("medm_ema")
+                curr_fast = ec_current.get("fast_ema")
+                curr_medm = ec_current.get("medm_ema")
                 if curr_fast is not None and curr_medm is not None:
                     trend_reversal = False
                     # crossunder: fast was above medm, now below → close LONG
@@ -316,10 +478,10 @@ def run_backtest(
                         equity_history.append(equity)
                         position = None
 
-            # Update prev EMA values for next bar
-            if sig_metadata.get("fast_ema") is not None:
-                prev_fast_ema = sig_metadata.get("fast_ema")
-                prev_medm_ema = sig_metadata.get("medm_ema")
+            # Update prev EMA values for next bar (from exit_config)
+            if ec_current.get("fast_ema") is not None:
+                prev_fast_ema = ec_current.get("fast_ema")
+                prev_medm_ema = ec_current.get("medm_ema")
 
             # Check stop-loss hit (using candle high/low)
             if position is not None and position.stop_loss_price is not None:
@@ -350,10 +512,26 @@ def run_backtest(
                     equity_history.append(equity)
                     position = None
 
-            # Check trailing stop (Pine: trail_points/trail_offset)
+            # Intra-bar tick evaluation for trailing stop (tick_mode > 1)
+            if position is not None and position.trail_activation > 0 and tick_mode > 1:
+                tick_prices = _generate_intra_bar_ticks(float(candle["open"]), high, low, close, tick_mode)
+                hit, exit_px, pnl_usd_val = _check_trailing_stop_on_ticks(position, tick_prices, mintick, leverage, equity)
+                if hit:
+                    position.exit_bar = i
+                    position.exit_time = ts
+                    position.exit_price = exit_px
+                    position.pnl_pct = (pnl_usd_val / position.position_size * 100) if position.position_size > 0 else 0.0
+                    position.pnl_usd = pnl_usd_val
+                    position.bars_held = i - position.entry_bar
+                    trades.append(position)
+                    equity += pnl_usd_val
+                    equity_history.append(equity)
+                    position = None
+
+            # Check trailing stop (Pine: trail_points/trail_offset) - OHLC mode
             # Activates after price moves activation ticks in favor,
             # then trails at offset ticks behind best price.
-            if position is not None and position.trail_activation > 0:
+            if position is not None and position.trail_activation > 0 and tick_mode == 1:
                 tick_size = mintick  # detected per-asset from HL candle data
 
                 if position.side == "LONG":
@@ -418,42 +596,23 @@ def run_backtest(
                             equity_history.append(equity)
                             position = None
 
-            # Exit existing position if signal reverses
-            if position is not None:
-                exit_signal = False
-                if position.side == "LONG" and direction == "SELL":
-                    exit_signal = True
-                elif position.side == "SHORT" and direction == "BUY":
-                    exit_signal = True
-
-                if exit_signal:
-                    exit_cost = position.qty * close * TAKER_FEE
-                    if position.side == "LONG":
-                        raw_pnl = (close - position.entry_price) / position.entry_price
-                    else:
-                        raw_pnl = (position.entry_price - close) / position.entry_price
-                    pnl_pct = raw_pnl * leverage * 100
-                    pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
-                    position.exit_bar = i
-                    position.exit_time = ts
-                    position.exit_price = close
-                    position.pnl_pct = pnl_pct
-                    position.pnl_usd = pnl_usd
-                    position.bars_held = i - position.entry_bar
-                    trades.append(position)
-                    equity += pnl_usd
-                    equity_history.append(equity)
-                    position = None
-
             # Enter new position if flat and signal is directional
             if position is None and direction in ("BUY", "SELL"):
                 side = "LONG" if direction == "BUY" else "SHORT"
 
-                # Stop-loss from strategy metadata
-                sl = sig_metadata.get("stop_loss_long") if side == "LONG" else sig_metadata.get("stop_loss_short")
-                atr_val = sig_metadata.get("atr", close * 0.01)
-                atr_mult = sig_metadata.get("atr_mult_use", 1.8)
+                # Read all exit params from strategy exit_config (neutral receiver)
+                ec = sig.get("exit_config", {}) or {}
+                sl = ec.get("stop_loss_long") if side == "LONG" else ec.get("stop_loss_short")
+                tp = ec.get("take_profit_long") if side == "LONG" else ec.get("take_profit_short")
+                trail_act = float(ec.get("trail_activation", 0))
+                trail_off = float(ec.get("trail_offset", 0))
+                use_time_exit = ec.get("use_time_exit", False)
+                time_exit_bars = ec.get("time_exit_bars")
+
+                # Fallback: compute stop-loss from ATR if exit_config didn't declare one
                 if not sl:
+                    atr_val = sig_metadata.get("atr", close * 0.01)
+                    atr_mult = sig_metadata.get("atr_mult_use", 1.8)
                     if side == "LONG":
                         sl = low - atr_val * atr_mult
                     else:
@@ -473,11 +632,6 @@ def run_backtest(
 
                 position_size = qty * close
                 entry_cost = qty * close * TAKER_FEE
-
-                # Trail stop params from strategy metadata (each strategy defines its own)
-                # v1.3 uses active_activation/active_offset, v1 uses activation/offset
-                trail_act = sig_metadata.get("active_activation") or sig_metadata.get("activation") or activation
-                trail_off = sig_metadata.get("active_offset") or sig_metadata.get("offset") or offset
 
                 position = BacktestTrade(
                     entry_bar=i,

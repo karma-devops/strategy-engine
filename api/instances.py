@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
 from engine.registry import STRATEGIES
-from instances.models import get_db, Instance
+from instances.models import get_db, Instance, AccountSnapshot, PositionSnapshot
 from instances.manager import manager
 
 router = APIRouter()
@@ -45,9 +45,12 @@ class UpdateInstanceRequest(BaseModel):
     offset: Optional[int] = None
     dry_run: Optional[bool] = None
     enabled: Optional[bool] = None
+    start_balance: Optional[float] = None
+    balance_mode: Optional[str] = None
     hyperliquid_private_key: Optional[str] = None
     account_address: Optional[str] = None
     withdrawal_address: Optional[str] = None
+    hl_credential_id: Optional[str] = None
 
 
 @router.get("/instances")
@@ -72,6 +75,8 @@ def list_instances(request: Request, db: Session = Depends(get_db)):
                 "offset": i.offset,
                 "dry_run": i.dry_run,
                 "enabled": i.enabled,
+                "start_balance": i.start_balance,
+                "balance_mode": i.balance_mode,
                 "status": i.status,
                 "account_address_mask": i.mask_address(i.get_account_address()),
                 "withdrawal_address_mask": i.mask_address(i.get_withdrawal_address()),
@@ -86,6 +91,128 @@ def list_instances(request: Request, db: Session = Depends(get_db)):
             }
             for i in instances
         ],
+    }
+
+
+def get_summary_data():
+    """Standalone summary data fetcher for logout page (no request context needed)."""
+    from instances.models import SessionLocal, AccountSnapshot, Instance, PositionSnapshot
+    db = SessionLocal()
+    try:
+        instances = db.query(Instance).order_by(Instance.created_at.asc()).all()
+        snapshots = db.query(AccountSnapshot).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
+        latest = snapshots[-1] if snapshots else None
+        active = sum(1 for i in instances if i.status == "running")
+        account_value = latest.account_value if latest else 0.0
+        has_hl_credentials = False
+        if not latest:
+            try:
+                from core.exchange import get_hyperliquid_client
+                hl = get_hyperliquid_client()
+                has_hl_credentials = getattr(hl, 'has_credentials', False)
+                if has_hl_credentials:
+                    live_val = hl.get_account_value()
+                    if live_val > 0:
+                        account_value = round(live_val, 2)
+            except Exception:
+                pass
+        else:
+            try:
+                from core.exchange import get_hyperliquid_client
+                has_hl_credentials = getattr(get_hyperliquid_client(), 'has_credentials', False)
+            except Exception:
+                pass
+        return {
+            "account_value": account_value,
+            "active_engines": active,
+            "total_engines": len(instances),
+            "dry_run_global": all(i.dry_run for i in instances) if instances else True,
+            "has_hl_credentials": has_hl_credentials,
+        }
+    finally:
+        db.close()
+
+
+@router.get("/summary")
+@limiter.limit(READ_LIMIT)
+def summary(request: Request, db: Session = Depends(get_db)):
+    """Live KPI + fleet summary for frontend polling (mirrors dashboard route)."""
+    from instances.models import AccountSnapshot
+    instances = db.query(Instance).order_by(Instance.created_at.asc()).all()
+    instances_data = []
+    for i in instances:
+        snap = (
+            db.query(PositionSnapshot)
+            .filter(PositionSnapshot.instance_id == i.slug)
+            .order_by(PositionSnapshot.timestamp.desc())
+            .first()
+        )
+        instances_data.append({
+            "slug": i.slug,
+            "name": i.name,
+            "token": i.token,
+            "strategy_id": i.strategy_id,
+            "timeframe": i.timeframe,
+            "status": i.status,
+            "position_side": i.position_side or "FLAT",
+            "leverage": i.leverage,
+            "max_position_pct": i.max_position_pct,
+            "dry_run": i.dry_run,
+            "unrealized_pnl": i.unrealized_pnl or 0.0,
+            "unrealized_pnl_pct": i.unrealized_pnl_pct or 0.0,
+            "entry_price": snap.entry_price if snap else (i.entry_price or 0.0),
+            "mark_price": snap.mark_price if snap else (i.mark_price or 0.0),
+            "position_size": snap.size if snap else (i.position_size or 0.0),
+        })
+    snapshots = db.query(AccountSnapshot).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
+    equity_series = [{"time": s.timestamp.isoformat(), "value": s.account_value} for s in snapshots]
+    peak = 0.0
+    max_dd = 0.0
+    for s in snapshots:
+        v = s.account_value
+        if v > peak:
+            peak = v
+        if peak > 0:
+            dd = (peak - v) / peak
+            if dd > max_dd:
+                max_dd = dd
+    latest = snapshots[-1] if snapshots else None
+    active = sum(1 for i in instances if i.status == "running")
+    open_pnl = round(sum((i.unrealized_pnl or 0.0) for i in instances), 2)
+
+    # If no snapshots, try live exchange value as fallback
+    account_value = latest.account_value if latest else 0.0
+    has_hl_credentials = False
+    if not latest:
+        try:
+            from core.exchange import get_hyperliquid_client
+            hl = get_hyperliquid_client()
+            has_hl_credentials = getattr(hl, 'has_credentials', False)
+            if has_hl_credentials:
+                live_val = hl.get_account_value()
+                if live_val > 0:
+                    account_value = round(live_val, 2)
+        except Exception:
+            pass
+    else:
+        # Even with snapshots, check if HL creds exist for the prompt
+        try:
+            from core.exchange import get_hyperliquid_client
+            has_hl_credentials = getattr(get_hyperliquid_client(), 'has_credentials', False)
+        except Exception:
+            has_hl_credentials = False
+
+    return {
+        "ok": True,
+        "account_value": account_value,
+        "drawdown_pct": round(max_dd * 100.0, 2),
+        "active_engines": active,
+        "total_engines": len(instances),
+        "open_pnl": open_pnl,
+        "instances": instances_data,
+        "equity_series": equity_series,
+        "dry_run_global": all(i.dry_run for i in instances) if instances else True,
+        "has_hl_credentials": has_hl_credentials,
     }
 
 
@@ -169,6 +296,45 @@ def update_instance(
             setattr(inst, key, value)
     db.commit()
     return {"ok": True, "message": f"Updated {inst.slug}"}
+
+
+@router.put("/instances/{instance_id}/strategy-config")
+@limiter.limit(WRITE_LIMIT)
+def update_strategy_config(
+    request: Request,
+    instance_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """Save per-instance strategy parameter overrides (Pine input.* equivalent)."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    inst.strategy_config = payload
+    db.commit()
+    return {"ok": True, "message": f"Strategy config saved for {inst.slug}", "config": payload}
+
+
+@router.get("/instances/{instance_id}/strategy-config")
+@limiter.limit(READ_LIMIT)
+def get_strategy_config(
+    request: Request,
+    instance_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return current per-instance strategy config + parameter schema."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    from engine.registry import get_strategy
+    strategy_cls = get_strategy(inst.strategy_id)
+    parameters = strategy_cls.get_parameters() if strategy_cls else []
+    return {
+        "ok": True,
+        "strategy_id": inst.strategy_id,
+        "config": inst.strategy_config or {},
+        "parameters": parameters,
+    }
 
 
 @router.post("/instances/{instance_id}/start")
@@ -267,6 +433,82 @@ def get_all_trades(request: Request, limit: int = 50, db: Session = Depends(get_
     }
 
 
+@router.post("/instances/{instance_id}/leverage")
+@limiter.limit(WRITE_LIMIT)
+def set_leverage(
+    request: Request,
+    instance_id: str,
+    leverage: int,
+    db: Session = Depends(get_db),
+):
+    """Set leverage on the exchange and update the instance record."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    if leverage < 1 or leverage > 50:
+        return {"ok": False, "message": "Leverage must be 1-50"}
+    from core.exchange import get_hyperliquid_client
+    client = get_hyperliquid_client(inst)
+    result = client.set_leverage(inst.token, leverage)
+    if result is None:
+        return {"ok": False, "message": "Exchange rejected leverage change - check logs"}
+    # HL returns {"status": "err", "response": "..."} on failure
+    if isinstance(result, dict) and result.get("status") == "err":
+        return {"ok": False, "message": f"Exchange error: {result.get('response', 'unknown')}"}
+    inst.leverage = leverage
+    db.commit()
+    return {"ok": True, "message": f"Set {inst.slug} leverage to {leverage}x", "result": result}
+
+
+class SetBalanceRequest(BaseModel):
+    start_balance: float = Field(..., ge=0)
+    balance_mode: str = Field(default="manual", pattern="^(live|manual)$")
+
+
+@router.post("/instances/{instance_id}/balance")
+@limiter.limit(WRITE_LIMIT)
+def set_balance(
+    request: Request,
+    instance_id: str,
+    payload: SetBalanceRequest,
+    db: Session = Depends(get_db),
+):
+    """Set manual start balance for PnL tracking."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    inst.start_balance = payload.start_balance
+    inst.balance_mode = payload.balance_mode
+    db.commit()
+    return {"ok": True, "message": f"Set {inst.slug} balance: {payload.balance_mode} ${payload.start_balance}"}
+
+
+@router.get("/instances/{instance_id}/balance")
+@limiter.limit(READ_LIMIT)
+def get_balance(
+    request: Request,
+    instance_id: str,
+    db: Session = Depends(get_db),
+):
+    """Get balance info: start_balance, balance_mode, live account value, tracked PnL."""
+    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    if not inst:
+        return {"ok": False, "message": "Instance not found"}
+    from core.exchange import get_hyperliquid_client
+    client = get_hyperliquid_client(inst)
+    live_value = client.get_account_value() if not inst.dry_run else 0.0
+    start = inst.start_balance if inst.balance_mode == "manual" and inst.start_balance > 0 else live_value
+    tracked_pnl = live_value - start if start > 0 else 0.0
+    return {
+        "ok": True,
+        "balance_mode": inst.balance_mode,
+        "start_balance": inst.start_balance,
+        "live_account_value": live_value,
+        "tracked_pnl": tracked_pnl,
+        "baseline": start,
+    }
+
+
 @router.post("/instances/{instance_id}/restart")
 @limiter.limit(WRITE_LIMIT)
 def restart_instance(request: Request, instance_id: str, db: Session = Depends(get_db)):
@@ -277,9 +519,18 @@ def restart_instance(request: Request, instance_id: str, db: Session = Depends(g
 @router.delete("/instances/{instance_id}")
 @limiter.limit(WRITE_LIMIT)
 def delete_instance(request: Request, instance_id: str, db: Session = Depends(get_db)):
+    """Delete an instance and all associated data (trades, signals, backtests, snapshots)."""
     manager.stop_instance(instance_id)
     inst = db.query(Instance).filter(Instance.slug == instance_id).first()
-    if inst:
-        db.delete(inst)
-        db.commit()
-    return {"ok": True, "message": "Deleted"}
+    if not inst:
+        return {"ok": False, "message": f"Instance {instance_id} not found"}
+    # Clean up all related records to prevent orphaned data
+    from instances.models import Trade, Signal, Backtest, PositionSnapshot, AccountSnapshot
+    db.query(Trade).filter(Trade.instance_id == instance_id).delete()
+    db.query(Signal).filter(Signal.instance_id == instance_id).delete()
+    db.query(Backtest).filter(Backtest.instance_slug == instance_id).delete()
+    db.query(PositionSnapshot).filter(PositionSnapshot.instance_id == instance_id).delete()
+    db.query(AccountSnapshot).filter(AccountSnapshot.instance_id == instance_id).delete()
+    db.delete(inst)
+    db.commit()
+    return {"ok": True, "message": f"Deleted {instance_id} and all associated data"}

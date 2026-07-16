@@ -1,0 +1,169 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Strategy Studio{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/chat_widget.css">
+{% endblock %}
+{% block heading %}Strategy Studio{% endblock %}
+{% block content %}
+<style>
+    .studio-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); align-items: start; }
+    .studio-pane { display: flex; flex-direction: column; gap: var(--space-2); }
+    .studio-pane label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
+    .studio-pane textarea, .studio-pane select { background: #0d0d0d; color: #c5c5c5; border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 12px; font-family: 'SF Mono','Cascadia Code',var(--font-mono); font-size: 12px; line-height: 1.6; min-height: 420px; resize: vertical; width: 100%; }
+    .studio-pane select { min-height: 36px; height: 36px; }
+    .studio-bar { display: flex; gap: var(--space-2); align-items: center; margin: var(--space-3) 0; flex-wrap: wrap; }
+    .studio-status { font-size: var(--text-sm); margin-top: var(--space-2); }
+    .studio-status.success { color: var(--color-profit); }
+    .studio-status.error { color: var(--color-loss); }
+    .studio-status.busy { color: var(--text-secondary); }
+    .studio-meta { font-size: var(--text-xs); color: var(--text-muted); }
+    .studio-meta code { color: var(--brand); }
+</style>
+
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Pine → Python Converter</h2>
+        <span class="studio-meta">Provider: <code>{{ ai_provider }}</code> · Model: <code>{{ ai_model }}</code></span>
+    </div>
+    <p style="color:var(--text-muted);font-size:var(--text-sm);margin-bottom:var(--space-2);">
+        Select an uploaded (pending) strategy, or paste PineScript directly. Convert generates Python via the AI provider — review, then Save to activate.
+    </p>
+
+    <div class="studio-bar">
+        <select id="strategy-select" onchange="loadStrategy()">
+            <option value="">— Select pending strategy —</option>
+        </select>
+        <button class="fleet-btn btn-start" style="padding:8px 20px;" onclick="convert()">Convert →</button>
+        <button class="fleet-btn btn-restart" style="padding:8px 20px;" onclick="saveStrategy()">Save &amp; Activate</button>
+        <a href="/app/strategies" class="btn-sm" style="text-decoration:none;color:var(--text-muted);">← Strategies</a>
+    </div>
+
+    <div class="studio-wrap">
+        <div class="studio-pane">
+            <label for="pine-input">PineScript Source</label>
+            <textarea id="pine-input" placeholder="//@version=6&#10;strategy('My Strategy', overlay=true)&#10;// paste PineScript here"></textarea>
+        </div>
+        <div class="studio-pane">
+            <label for="python-output">Generated Python (review before saving)</label>
+            <textarea id="python-output" placeholder="// Generated Python appears here after Convert" readonly></textarea>
+        </div>
+    </div>
+
+    <div class="studio-status" id="status" style="display:none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% include 'chat_widget.html' %}
+<script>
+const API_KEY = "{{ api_key }}";
+const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+
+let currentStrategyId = null;
+
+async function loadStrategies() {
+    try {
+        const r = await fetch(API_BASE + '/api/v2/strategies', { headers: { 'X-API-Key': API_KEY } });
+        const data = await r.json();
+        const sel = document.getElementById('strategy-select');
+        (data.strategies || []).forEach(s => {
+            if (s.status === 'pending') {
+                const o = document.createElement('option');
+                o.value = s.strategy_id; o.textContent = s.name + ' (' + s.strategy_id + ')';
+                sel.appendChild(o);
+            }
+        });
+    } catch (e) { /* non-fatal */ }
+}
+
+async function loadStrategy() {
+    const id = document.getElementById('strategy-select').value;
+    currentStrategyId = id || null;
+    if (!id) return;
+    const status = document.getElementById('status');
+    status.style.display = 'block'; status.className = 'studio-status busy';
+    status.textContent = 'Loading ' + id + '...';
+    try {
+        const r = await fetch(API_BASE + '/api/v2/strategies/' + id, { headers: { 'X-API-Key': API_KEY } });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('pine-input').value = data.pine_source || '';
+            status.style.display = 'none';
+        } else {
+            status.className = 'studio-status error'; status.textContent = data.message || 'Load failed';
+        }
+    } catch (e) {
+        status.className = 'studio-status error'; status.textContent = 'Error: ' + e;
+    }
+}
+
+function setStatus(msg, cls) {
+    const s = document.getElementById('status');
+    s.style.display = 'block'; s.className = 'studio-status ' + cls; s.textContent = msg;
+}
+
+async function convert() {
+    const pine = document.getElementById('pine-input').value.trim();
+    if (!pine) { setStatus('PineScript source is required.', 'error'); return; }
+    const id = currentStrategyId || '__paste__';
+    setStatus('Converting via ' + '{{ ai_model }}' + '...', 'busy');
+    try {
+        const r = await fetch(API_BASE + '/api/v2/strategies/' + id + '/convert', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify({ pine_source: pine })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            document.getElementById('python-output').value = data.python_source;
+            setStatus('✓ ' + data.message, 'success');
+        } else {
+            setStatus('✕ ' + (data.message || 'Conversion failed'), 'error');
+        }
+    } catch (e) {
+        setStatus('✕ Error: ' + e, 'error');
+    }
+}
+
+async function saveStrategy() {
+    const python = document.getElementById('python-output').value.trim();
+    if (!python) { setStatus('Nothing to save — run Convert first.', 'error'); return; }
+    if (!currentStrategyId) { setStatus('Select a pending strategy to save into (or upload one first).', 'error'); return; }
+    setStatus('Saving...', 'busy');
+    try {
+        const r = await fetch(API_BASE + '/api/v2/strategies/' + currentStrategyId + '/save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify({ python_source: python })
+        });
+        const data = await r.json();
+        if (data.ok) { setStatus('✓ ' + data.message, 'success'); setTimeout(() => window.location.href = '/app/strategies/' + currentStrategyId, 1200); }
+        else { setStatus('✕ ' + (data.message || 'Save failed'), 'error'); }
+    } catch (e) {
+        setStatus('✕ Error: ' + e, 'error');
+    }
+}
+
+loadStrategies();
+</script>
+<script src="/static/chat_widget.js"></script>
+<script>
+// Phase 9F: inject Studio context (strategy name + Pine source) into chat widget hint
+(function(){
+  var w = document.getElementById('chat-widget');
+  function updateHint() {
+    var name = document.getElementById('strategy-select');
+    var pine = document.getElementById('pine-input');
+    var hint = '';
+    if (name && name.value) hint += 'Strategy: ' + name.options[name.selectedIndex].text + '\n';
+    if (pine && pine.value) hint += 'PineScript source:\n' + pine.value.substring(0, 1500);
+    if (w) w.dataset.contextHint = hint;
+  }
+  if (w) {
+    updateHint();
+    var pine = document.getElementById('pine-input');
+    var sel = document.getElementById('strategy-select');
+    if (pine) pine.addEventListener('input', updateHint);
+    if (sel) sel.addEventListener('change', updateHint);
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Backtests{% endblock %}
+{% block heading %}Backtests{% endblock %}
+{% block content %}
+<form class="bt-form" id="bt-form" onsubmit="event.preventDefault(); runBacktest();">
+    <div class="field">
+        <label>Token</label>
+        <input type="text" id="bt-token" value="FARTCOIN" placeholder="FARTCOIN">
+    </div>
+    <div class="field">
+        <label>Strategy</label>
+        <select id="bt-strategy">
+            <option value="engine_v1_3">engine_v1_3</option>
+        </select>
+    </div>
+    <div class="field">
+        <label>Timeframe</label>
+        <select id="bt-tf">
+            <option value="15m" selected>15m</option>
+            <option value="5m">5m</option>
+            <option value="1h">1h</option>
+        </select>
+    </div>
+    <div class="field">
+        <label>Days</label>
+        <input type="number" id="bt-days" value="7" min="1" max="365">
+    </div>
+    <div class="field">
+        <label>Leverage</label>
+        <input type="number" id="bt-lev" value="5" min="1" max="50">
+    </div>
+    <div class="field">
+        <label>&nbsp;</label>
+        <button type="submit" id="bt-submit">Run Backtest</button>
+    </div>
+    <div class="bt-msg" id="bt-msg"></div>
+</form>
+
+<table class="bt-table">
+    <thead>
+        <tr>
+            <th>Token</th>
+            <th>Strategy</th>
+            <th>TF</th>
+            <th>Return</th>
+            <th>DD</th>
+            <th>Sharpe</th>
+            <th>WR</th>
+            <th>PF</th>
+            <th>Trades</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if backtests %}
+        {% for b in backtests %}
+        <tr>
+            <td class="mono-off">{{ b.token }}</td>
+            <td class="mono-off">{{ b.strategy_id }}</td>
+            <td>{{ b.timeframe }}</td>
+            <td class="{% if b.total_return_pct >= 0 %}pos{% else %}neg{% endif %}">{{ b.total_return_pct | format_pct }}</td>
+            <td class="neg">{{ b.max_drawdown_pct | format_pct | replace('+','') }}</td>
+            <td>{{ b.sharpe_ratio | format_num(2) }}</td>
+            <td>{{ b.win_rate | format_num(1) }}%</td>
+            <td>{{ b.profit_factor | format_num(2) }}</td>
+            <td>{{ b.total_trades }}</td>
+            <td><span class="tag tag-{{ b.status }}">{{ b.status }}</span></td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="10" class="empty">No backtests yet. Run one above.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const API_KEY = "{{ api_key }}";
+    const API_BASE = (location.origin || '').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    async function runBacktest() {
+        const btn = document.getElementById('bt-submit');
+        const msg = document.getElementById('bt-msg');
+        btn.disabled = true;
+        msg.className = 'bt-msg';
+        msg.textContent = 'Running backtest...';
+        const payload = {
+            token: document.getElementById('bt-token').value,
+            strategy_id: document.getElementById('bt-strategy').value,
+            timeframe: document.getElementById('bt-tf').value,
+            days: parseInt(document.getElementById('bt-days').value),
+            leverage: parseInt(document.getElementById('bt-lev').value),
+            mode: "Scalp",
+            profile: "balanced"
+        };
+        try {
+            const r = await fetch(API_BASE + '/api/v2/backtests/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.detail || 'Backtest failed');
+            msg.className = 'bt-msg ok';
+            msg.textContent = 'Backtest complete: ' + (data.total_return_pct !== undefined ? data.total_return_pct.toFixed(2) + '% return' : 'done') + ' — refresh to view.';
+            setTimeout(() => location.reload(), 1500);
+        } catch (e) {
+            msg.className = 'bt-msg err';
+            msg.textContent = 'Error: ' + e.message;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

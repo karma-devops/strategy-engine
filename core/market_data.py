@@ -9,6 +9,8 @@ from typing import Optional
 import requests
 import pandas as pd
 
+from instances.models import SessionLocal, OHLCData
+
 
 class HyperLiquidMarketData:
     BASE_URL = "https://api.hyperliquid.xyz/info"
@@ -17,6 +19,39 @@ class HyperLiquidMarketData:
 
     def __init__(self):
         self._session = requests.Session()
+
+    @staticmethod
+    def save_ohlc_batch(token: str, timeframe: str, df: pd.DataFrame):
+        """Idempotently upsert fetched candles into ohlc_data for long-term history."""
+        if df is None or df.empty:
+            return
+        db = SessionLocal()
+        try:
+            seen = set()
+            for _, row in df.iterrows():
+                ts = row["timestamp"]
+                if (token, timeframe, ts) in seen:
+                    continue
+                seen.add((token, timeframe, ts))
+                existing = db.query(OHLCData).filter(
+                    OHLCData.token == token, OHLCData.timeframe == timeframe, OHLCData.timestamp == ts
+                ).first()
+                if existing:
+                    existing.open, existing.high, existing.low, existing.close, existing.volume = (
+                        float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]), float(row["volume"])
+                    )
+                else:
+                    db.add(OHLCData(
+                        token=token, timeframe=timeframe, timestamp=ts,
+                        open=float(row["open"]), high=float(row["high"]),
+                        low=float(row["low"]), close=float(row["close"]), volume=float(row["volume"]),
+                    ))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"[WARN] OHLC persist failed: {e}")
+        finally:
+            db.close()
 
     def _post(self, payload: dict) -> Optional[list]:
         for attempt in range(self.MAX_RETRIES):
@@ -83,9 +118,33 @@ class HyperLiquidMarketData:
         numeric_cols = ["open", "high", "low", "close", "volume"]
         df[numeric_cols] = df[numeric_cols].astype("float64")
 
+        # Persist to DB for long-term accumulation (idempotent upsert)
+        try:
+            HyperLiquidMarketData.save_ohlc_batch(symbol, timeframe, df)
+        except Exception:
+            pass
+
         # Return most recent `bars` sorted ascending
         df = df.sort_values("timestamp").tail(bars).reset_index(drop=True)
         return df
+
+    @staticmethod
+    def load_ohlc_from_db(token: str, timeframe: str, limit: int = 5000) -> pd.DataFrame:
+        """Load accumulated candles from DB (oldest→newest), up to `limit` rows."""
+        db = SessionLocal()
+        try:
+            rows = db.query(OHLCData).filter(
+                OHLCData.token == token, OHLCData.timeframe == timeframe
+            ).order_by(OHLCData.timestamp.asc()).limit(limit).all()
+            if not rows:
+                return pd.DataFrame()
+            data = [{
+                "timestamp": r.timestamp, "open": r.open, "high": r.high,
+                "low": r.low, "close": r.close, "volume": r.volume,
+            } for r in rows]
+            return pd.DataFrame(data)
+        finally:
+            db.close()
 
     def get_mid_price(self, symbol: str) -> Optional[float]:
         """Get mid price from L2 orderbook."""

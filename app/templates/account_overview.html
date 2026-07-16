@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Account{% endblock %}
+{% block heading %}Account Overview{% endblock %}
+{% block content %}
+<style>
+    .alloc-table { width: 100%; border-collapse: collapse; margin-top: var(--space-3); }
+    .alloc-table th { text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--input-border); }
+    .alloc-table td { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); border-bottom: 1px solid var(--border-subtle); }
+    .alloc-table tr:hover { background: var(--surface-hover); }
+    .alloc-table .num { font-family: var(--font-mono); text-align: right; }
+    .alloc-table .pos { color: var(--color-profit); }
+    .alloc-table .neg { color: var(--color-loss); }
+    .tag-mode { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+    .tag-mode.live { background: rgba(239,83,80,0.15); color: var(--color-loss); }
+    .tag-mode.paper { background: rgba(57,208,216,0.15); color: var(--brand); }
+</style>
+
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Portfolio Value</div>
+        <div class="kpi-value">${{ portfolio_value }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Start Balance</div>
+        <div class="kpi-value">${{ start_balance }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Total PnL</div>
+        <div class="kpi-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}">${{ total_pnl }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Withdrawable</div>
+        <div class="kpi-value">${{ withdrawable }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Active Engines</div>
+        <div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+</div>
+
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <div class="card-head"><h2>Engine Allocation</h2></div>
+    {% if engines %}
+    <table class="alloc-table">
+        <thead>
+            <tr>
+                <th>Engine</th>
+                <th>Token</th>
+                <th>Status</th>
+                <th>Mode</th>
+                <th>Lev</th>
+                <th class="num">Account Value</th>
+                <th class="num">Unrealized PnL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in engines %}
+            <tr>
+                <td><a href="/app/engines/{{ e.slug }}" style="color:var(--brand);">{{ e.name }}</a></td>
+                <td>{{ e.token }}</td>
+                <td><span class="tag tag-{% if e.status == 'running' %}running{% else %}flat{% endif %}">{{ e.status }}</span></td>
+                <td><span class="tag-mode {% if e.dry_run %}paper{% else %}live{% endif %}">{% if e.dry_run %}PAPER{% else %}LIVE{% endif %}</span></td>
+                <td>{{ e.leverage }}x</td>
+                <td class="num">${{ e.account_value }}</td>
+                <td class="num {% if e.unrealized_pnl >= 0 %}pos{% else %}neg{% endif %}">${{ e.unrealized_pnl }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No engines configured. <a href="/app/engines" style="color:var(--brand);">Add one →</a></div>
+    {% endif %}
+</div>
+
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <div class="card-head"><h2>Account Settings</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);padding:var(--space-3);">
+        <div>
+            <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Username</div>
+            <div style="font-size:var(--text-sm);">{{ user.username }}</div>
+        </div>
+        <div>
+            <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Display Name</div>
+            <div style="font-size:var(--text-sm);">{{ user.display_name }}</div>
+        </div>
+        <div>
+            <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Default Dry Run</div>
+            <div style="font-size:var(--text-sm);">{{ user.default_dry_run }}</div>
+        </div>
+        <div>
+            <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);margin-bottom:4px;">Start Balance</div>
+            <div style="font-size:var(--text-sm);">${{ user.start_balance }}</div>
+        </div>
+    </div>
+    <div style="padding:0 var(--space-3) var(--space-3);">
+        <a href="/app/account/settings" class="btn btn-save" style="text-decoration:none;display:inline-block;padding:8px 16px;border-radius:4px;background:var(--surface-hover);color:var(--text-secondary);font-size:var(--text-sm);">Edit Settings →</a>
+        <a href="/app/account/secrets" class="btn btn-save" style="text-decoration:none;display:inline-block;padding:8px 16px;border-radius:4px;background:var(--surface-hover);color:var(--text-secondary);font-size:var(--text-sm);margin-left:8px;">Secrets →</a>
+        <a href="/app/account/wallet" class="btn btn-save" style="text-decoration:none;display:inline-block;padding:8px 16px;border-radius:4px;background:var(--surface-hover);color:var(--text-secondary);font-size:var(--text-sm);margin-left:8px;">Wallet →</a>
+        <a href="/app/account/api-keys" class="btn btn-save" style="text-decoration:none;display:inline-block;padding:8px 16px;border-radius:4px;background:var(--surface-hover);color:var(--text-secondary);font-size:var(--text-sm);margin-left:8px;">API Keys →</a>
+    </div>
+</div>
+{% endblock %}

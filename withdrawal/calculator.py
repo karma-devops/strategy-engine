@@ -19,7 +19,7 @@ DEFAULT_PHASED_RULES = [
     {"min": 0, "max": 100000, "withdrawal_rate": 0.0, "compound_rate": 1.0},
     {"min": 100000, "max": 500000, "withdrawal_rate": 0.25, "compound_rate": 0.75},
     {"min": 500000, "max": 1000000, "withdrawal_rate": 0.50, "compound_rate": 0.50},
-    {"min": 1000000, "max": float("inf"), "withdrawal_rate": 0.55, "compound_rate": 0.45},
+    {"min": 1000000, "max": None, "withdrawal_rate": 0.55, "compound_rate": 0.45},
 ]
 
 
@@ -68,7 +68,11 @@ def get_effective_rate(db: Session, balance: float, config: WithdrawalConfig) ->
     if not isinstance(rules, list):
         return config.withdrawal_rate
     for rule in rules:
-        if rule["min"] <= balance < rule["max"]:
+        max_val = rule["max"]
+        if max_val is None:
+            if balance >= rule["min"]:
+                return rule["withdrawal_rate"]
+        elif rule["min"] <= balance < max_val:
             return rule["withdrawal_rate"]
     return config.withdrawal_rate
 

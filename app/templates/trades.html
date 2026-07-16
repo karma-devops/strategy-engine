@@ -1,0 +1,181 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Trades{% endblock %}
+{% block head %}
+<style>
+  .filter-bar { display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; margin-bottom:var(--space-4); }
+  .filter-bar select, .filter-bar input {
+    background:var(--input-bg); color:var(--input-text); border:1px solid var(--input-border);
+    border-radius:var(--radius-sm); padding:var(--space-1) var(--space-3);
+    font-size:var(--text-sm); height:36px; font-family:var(--font-body);
+  }
+  .filter-bar select:focus, .filter-bar input:focus { border-color:var(--color-accent); outline:2px solid var(--color-accent); outline-offset:-2px; }
+  .filter-count { font-size:var(--text-xs); color:var(--text-muted); margin-left:auto; }
+  .data-table th { cursor:pointer; user-select:none; white-space:nowrap; }
+  .data-table th:hover { color:var(--color-accent); }
+  .data-table th .sort-arrow { font-size:var(--text-xs); margin-left:2px; opacity:0.3; }
+  .data-table th.sorted .sort-arrow { opacity:1; color:var(--color-accent); }
+  .tag-long { background:var(--color-positive-bg,rgba(52,211,153,0.15)); color:var(--color-positive,var(--color-success)); }
+  .tag-short { background:var(--color-negative-bg,rgba(239,68,68,0.15)); color:var(--color-negative,var(--color-danger)); }
+  .tag-open { background:rgba(234,179,8,0.15); color:#eab308; }
+  .tag-closed { background:var(--surface-hover); color:var(--text-muted); }
+  .row-win { border-left:3px solid var(--color-success,var(--color-positive,#34d399)); }
+  .row-loss { border-left:3px solid var(--color-danger,var(--color-negative,#ef4444)); }
+  .row-open { border-left:3px solid #eab308; }
+  .empty { text-align:center; padding:var(--space-8) var(--space-4); color:var(--text-muted); }
+</style>
+{% endblock %}
+{% block heading %}Trades{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Total PnL<span class="tip-i" data-tip="Realized PnL from all closed trades, net of fees"></span></div>
+        <div class="kpi-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}" id="kpi-pnl">{{ total_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Win Rate<span class="tip-i" data-tip="Percentage of closed trades with positive PnL"></span></div>
+        <div class="kpi-value" id="kpi-wr">{{ win_rate }}%</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Open Positions<span class="tip-i" data-tip="Trades currently holding a position"></span></div>
+        <div class="kpi-value" id="kpi-open">{{ open_count }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Total Trades<span class="tip-i" data-tip="All trades including open positions"></span></div>
+        <div class="kpi-value" id="kpi-total">{{ total_trades }}</div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <div class="filter-bar">
+        <select id="filter-engine" aria-label="Filter by engine">
+            <option value="">All Engines</option>
+            {% for e in engines %}
+            <option value="{{ e }}">{{ e }}</option>
+            {% endfor %}
+        </select>
+        <select id="filter-side" aria-label="Filter by side">
+            <option value="">All Sides</option>
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+        </select>
+        <select id="filter-status" aria-label="Filter by status">
+            <option value="">All Status</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+        </select>
+        <span class="filter-count" id="filter-count">Showing {{ total_trades }} trades</span>
+    </div>
+
+    {% if trades %}
+    <div class="table-wrap">
+    <table class="data-table" id="trades-table">
+        <thead>
+            <tr>
+                <th data-sort="time">Time <span class="sort-arrow">▲</span></th>
+                <th data-sort="instance">Engine <span class="sort-arrow">▲</span></th>
+                <th data-sort="side">Side <span class="sort-arrow">▲</span></th>
+                <th data-sort="size">Size <span class="sort-arrow">▲</span></th>
+                <th data-sort="entry_price">Entry <span class="sort-arrow">▲</span></th>
+                <th data-sort="exit_price">Exit <span class="sort-arrow">▲</span></th>
+                <th data-sort="pnl_usd">PnL ($) <span class="sort-arrow">▲</span></th>
+                <th data-sort="pnl_pct">PnL (%) <span class="sort-arrow">▲</span></th>
+                <th data-sort="fees">Fees <span class="sort-arrow">▲</span></th>
+                <th data-sort="status">Status <span class="sort-arrow">▲</span></th>
+            </tr>
+        </thead>
+        <tbody id="trades-body">
+            {% for t in trades %}
+            <tr class="trade-row {% if t.open %}row-open{% else %}{% if t.pnl_usd >= 0 %}row-win{% else %}row-loss{% endif %}{% endif %}"
+                data-engine="{{ t.instance }}" data-side="{{ t.side }}" data-status="{% if t.open %}open{% else %}closed{% endif %}">
+                <td>{{ t.time }}</td>
+                <td>{{ t.instance }}</td>
+                <td><span class="tag tag-{% if t.side == 'long' %}long{% else %}short{% endif %}">{{ t.side | upper }}</span></td>
+                <td style="font-family:var(--font-mono);">{{ t.size }}</td>
+                <td style="font-family:var(--font-mono);">{{ t.entry_price }}</td>
+                <td style="font-family:var(--font-mono);">{% if t.exit_price %}{{ t.exit_price }}{% else %}—{% endif %}</td>
+                <td class="{% if t.open %}muted{% elif t.pnl_usd >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{% if t.open %}open{% else %}{{ t.pnl_usd | format_usd }}{% endif %}</td>
+                <td class="{% if t.open %}muted{% elif t.pnl_usd >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{% if t.open %}—{% else %}{{ t.pnl_pct }}%{% endif %}</td>
+                <td style="font-family:var(--font-mono);">{{ t.fees }}</td>
+                <td>{% if t.open %}<span class="tag tag-open">OPEN</span>{% else %}<span class="tag tag-closed">CLOSED</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">No trades yet. Start an engine or run a backtest to populate the log.</div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const rows = Array.from(document.querySelectorAll('.trade-row'));
+    const table = document.getElementById('trades-table');
+    const countEl = document.getElementById('filter-count');
+    const filterEngine = document.getElementById('filter-engine');
+    const filterSide = document.getElementById('filter-side');
+    const filterStatus = document.getElementById('filter-status');
+
+    function filterRows() {
+        const engine = filterEngine.value;
+        const side = filterSide.value;
+        const status = filterStatus.value;
+        let visible = 0;
+        rows.forEach(r => {
+            const show = (!engine || r.dataset.engine === engine) &&
+                         (!side || r.dataset.side === side) &&
+                         (!status || r.dataset.status === status);
+            r.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        countEl.textContent = 'Showing ' + visible + ' of ' + rows.length + ' trades';
+    }
+
+    filterEngine.addEventListener('change', filterRows);
+    filterSide.addEventListener('change', filterRows);
+    filterStatus.addEventListener('change', filterRows);
+
+    // Sortable columns
+    if (table) {
+        let sortCol = null, sortDir = 'asc';
+        table.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.sort;
+                if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+                else { sortCol = col; sortDir = 'asc'; }
+                table.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+                th.classList.add('sorted');
+                const tbody = document.getElementById('trades-body');
+                const sorted = Array.from(tbody.querySelectorAll('tr')).sort((a, b) => {
+                    const av = a.querySelector(`td:nth-child(${th.cellIndex + 1})`).textContent.trim();
+                    const bv = b.querySelector(`td:nth-child(${th.cellIndex + 1})`).textContent.trim();
+                    const an = parseFloat(av.replace(/[^0-9.-]/g, ''));
+                    const bn = parseFloat(bv.replace(/[^0-9.-]/g, ''));
+                    if (!isNaN(an) && !isNaN(bn)) return sortDir === 'asc' ? an - bn : bn - an;
+                    return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+                });
+                sorted.forEach(r => tbody.appendChild(r));
+            });
+        });
+    }
+
+    // Live SSE update for open trades
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    const API_KEY = '{{ api_key }}';
+    const es = new EventSource(API_BASE + '/stream');
+    es.addEventListener('trade', function(e) {
+        try {
+            const d = JSON.parse(e.data);
+            if (!d) return;
+            // Update KPIs on trade close
+            const pnlEl = document.getElementById('kpi-pnl');
+            const wrEl = document.getElementById('kpi-wr');
+            const openEl = document.getElementById('kpi-open');
+            if (d.total_pnl !== undefined) pnlEl.textContent = '$' + d.total_pnl.toFixed(2);
+            if (d.win_rate !== undefined) wrEl.textContent = d.win_rate.toFixed(1) + '%';
+            if (d.open_positions !== undefined) openEl.textContent = d.open_positions;
+        } catch(err) {}
+    });
+})();
+</script>
+{% endblock %}

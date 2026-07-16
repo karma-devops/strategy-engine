@@ -15,98 +15,128 @@ import pandas as pd
 import numpy as np
 from engine.base import BaseStrategy
 
-
 class EngineV1_3Strategy(BaseStrategy):
     """
-    Eve Engine v1.3 — full-fidelity Pine Script translation (scalp-only).
+    Eve Engine v1.3 — full-fidelity Pine Script translation.
 
-    * Forced ``engineMode = 'Scalp'``
-    * Risk profile locked to ``Scalp Aggressive (8/3)``
-    * Scalp EMA/SMA lengths (4 / 9 / 25) and scalp ATR multiplier base (1.3)
-    * Adaptive equity compounding, DMI/ADX, pin-bar detection,
-      momentum triggers, price-pierce entries, TP / time-exit levels
+    Supports BOTH Swing and Scalp modes (Pine default = Swing).
+    Risk profiles are selectable, not hardcoded.
+    All mode-aware parameters follow Pine's mode-aware _use pattern.
     """
 
-    def __init__(self, name: str = "Eve Engine v1.3"):
-        super().__init__(name)
+    # Risk profile → trail params (Pine lines 237-257)
+    _PROFILES = {
+        "Swing Sniper (36/12)": (36, 12),
+        "Swing Trend (36/18)": (36, 18),
+        "Swing Conservative (48/18)": (48, 18),
+        "Scalp Default (10/4)": (10, 4),
+        "Scalp Aggressive (8/3)": (8, 3),
+        "Scalp Conservative (12/5)": (12, 5),
+    }
 
-        # ------------------------------------------------------------------
-        #  Forced mode & profile — scalp aggressive 8/3 only
-        # ------------------------------------------------------------------
-        self.engine_mode = "Scalp"
-        self.active_activation = 8
-        self.active_offset = 3
-        # Explicit guard: this engine is scalp-only; any attempt to change
-        # mode/profile is ignored and reset here.
-        self.allowed_modes = {"Scalp"}
-        self.allowed_profiles = {(8, 3)}
+    @classmethod
+    def _accepted_params(cls) -> set:
+        return {
+            "engine_mode", "risk_profile", "risk_per_trade_pct",
+            "atr_mult_input", "atr_mult_guard", "growth_target_x",
+            "use_momentum", "momentum_thresh", "use_fixed_tp",
+            "tp_multiplier", "use_time_exit", "max_bars_in_trade",
+            "use_volume_confirm", "volume_lookback", "trade_direction",
+        }
 
-        # ------------------------------------------------------------------
-        #  Mode-aware indicator lengths  (scalp defaults)
-        # ------------------------------------------------------------------
-        self.ema_fast_len = 4
-        self.ema_medm_len = 9
-        self.ema_slow_len = 25
-        self.atr_period = 14
+    @classmethod
+    def get_parameters(cls) -> list[dict]:
+        return [
+            {"name": "engine_mode", "label": "Engine Mode", "type": "select",
+             "options": ["Swing", "Scalp"], "default": "Swing", "group": "Configuration"},
+            {"name": "risk_profile", "label": "Risk Profile", "type": "select",
+             "options": list(cls._PROFILES.keys()),
+             "default": "Scalp Default (10/4)", "group": "Risk Management"},
+            {"name": "risk_per_trade_pct", "label": "Risk % Per Trade", "type": "float",
+             "min": 50.0, "max": 100.0, "step": 1.0, "default": 97.0, "group": "Risk Management"},
+            {"name": "atr_mult_input", "label": "Stop Loss Base (x ATR)", "type": "float",
+             "min": 0.5, "max": 3.0, "step": 0.1, "default": 1.8, "group": "Risk Management"},
+            {"name": "atr_mult_guard", "label": "Stop Loss Guard (x ATR)", "type": "float",
+             "min": 0.5, "max": 2.0, "step": 0.1, "default": 0.9, "group": "Risk Management"},
+            {"name": "growth_target_x", "label": "Hyper-Growth Target (x)", "type": "float",
+             "min": 1.1, "step": 0.5, "default": 50.0, "group": "Hyper-Growth Protocol"},
+            {"name": "use_momentum", "label": "Exploit Momentum Entry?", "type": "bool",
+             "default": True, "group": "Hyper-Growth Protocol"},
+            {"name": "momentum_thresh", "label": "Momentum Threshold (ADX)", "type": "int",
+             "min": 10, "max": 40, "default": 18, "group": "Hyper-Growth Protocol"},
+            {"name": "use_fixed_tp", "label": "Use Fixed Take-Profit?", "type": "bool",
+             "default": False, "group": "Scalp Features"},
+            {"name": "tp_multiplier", "label": "TP Multiplier (x ATR)", "type": "float",
+             "min": 1.0, "max": 5.0, "step": 0.1, "default": 1.5, "group": "Scalp Features"},
+            {"name": "use_time_exit", "label": "Use Time-Based Exit?", "type": "bool",
+             "default": False, "group": "Scalp Features"},
+            {"name": "max_bars_in_trade", "label": "Max Bars In Trade", "type": "int",
+             "min": 5, "max": 100, "default": 20, "group": "Scalp Features"},
+            {"name": "use_volume_confirm", "label": "Require Volume Confirmation?", "type": "bool",
+             "default": False, "group": "Filters"},
+            {"name": "volume_lookback", "label": "Volume SMA Length", "type": "int",
+             "min": 5, "max": 100, "default": 20, "group": "Filters"},
+            {"name": "trade_direction", "label": "Trade Direction", "type": "select",
+             "options": ["Both", "Long Only", "Short Only"], "default": "Both", "group": "Filters"},
+        ]
 
-        # ------------------------------------------------------------------
-        #  ATR multiplier (input default preserved exactly)
-        # ------------------------------------------------------------------
-        self.atr_mult_input = 1.8      # Pine input.float default
-        self.atr_mult_base = 1.3       # scalp atr_mult_base
-        self.atr_mult_guard = 0.9      # cold-market guard
-
-        # ------------------------------------------------------------------
-        #  Hyper-growth protocol (input defaults preserved)
-        # ------------------------------------------------------------------
+    def __init__(self, name: str = "Eve Engine v1.3", **kwargs):
+        # Set Pine defaults first, then apply kwargs overrides
+        # Pine defaults: engineMode='Swing', riskProfile='Scalp Default (10/4)'
+        self.engine_mode = "Swing"
+        self.risk_profile = "Scalp Default (10/4)"
+        self.risk_per_trade_pct = 97.0
+        self.atr_mult_input = 1.8
+        self.atr_mult_guard = 0.9
         self.growth_target_x = 50.0
         self.use_momentum = True
-        # tooltip says Swing=18, Scalp=28 – we force scalp-recommended value
-        self.momentum_thresh = 28
-
-        # ------------------------------------------------------------------
-        #  Equity tracking (input defaults preserved)
-        # ------------------------------------------------------------------
-        self.equity_sma_len = 21
-        self.warmup_trades = 3
-        self.use_equity_guard = False
-        self.eq_percent = 0.7
-        self.initial_capital = 100.0
-
-        # ------------------------------------------------------------------
-        #  Risk per trade (input default preserved)
-        # ------------------------------------------------------------------
-        self.risk_per_trade_pct = 97.0
-
-        # ------------------------------------------------------------------
-        #  Trade direction (input default preserved)
-        # ------------------------------------------------------------------
-        self.trade_direction = "Both"
-
-        # ------------------------------------------------------------------
-        #  Volume confirmation (input defaults preserved)
-        # ------------------------------------------------------------------
-        self.use_volume_confirm = False
-        self.volume_lookback = 20
-        self.volume_multiplier = 1.3  # scalp volumeMultiplier_use
-
-        # ------------------------------------------------------------------
-        #  Scalp-specific features (input defaults preserved)
-        # ------------------------------------------------------------------
+        self.momentum_thresh = 18
         self.use_fixed_tp = False
         self.tp_multiplier = 1.5
         self.use_time_exit = False
         self.max_bars_in_trade = 20
+        self.use_volume_confirm = False
+        self.volume_lookback = 20
+        self.trade_direction = "Both"
 
-        # ------------------------------------------------------------------
-        #  Manual fallback ticks (input defaults preserved)
-        # ------------------------------------------------------------------
+        super().__init__(name, **kwargs)
+
+        # Derived mode flags (Pine lines 39-40)
+        self.is_swing_mode = self.engine_mode == "Swing"
+        self.is_scalp_mode = self.engine_mode == "Scalp"
+
+        # Resolve risk profile → trail params (Pine lines 237-257)
+        self.active_activation, self.active_offset = self._PROFILES.get(
+            self.risk_profile,
+            (36, 12) if self.is_swing_mode else (10, 4),
+        )
+
+        # Mode-aware indicator lengths (Pine lines 281-283)
+        self.ema_fast_len = 6 if self.is_swing_mode else 4
+        self.ema_medm_len = 18 if self.is_swing_mode else 9
+        self.ema_slow_len = 50 if self.is_swing_mode else 25
+
+        # ATR period (Pine line 279 — same for both modes)
+        self.atr_period = 14
+
+        # Mode-aware ATR multiplier base (Pine line 117)
+        self.atr_mult_base = 1.8 if self.is_swing_mode else 1.3
+
+        # Mode-aware momentum threshold override (Pine lines 302-303)
+        self.momentum_thresh_mode = 18 if self.is_swing_mode else 28
+
+        # Mode-aware volume multiplier (Pine line 342)
+        self.volume_multiplier = 1.3 if self.is_scalp_mode else 1.0
+
+        # Mode-aware pin bar ratios (Pine lines 314-315)
+        self.pin_bar_wick_ratio = 0.66 if self.is_swing_mode else 0.70
+        self.pin_bar_body_ratio = 0.34 if self.is_swing_mode else 0.30
+
+        # Manual fallback ticks (Pine lines 221-222)
         self.man_activation = 36
         self.man_offset = 12
 
-        # ------------------------------------------------------------------
-        #  Hard-coded constants from Pine
-        # ------------------------------------------------------------------
+        # Hard-coded constants from Pine (lines 23-30)
         self.FLOAT_EPSILON = 0.0001
         self.MIN_ATR_MULT = 0.5
         self.MAX_ATR_MULT = 3.0
@@ -117,6 +147,13 @@ class EngineV1_3Strategy(BaseStrategy):
         self.MAX_EQUITY_HISTORY = 100
         self.er_len = 14
         self.z_score = 2.2
+
+        # Equity tracking (Pine lines 88-89)
+        self.equity_sma_len = 21
+        self.warmup_trades = 3
+        self.use_equity_guard = False
+        self.eq_percent = 0.7
+        self.initial_capital = 100.0
 
     # ------------------------------------------------------------------
     #  helpers
@@ -462,7 +499,7 @@ class EngineV1_3Strategy(BaseStrategy):
         adx_value, di_plus, di_minus = self._dmi_adx(df, period=self.atr_period)
 
         momentum_thresh_final = (
-            self.momentum_thresh if self.momentum_thresh > 0 else 28
+            self.momentum_thresh if self.momentum_thresh > 0 else self.momentum_thresh_mode
         )
         is_strong_trend = adx_value > momentum_thresh_final
 
@@ -472,8 +509,8 @@ class EngineV1_3Strategy(BaseStrategy):
         upper_wick = high - max(close, open_)
         lower_wick = min(close, open_) - low
 
-        pin_bar_wick_ratio = 0.70   # scalp
-        pin_bar_body_ratio = 0.30   # scalp
+        pin_bar_wick_ratio = self.pin_bar_wick_ratio
+        pin_bar_body_ratio = self.pin_bar_body_ratio
 
         bullish_pin_bar = False
         bearish_pin_bar = False
@@ -631,6 +668,8 @@ class EngineV1_3Strategy(BaseStrategy):
             "take_profit_long": float(round(tp_long, 8)),
             "take_profit_short": float(round(tp_short, 8)),
             "time_exit_bars": self.max_bars_in_trade if self.use_time_exit else None,
+            "use_time_exit": self.use_time_exit,
+            "engine_mode": self.engine_mode,
             "use_fixed_tp": self.use_fixed_tp,
             "qty_long": float(round(final_qty_long, 6)),
             "qty_short": float(round(final_qty_short, 6)),
@@ -641,11 +680,29 @@ class EngineV1_3Strategy(BaseStrategy):
             "chan_adj": float(round(chan_adj, 6)),
         }
 
+        # ── Exit contract: strategy declares its exits, consumers are neutral ──
+        exit_config = {
+            "stop_loss_long": float(round(stop_price_long, 8)),
+            "stop_loss_short": float(round(stop_price_short, 8)),
+            "take_profit_long": float(round(tp_long, 8)),
+            "take_profit_short": float(round(tp_short, 8)),
+            "trail_activation": self.active_activation,
+            "trail_offset": self.active_offset,
+            "use_time_exit": self.use_time_exit,
+            "time_exit_bars": self.max_bars_in_trade if self.use_time_exit else None,
+            "engine_mode": self.engine_mode,
+            "fan_up_trend": fan_up_trend,
+            "fan_dn_trend": fan_dn_trend,
+            "fast_ema": float(round(fast_ema, 8)),
+            "medm_ema": float(round(medm_ema, 8)),
+        }
+
         return {
             "token": symbol,
             "signal": signal,
             "direction": direction,
             "metadata": metadata,
+            "exit_config": exit_config,
         }
 
 

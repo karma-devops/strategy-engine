@@ -1,0 +1,96 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Paper Trading{% endblock %}
+{% block heading %}Paper Trading{% endblock %}
+{% block content %}
+<style>
+    .equity-svg { width: 100%; height: 280px; display: block; }
+    .equity-svg .eq-path { fill: none; stroke: var(--brand); stroke-width: 2; }
+    .equity-svg .eq-path.negative { stroke: var(--color-loss); }
+    .equity-svg .eq-area { fill: rgba(57,208,216,0.08); }
+    .equity-svg .eq-area.negative { fill: rgba(239,83,80,0.08); }
+    .equity-svg .eq-dot { fill: var(--brand); }
+    .equity-svg .eq-dot.negative { fill: var(--color-loss); }
+</style>
+
+<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Active Engines<span class="tip-i" data-tip="Paper engines currently running (dry_run=True)"></span></div><div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div></div>
+    <div class="kpi"><div class="kpi-label">Mode<span class="tip-i" data-tip="Paper trading uses simulated orders, no real money at risk"></span></div><div class="kpi-value"><span class="tag tag-flat">Paper Trading</span></div></div>
+</div>
+
+<div class="chart-card">
+    <div class="card-head"><h2>Equity Curve (Paper)</h2></div>
+    <canvas id="equityChart" style="width:100%;height:280px;display:block;"></canvas>
+</div>
+
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <div class="card-head"><h2>Paper Engines</h2></div>
+    {% if instances %}
+    <div class="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}">
+            <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}">{{ inst.status }}</span></div>
+            <div class="fleet-sub">{{ inst.token }}</div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No paper engines. Create one with dry_run=True in <a href="/app/engines" style="color:var(--brand);">Engines →</a></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const equityData = {{ equity_series | tojson | safe }};
+
+// Native TradingView-style area chart (no external lib)
+function renderEquity(canvas, data) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+    if (!data || data.length < 2) { ctx.fillStyle = '#9aa4b2'; ctx.font = '13px sans-serif'; ctx.fillText('No paper equity data yet.', 20, H/2); return; }
+    const pts = data.map(d => ({ t: Math.floor((d.time || d[0]) / 1000), v: parseFloat(d.value || d.equity || d[1]) }));
+    const vals = pts.map(p => p.v);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    const pad = (max - min) * 0.1 || 1; min -= pad; max += pad;
+    const padL = 56, padR = 12, padT = 12, padB = 24;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const x = i => padL + (i / (pts.length - 1)) * plotW;
+    const y = v => padT + (1 - (v - min) / (max - min)) * plotH;
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 1;
+    for (let g = 0; g <= 4; g++) {
+        const gy = padT + (g / 4) * plotH;
+        ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+        const gv = max - (g / 4) * (max - min);
+        ctx.fillStyle = '#5b6573'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+        ctx.fillText(gv.toFixed(2), padL - 6, gy + 3);
+    }
+    const up = vals[vals.length - 1] >= vals[0];
+    const line = up ? '#26a69a' : '#ef5350';
+    ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(x(i), y(vals[i]));
+    ctx.lineTo(x(pts.length - 1), padT + plotH); ctx.lineTo(x(0), padT + plotH); ctx.closePath();
+    const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+    grad.addColorStop(0, up ? 'rgba(38,166,154,0.35)' : 'rgba(239,83,80,0.35)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x(0), y(vals[0]));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(x(i), y(vals[i]));
+    ctx.strokeStyle = line; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.fillStyle = line; ctx.beginPath(); ctx.arc(x(pts.length - 1), y(vals[vals.length - 1]), 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5b6573'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    for (let g = 0; g <= 4; g++) {
+        const i = Math.round((g / 4) * (pts.length - 1));
+        const dt = new Date(pts[i].t * 1000);
+        const lab = (dt.getMonth()+1) + '/' + dt.getDate() + ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+        ctx.fillText(lab, x(i), H - 8);
+    }
+}
+renderEquity(document.getElementById('equityChart'), equityData);
+</script>
+{% endblock %}

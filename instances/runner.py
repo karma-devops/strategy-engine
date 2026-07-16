@@ -4,6 +4,7 @@ Polls candles, generates signal, executes trades, records state.
 Runner is created stopped; manager must call .start() explicitly.
 """
 
+import time
 import threading
 import traceback
 from datetime import datetime, timezone
@@ -12,7 +13,7 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import sessionmaker
 
 from config import config
-from engine.registry import get_strategy
+from engine.registry import get_strategy, detect_mintick
 from core.market_data import market_data
 from core.exchange import get_hyperliquid_client
 from core.position_sizer import PositionSizer
@@ -38,6 +39,11 @@ class InstanceRunner:
         self._last_signal = None
         self._last_executed_side: Optional[str] = None
         self._active_trade: Optional[dict] = None  # side, entry_signal_id, entry_time, bars_in_trade
+        self._prev_fast_ema: Optional[float] = None
+        self._prev_medm_ema: Optional[float] = None
+        self._last_bar_time: Optional[object] = None  # track bar close for EMA cross
+        self._last_entry_bar_time: Optional[object] = None  # Pine: bar_index > lastEntryBar
+        self._equity_history: list = []  # closed-trade equity values for adaptive strategy
         self._hl = get_hyperliquid_client(instance)
 
     # ------------------------------------------------------------------
@@ -73,7 +79,9 @@ class InstanceRunner:
             self._persist_status(self.instance, "error")
             return
 
-        strategy = strategy_class()
+        # Apply per-instance strategy config overrides from DB (Pine input.* equivalent)
+        strategy_config = getattr(self.instance, 'strategy_config', None) or {}
+        strategy = strategy_class(**strategy_config) if strategy_config else strategy_class()
         hl = self._hl
 
         while not self._stop_event.is_set():
@@ -102,10 +110,25 @@ class InstanceRunner:
                 return
 
             # Generate signal
-            result = strategy.generate_signals(df, symbol=self.instance.token)
+            result = strategy.generate_signals(df, symbol=self.instance.token, equity_history=self._equity_history)
             direction = result.get("direction", "NEUTRAL")
             signal_val = result.get("signal", 0.0)
             metadata = result.get("metadata", {}) or {}
+
+            # Store current EMA values for next-tick cross detection.
+            # Only update prev values when a new bar has closed (not every poll).
+            # This matches Pine's bar-by-bar ta.crossunder/crossover behavior.
+            # Read from exit_config (receptacle), not metadata.
+            current_bar_time = df["timestamp"].iloc[-1] if "timestamp" in df.columns else None
+            if current_bar_time is not None and current_bar_time != self._last_bar_time:
+                # New bar detected - update prev EMA values from exit_config
+                ec_ema = result.get("exit_config", {}) or {}
+                self._prev_fast_ema = ec_ema.get("fast_ema")
+                self._prev_medm_ema = ec_ema.get("medm_ema")
+                self._last_bar_time = current_bar_time
+                # Increment bars_in_trade only on new bar (not every poll)
+                if self._active_trade:
+                    self._active_trade["bars_in_trade"] += 1
 
             # Sync position from exchange (source of truth)
             position = hl.get_position(self.instance.token)
@@ -122,19 +145,60 @@ class InstanceRunner:
                 self._active_trade = None
             elif current_side and self._active_trade is None:
                 # Position exists but we didn't track entry (e.g. restart) — adopt it
+                adopt_entry_cost = 0.0
+                if position:
+                    try:
+                        adopt_entry_cost = abs(float(position.get("szi", 0))) * float(position.get("entryPx", 0)) * 0.00035
+                    except Exception:
+                        adopt_entry_cost = 0.0
+                # Adopt position with current signal's exit_config for SL/TP
+                ec = result.get("exit_config", {}) or {}
+                adopt_size = abs(float(position.get("szi", 0))) if position else 0.0
+                adopt_mintick = detect_mintick(df=df, token=self.instance.token) if position else 0.00001
                 self._active_trade = {
                     "side": current_side,
                     "entry_signal_id": None,
                     "entry_time": datetime.now(timezone.utc),
                     "bars_in_trade": 0,
+                    "entry_cost": adopt_entry_cost,
+                    "entry_price": float(position.get("entryPx", 0)) if position else 0.0,
+                    "size": adopt_size,
+                    "best_price": float(position.get("markPx", 0)) or float(position.get("entryPx", 0)) if position else 0.0,
+                    "trail_active": False,
+                    "mintick": adopt_mintick,
+                    "stop_loss": ec.get("stop_loss_long") if current_side == "LONG" else ec.get("stop_loss_short"),
+                    "take_profit": ec.get("take_profit_long") if current_side == "LONG" else ec.get("take_profit_short"),
                 }
+                add_log(
+                    f"[{self.instance.token}] ADOPTED POS {current_side} "
+                    f"{adopt_size:.4f}@{float(position.get('entryPx', 0)):.6f} | "
+                    f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
+                    "trade",
+                )
             elif current_side and self._active_trade and current_side != self._active_trade["side"]:
-                # Side flipped externally — adopt new side
+                # Side flipped externally — adopt new side with current signal's exit_config
+                adopt_entry_cost = 0.0
+                if position:
+                    try:
+                        adopt_entry_cost = abs(float(position.get("szi", 0))) * float(position.get("entryPx", 0)) * 0.00035
+                    except Exception:
+                        adopt_entry_cost = 0.0
+                ec = result.get("exit_config", {}) or {}
+                adopt_size = abs(float(position.get("szi", 0))) if position else 0.0
+                adopt_mintick = detect_mintick(df=df, token=self.instance.token) if position else 0.00001
                 self._active_trade = {
                     "side": current_side,
                     "entry_signal_id": None,
                     "entry_time": datetime.now(timezone.utc),
                     "bars_in_trade": 0,
+                    "entry_cost": adopt_entry_cost,
+                    "entry_price": float(position.get("entryPx", 0)) if position else 0.0,
+                    "size": adopt_size,
+                    "best_price": float(position.get("markPx", 0)) or float(position.get("entryPx", 0)) if position else 0.0,
+                    "trail_active": False,
+                    "mintick": adopt_mintick,
+                    "stop_loss": ec.get("stop_loss_long") if current_side == "LONG" else ec.get("stop_loss_short"),
+                    "take_profit": ec.get("take_profit_long") if current_side == "LONG" else ec.get("take_profit_short"),
                 }
 
             # Persist position snapshot
@@ -176,32 +240,98 @@ class InstanceRunner:
             # PineScript semantics: enter only from flat; exit via stop/TP/trailing/time/reversal
             if self._active_trade is None:
                 # Flat: enter on a fresh entry signal
-                if desired_side:
+                # Pine: bar_index > lastEntryBar — one entry per bar
+                current_bar_time = df["timestamp"].iloc[-1] if "timestamp" in df.columns else None
+                if desired_side and (self._last_entry_bar_time is None or current_bar_time != self._last_entry_bar_time):
                     executed, entry_cost = self._execute_open(db, hl, desired_side, account_value, position, result)
                     if executed:
+                        # Strategy exit_config is read at exit time (neutral receiver)
+                        ec = result.get("exit_config", {}) or {}
+                        entry_px = float(position.get("entryPx", 0)) if position else 0.0
+                        # Detect mintick from HL API markPx precision (authoritative)
+                        mintick = detect_mintick(df=df, token=self.instance.token)
                         self._active_trade = {
                             "side": desired_side,
                             "entry_signal_id": None,
                             "entry_time": datetime.now(timezone.utc),
                             "bars_in_trade": 0,
                             "entry_cost": entry_cost,
+                            "entry_price": entry_px,
+                            "size": (notional / entry_px) if entry_px else 0.0,
+                            "best_price": entry_px,
+                            "trail_active": False,
+                            "mintick": mintick,
+                            "stop_loss": ec.get("stop_loss_long") if desired_side == "LONG" else ec.get("stop_loss_short"),
+                            "take_profit": ec.get("take_profit_long") if desired_side == "LONG" else ec.get("take_profit_short"),
                         }
+                        add_log(
+                            f"[{self.instance.token}] ENTRY {desired_side} @ {entry_px:.6f} | "
+                            f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
+                            "trade",
+                        )
                         trade_active = True
+                        self._last_entry_bar_time = current_bar_time
             else:
                 # In a trade: check exit conditions
-                exit_reason = self._evaluate_exit(result, self._active_trade, position)
+                # Pass current bar H/L for stop-loss evaluation
+                bar_high = float(df["high"].iloc[-1])
+                bar_low = float(df["low"].iloc[-1])
+                exit_reason = self._evaluate_exit(result, self._active_trade, position, bar_high, bar_low)
                 if exit_reason:
                     closed, exit_cost = self._execute_close(db, hl, self._active_trade["side"], position, exit_reason)
                     if closed:
                         recorded_entry_cost = self._active_trade.get("entry_cost", 0.0)
+                        # Equity history: append post-close account value (matches Pine closedtrades)
+                        # Pine: closedEquity = strategy.equity - strategy.openprofit (on trade close)
+                        post_close_value = hl.get_account_value() or account_value
+                        if post_close_value > 0:
+                            self._equity_history.append(post_close_value)
+                            if len(self._equity_history) > 100:  # MAX_EQUITY_HISTORY
+                                self._equity_history = self._equity_history[-100:]
                         self._close_active_trade(db, position, exit_reason, entry_cost=recorded_entry_cost, exit_cost=exit_cost)
                         self._active_trade = None
                         trade_active = current_side is not None
                         executed = True
 
-            # Increment bars-in-trade counter
-            if self._active_trade:
-                self._active_trade["bars_in_trade"] += 1
+                        # PineScript reversal: if exit reason is trend change and
+                        # the current signal is opposite, re-enter same tick.
+                        if exit_reason in ("Trend Change", "Reversal Signal") and desired_side and desired_side != current_side:
+                            # Refresh position — should be None after close
+                            position = hl.get_position(self.instance.token)
+                            if position is None:
+                                opened, entry_cost_rev = self._execute_open(db, hl, desired_side, account_value, position, result)
+                                if opened:
+                                    entry_px = float(position.get("entryPx", 0)) if position else 0.0
+                                    # Re-read position after open to get actual entry price
+                                    position = hl.get_position(self.instance.token)
+                                    entry_px = float(position.get("entryPx", 0)) if position else 0.0
+                                    ec = result.get("exit_config", {}) or {}
+                                    mintick = detect_mintick(df=df, token=self.instance.token)
+                                    notional_rev = PositionSizer.notional_from_free_balance(
+                                        account_value, self.instance.leverage, self.instance.max_position_pct
+                                    ) if account_value and account_value > 0 else 0.0
+                                    self._active_trade = {
+                                        "side": desired_side,
+                                        "entry_signal_id": None,
+                                        "entry_time": datetime.now(timezone.utc),
+                                        "bars_in_trade": 0,
+                                        "entry_cost": notional_rev * 0.00035 if notional_rev else 0.0,
+                                        "entry_price": entry_px,
+                                        "size": (notional_rev / entry_px) if entry_px else 0.0,
+                                        "best_price": entry_px,
+                                        "trail_active": False,
+                                        "mintick": mintick,
+                                        "stop_loss": ec.get("stop_loss_long") if desired_side == "LONG" else ec.get("stop_loss_short"),
+                                        "take_profit": ec.get("take_profit_long") if desired_side == "LONG" else ec.get("take_profit_short"),
+                                    }
+                                    add_log(
+                                        f"[{self.instance.token}] RE-ENTRY {desired_side} @ {entry_px:.6f} (reversal from {exit_reason}) | "
+                                        f"SL={self._active_trade['stop_loss']} TP={self._active_trade['take_profit']}",
+                                        "trade",
+                                    )
+                                    trade_active = True
+
+            # bars_in_trade now incremented on new bar close (above), not every poll
 
             # Record signal AFTER execution so trade_active/executed are accurate
             signal_row = Signal(
@@ -330,6 +460,10 @@ class InstanceRunner:
         signal_result: dict,
     ) -> Tuple[bool, float]:
         """Open a new position when flat. Mirrors PineScript strategy.entry."""
+        # Bug #7 fix: removed redundant max_notional / min() check.
+        # notional_from_free_balance already computes the same formula
+        # (balance * leverage * max_position_pct). The guard below is kept
+        # as an early bail for zero/negative values.
         max_notional = account_value * self.instance.leverage * self.instance.max_position_pct
         if max_notional <= 0:
             add_log(f"[{self.instance.token}] Position limit blocks {desired_side}: no notional allowance", "warn")
@@ -343,13 +477,19 @@ class InstanceRunner:
         if notional <= 0:
             add_log(f"[RUNNER {self.id}] Insufficient balance to open {desired_side}", "warn")
             return False, 0.0
-        notional = min(notional, max_notional)
+
+        # Bug #1 fix: generate cloid once so retries get the same id
+        # (retry_with_backoff re-enters market_open on failure, and without
+        # a stable cloid each retry would create a different order)
+        open_cloid = hl._make_cloid(self.instance.token, "open",
+                                     stable_id=str(int(time.time() * 1000)))
 
         open_result = hl.market_open(
             self.instance.token,
             side=desired_side.lower(),
             size_usd=notional,
             leverage=self.instance.leverage,
+            cloid=open_cloid,
         )
         entry_cost = notional * 0.00035  # taker fee estimate
         add_log(
@@ -377,17 +517,37 @@ class InstanceRunner:
         exit_reason: str,
     ) -> Tuple[bool, float]:
         """Close the active position. Mirrors PineScript strategy.close_all."""
-        # Estimate exit cost from current notional before closing
+        # Estimate exit cost from current notional before closing.
+        # Bug #2/#4 fix: three-tier fallback so exit_cost never stays $0.
+        # Tier 1: live position from exchange (most accurate)
+        # Tier 2: tracked _active_trade dict (adopted/reconciled positions)
+        # Tier 3: recorded entry_cost from _active_trade as last resort
         notional = 0.0
         if position:
             mark_px = float(position.get("markPx", 0)) or float(position.get("entryPx", 0))
             szi = float(position.get("szi", 0))
             notional = abs(szi) * mark_px
+        elif self._active_trade:
+            mark_px = float(self._active_trade.get("best_price", 0)) or float(self._active_trade.get("entry_price", 0))
+            notional = abs(self._active_trade.get("size", 0)) * mark_px
+        # Tier 3: if notional is still 0, use entry_cost as a floor estimate
+        if notional <= 0 and self._active_trade and self._active_trade.get("entry_cost", 0) > 0:
+            notional = self._active_trade["entry_cost"] / 0.00035  # reverse the fee to get rough notional
+            add_log(
+                f"[RUNNER {self.id}] exit_cost fallback: using entry_cost ${self._active_trade['entry_cost']:.4f} "
+                f"→ estimated notional ${notional:.2f}",
+                "warn",
+            )
         exit_cost = notional * 0.00035  # taker fee estimate
 
-        close_result = hl.market_close(self.instance.token)
+        # Bug #1 fix: generate cloid once so retries get the same id
+        close_cloid = hl._make_cloid(self.instance.token, "close",
+                                      stable_id=str(int(time.time() * 1000)))
+
+        close_result = hl.market_close(self.instance.token, cloid=close_cloid)
         add_log(
-            f"[{self.instance.token}] CLOSE {current_side} reason={exit_reason} cost=${exit_cost:.4f} (ok={close_result is not None})",
+            f"[{self.instance.token}] CLOSE {current_side} reason={exit_reason} "
+            f"cost=${exit_cost:.4f} (ok={close_result is not None})",
             "trade",
         )
         event_bus.emit(
@@ -430,37 +590,90 @@ class InstanceRunner:
         signal_result: dict,
         active_trade: dict,
         position,
+        bar_high: float = 0.0,
+        bar_low: float = 0.0,
     ) -> Optional[str]:
         """
-        Evaluate exit conditions mirroring PineScript:
-        - Trend reversal (EMA cross against position)
-        - Time-based exit (scalp only, if enabled)
-        - Future: stop-loss / take-profit / trailing activation-offset
-        Returns exit reason string or None.
+        Evaluate exit conditions mirroring PineScript.
+        Reads from exit_config (strategy-declared exits) only.
+        No fabricated exits. Neutral consumer.
+
+        Pine exit order:
+            1. Stop Loss     - strategy.exit(stop=)
+            2. Trailing Stop - strategy.exit(trail_points, trail_offset)
+            3. Take Profit   - strategy.exit(limit=) if useFixedTP (v1.3 only)
+            4. Trend Change  - ta.crossunder/crossover → strategy.close_all()
+            5. Time Exit     - if use_time_exit and engine_mode == Scalp (v1.3 only)
+
+        NOT evaluated (not in any PineScript):
+            - Full fan alignment against position (fabricated, removed)
+            - Reversal signal / opposite entry (fabricated, removed)
         """
-        metadata = signal_result.get("metadata", {}) or {}
-        direction = signal_result.get("direction", "NEUTRAL")
+        ec = signal_result.get("exit_config", {}) or {}
         side = active_trade["side"]
         bars_in_trade = active_trade["bars_in_trade"]
 
-        # Trend reversal: fan/EMA cross against current position
-        if side == "LONG" and metadata.get("fan_dn_trend"):
-            return "Trend Change"
-        if side == "SHORT" and metadata.get("fan_up_trend"):
-            return "Trend Change"
+        # 1. Stop-loss: candle high/low touches strategy stop level
+        if side == "LONG":
+            sl = ec.get("stop_loss_long")
+            if sl is not None and bar_low <= float(sl):
+                return "Stop Loss"
+        elif side == "SHORT":
+            sl = ec.get("stop_loss_short")
+            if sl is not None and bar_high >= float(sl):
+                return "Stop Loss"
 
-        # Time-based exit (scalp only)
-        engine_mode = metadata.get("engine_mode", "")
-        use_time_exit = metadata.get("use_time_exit", False)
-        max_bars = metadata.get("time_exit_bars")
-        if engine_mode == "Scalp" and use_time_exit and max_bars and bars_in_trade >= max_bars:
-            return "Time Exit"
+        # 2. Trailing stop (reads all params from exit_config)
+        # Pine: strategy.exit(trail_points=act, trail_offset=off) — no grace period
+        mintick = float(active_trade.get("mintick", 0.00001))
+        trail_act = float(ec.get("trail_activation", 0))
+        trail_off = float(ec.get("trail_offset", 0))
+        if not active_trade.get("trail_active") and trail_act > 0:
+            if side == "LONG":
+                if bar_high >= active_trade["entry_price"] + trail_act * mintick:
+                    active_trade["trail_active"] = True
+            else:
+                if bar_low <= active_trade["entry_price"] - trail_act * mintick:
+                    active_trade["trail_active"] = True
+        if active_trade.get("trail_active"):
+            if side == "LONG":
+                if bar_high > active_trade.get("best_price", 0):
+                    active_trade["best_price"] = bar_high
+                trail_stop = active_trade["best_price"] - trail_off * mintick
+                if bar_low <= trail_stop:
+                    return "Trailing Stop"
+            else:
+                if bar_low < active_trade.get("best_price", float("inf")):
+                    active_trade["best_price"] = bar_low
+                trail_stop = active_trade["best_price"] + trail_off * mintick
+                if bar_high >= trail_stop:
+                    return "Trailing Stop"
 
-        # Opposite entry signal while in trade acts as reversal close in this implementation
-        if side == "LONG" and direction == "SELL":
-            return "Reversal Signal"
-        if side == "SHORT" and direction == "BUY":
-            return "Reversal Signal"
+        # 3. Take-profit (only if strategy declares it)
+        tp_long = ec.get("take_profit_long")
+        tp_short = ec.get("take_profit_short")
+        if side == "LONG" and tp_long is not None and bar_high >= float(tp_long):
+            return "Take Profit"
+        if side == "SHORT" and tp_short is not None and bar_low <= float(tp_short):
+            return "Take Profit"
+
+        # 4. EMA-cross trend reversal (bar-to-bar, not poll-to-poll)
+        prev_f = self._prev_fast_ema
+        prev_m = self._prev_medm_ema
+        curr_f = ec.get("fast_ema")
+        curr_m = ec.get("medm_ema")
+        if prev_f is not None and prev_m is not None and curr_f is not None and curr_m is not None:
+            if side == "LONG" and prev_f >= prev_m and curr_f < curr_m:
+                return "Trend Change"
+            if side == "SHORT" and prev_f <= prev_m and curr_f > curr_m:
+                return "Trend Change"
+
+        # 5. Time-based exit (if strategy declares it)
+        use_time_exit = ec.get("use_time_exit", False)
+        if use_time_exit:
+            max_bars = ec.get("time_exit_bars")
+            if max_bars and bars_in_trade >= max_bars:
+                return "Time Exit"
 
         return None
 
@@ -483,6 +696,21 @@ class InstanceRunner:
     # Account snapshot
     # ------------------------------------------------------------------
     def _record_account(self, db, account_value: float, withdrawable: float):
+        # Filter anomalous snapshots: HL API can return wild values during
+        # position transitions (margin held/released) that produce fake drawdowns.
+        # Skip recording if value swings >50% from last known good value.
+        if hasattr(self, "_last_good_account_value") and self._last_good_account_value > 0:
+            ratio = account_value / self._last_good_account_value
+            if ratio < 0.5 or ratio > 2.0:
+                add_log(
+                    f"[{self.instance.token}] Skipping anomalous account snapshot: "
+                    f"${account_value:.2f} vs last ${self._last_good_account_value:.2f} (ratio={ratio:.2f})",
+                    "warn",
+                )
+                return
+        # Record good values
+        if account_value > 0:
+            self._last_good_account_value = account_value
         snap = AccountSnapshot(
             instance_id=self.id,
             account_value=account_value,

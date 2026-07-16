@@ -36,17 +36,26 @@
   --brown-50:  #E8DCC4;
   --brown-25:  #F5EDDE;
 
-  /* Accent: Teal-Blue (brand + profit + info — unified palette) */
+  /* Accent: Teal-Blue (brand — buttons, logo, UI) */
   /* Source: color-hex.com/palette/1080876 — darkest tones */
   --tb-500: #01889F;   /* lightest — hover, bright accent */
   --tb-600: #08798E;   /* primary — buttons, logo, brand */
-  --tb-700: #0C6A7D;   /* profit signal, LONG badges */
+  --tb-700: #0C6A7D;   /* brand secondary */
   --tb-800: #0E5B6C;   /* pressed/active */
   --tb-900: #0F4D5C;   /* deep — borders, subtle accents */
   --tb-050: rgba(8, 121, 142, 0.06);
   --tb-100: rgba(8, 121, 142, 0.10);
   --tb-200: rgba(8, 121, 142, 0.18);
   --tb-300: rgba(8, 121, 142, 0.28);
+
+  /* Accent: Emerald (profit, wins, LONG — muted green-teal, distinct from brand) */
+  --emerald-500: #34D399;  /* bright — PnL values, profit text */
+  --emerald-600: #10B981;  /* primary — profit signal, LONG badges */
+  --emerald-700: #059669;  /* deep — borders, subtle profit accents */
+  --emerald-050: rgba(52, 211, 153, 0.06);
+  --emerald-100: rgba(52, 211, 153, 0.10);
+  --emerald-200: rgba(52, 211, 153, 0.18);
+  --emerald-300: rgba(52, 211, 153, 0.28);
 
   /* Accent: Coral (loss, danger, stop) */
   --coral-600: #DC2626;
@@ -173,15 +182,15 @@
   --border-strong:   var(--brown-600);
 
   /* ── Semantic Colors ── */
-  --color-profit:    var(--tb-700);
+  --color-profit:    var(--emerald-600);
   --color-loss:      var(--coral-500);
   --color-info:      var(--tb-600);
   --color-warn:      var(--amber-500);
-  --color-profit-bg: var(--tb-100);
+  --color-profit-bg: var(--emerald-100);
   --color-loss-bg:   var(--coral-100);
   --color-info-bg:   var(--tb-100);
   --color-warn-bg:   var(--amber-100);
-  --color-profit-border: var(--tb-300);
+  --color-profit-border: var(--emerald-300);
   --color-loss-border:   var(--coral-300);
   --color-info-border:   var(--tb-300);
 
@@ -234,7 +243,7 @@
   --border-subtle:   rgba(0, 0, 0, 0.04);
   --border-strong:   rgba(0, 0, 0, 0.15);
 
-  --color-profit-bg: rgba(12, 106, 125, 0.10);
+  --color-profit-bg: rgba(52, 211, 153, 0.10);
   --color-loss-bg:   rgba(220, 38, 38, 0.10);
   --color-info-bg:   rgba(8, 121, 142, 0.10);
   --color-warn-bg:   rgba(217, 119, 6, 0.10);
@@ -301,4 +310,62 @@
   --trade-row-bg: var(--surface-raised);
   --trade-row-hover: var(--surface-hover);
   --trade-row-border: var(--border-subtle);
+}
+
+[data-mode="light"] {
+  /* ── Top Bar ── */
+  --topbar-bg: var(--surface-card);
+  --topbar-border: var(--border-default);
+  --topbar-height: 56px;
+
+  /* ── Stats Bar ── */
+  --stat-bg: var(--surface-card);
+  --stat-label-color: var(--text-muted);
+  --stat-value-size: var(--text-xl);
+  --stat-value-weight: var(--weight-bold);
+
+  /* ── Card ── */
+  --card-bg: var(--surface-card);
+  --card-border: var(--border-default);
+  --card-radius: var(--radius-lg);
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --card-head-border: var(--border-subtle);
+
+  /* ── Tag / Badge ── */
+  --tag-neutral-bg: var(--brown-100);
+  --tag-neutral-text: var(--text-secondary);
+  --tag-running-bg: rgba(8, 121, 142, 0.10);
+  --tag-running-text: var(--tb-600);
+  --tag-running-border: var(--tb-300);
+  --tag-stopped-bg: rgba(220, 38, 38, 0.08);
+  --tag-stopped-text: var(--coral-500);
+  --tag-stopped-border: var(--coral-300);
+
+  /* ── Tab ── */
+  --tab-color: var(--text-muted);
+  --tab-active-color: var(--text-primary);
+  --tab-active-border: var(--brand);
+
+  /* ── Log Area ── */
+  --log-bg: var(--surface-inset);
+  --log-text: var(--text-secondary);
+  --log-border: var(--border-subtle);
+
+  /* ── Trade Row ── */
+  --trade-row-bg: var(--surface-raised);
+  --trade-row-hover: var(--surface-hover);
+  --trade-row-border: var(--border-subtle);
+
+  /* ── Modal ── */
+  --modal-overlay: rgba(0, 0, 0, 0.25);
+
+  /* ── Sidebar ── */
+  --sidebar-bg: var(--surface-card);
+  --sidebar-border: var(--border-default);
+  --sidebar-item-active: var(--surface-hover);
+  --sidebar-item-hover: var(--surface-inset);
+
+  /* ── Inputs ── */
+  --surface-input: var(--surface-inset);
+  --surface-elevated: var(--surface-raised);
 }

@@ -71,10 +71,11 @@ class HyperLiquidClient:
     Private key is loaded from env or per-instance override and never logged.
     """
 
-    def __init__(self, private_key: Optional[str] = None, account_address: Optional[str] = None):
+    def __init__(self, private_key: Optional[str] = None, account_address: Optional[str] = None, dry_run: Optional[bool] = None):
         self._private_key = private_key or config.HYPER_LIQUID_ETH_PRIVATE_KEY
         self._address = account_address or config.ACCOUNT_ADDRESS
-        self.dry_run = config.DRY_RUN
+        # Per-instance dry_run overrides env; env is the default seed
+        self.dry_run = dry_run if dry_run is not None else config.DRY_RUN
 
         self.account: Optional[LocalAccount] = None
         if self._private_key:
@@ -117,6 +118,48 @@ class HyperLiquidClient:
         except Exception as e:
             print(f"[ERROR] get_account_value failed: {e}")
             return 0.0
+
+    @retry_with_backoff(max_attempts=3, base_delay=0.5, max_delay=5.0)
+    def get_max_leverage(self, symbol: str) -> int:
+        """Return HL's max allowed leverage for a token from meta_and_asset_ctxs."""
+        if not self.has_credentials:
+            return 0
+        try:
+            meta, ctxs = self._info.meta_and_asset_ctxs()
+            for m, c in zip(meta.get("universe", []), ctxs):
+                if m.get("name") == symbol:
+                    return int(c.get("maxLeverage", 0))
+        except Exception as e:
+            print(f"[ERROR] get_max_leverage({symbol}) failed: {e}")
+        return 0
+
+    @retry_with_backoff(max_attempts=3, base_delay=0.5, max_delay=5.0)
+    def get_recent_fills(self, symbol: str, limit: int = 20):
+        """Return recent fills for the account filtered by symbol (from user_fills)."""
+        if not self.has_credentials:
+            return []
+        try:
+            fills = self._info.user_fills(self._query_address())
+            out = []
+            for f in fills:
+                if f.get("coin") != symbol:
+                    continue
+                out.append({
+                    "coin": f.get("coin"),
+                    "side": f.get("dir"),  # "Open Long" / "Close Short" etc.
+                    "px": float(f.get("px", 0)),
+                    "sz": float(f.get("sz", 0)),
+                    "fee": float(f.get("fee", 0)),
+                    "time": f.get("time"),
+                    "closed_pnl": float(f.get("closedPnl", 0)),
+                    "oid": f.get("oid"),
+                })
+                if len(out) >= limit:
+                    break
+            return out
+        except Exception as e:
+            print(f"[ERROR] get_recent_fills({symbol}) failed: {e}")
+        return []
 
     @retry_with_backoff(max_attempts=3, base_delay=0.5, max_delay=5.0)
     def get_withdrawable(self) -> float:
@@ -198,14 +241,20 @@ class HyperLiquidClient:
         side: str,  # "long" or "short"
         size_usd: float,
         leverage: int = 10,
+        cloid: Optional[str] = None,
     ) -> Optional[dict]:
         """
         Open a market-direction position.
         size_usd is NOTIONAL position size. Leverage is set first.
+        cloid: stable client order id. Generated ONCE if None so retries reuse
+        the same cloid -> HL dedups a lost-response retry instead of
+        double-filling (bug #1).
         """
+        if cloid is None:
+            cloid = self._make_cloid(symbol, "open")
         if self.dry_run:
             print(
-                f"[DRY RUN] Would OPEN {side.upper()} {symbol} for ${size_usd:.2f} at {leverage}x"
+                f"[DRY RUN] Would OPEN {side.upper()} {symbol} for ${size_usd:.2f} at {leverage}x (cloid={cloid})"
             )
             return {"status": "dry_run", "symbol": symbol, "side": side, "size_usd": size_usd}
 
@@ -214,7 +263,13 @@ class HyperLiquidClient:
             return None
 
         # Set leverage
-        self.set_leverage(symbol, leverage)
+        lev_result = self.set_leverage(symbol, leverage)
+        if lev_result is None:
+            print(f"[ERROR] Cannot open {symbol}: set_leverage returned None (no exchange client?)")
+            return None
+        if isinstance(lev_result, dict) and lev_result.get("status") == "err":
+            print(f"[ERROR] Cannot open {symbol}: leverage rejected by exchange: {lev_result.get('response', 'unknown')}")
+            return None
 
         # Get current mid price
         from core.market_data import HyperLiquidMarketData
@@ -237,6 +292,7 @@ class HyperLiquidClient:
         # Round to 5 decimals — safe for all HL assets (min tick 0.00001)
         limit_px = round(limit_px, 5)
 
+        from hyperliquid.utils.types import Cloid
         try:
             result = self._exchange.order(
                 symbol,
@@ -245,6 +301,7 @@ class HyperLiquidClient:
                 limit_px,
                 {"limit": {"tif": "Ioc"}},
                 reduce_only=False,
+                cloid=Cloid.from_str(cloid) if cloid else None,
             )
             print(f"[TRADE] OPEN {side.upper()} {symbol} {qty} @ ~${mid:.6f}")
             return result
@@ -254,8 +311,10 @@ class HyperLiquidClient:
             return None
 
     @retry_with_backoff(max_attempts=3, base_delay=1.0, max_delay=8.0)
-    def market_close(self, symbol: str) -> Optional[dict]:
-        """Close entire open position for symbol at market."""
+    def market_close(self, symbol: str, cloid: Optional[str] = None) -> Optional[dict]:
+        "Close entire open position for symbol at market."
+        if cloid is None:
+            cloid = self._make_cloid(symbol, "close")
         pos = self.get_position(symbol)
         if not pos:
             print(f"[INFO] No open position in {symbol} to close")
@@ -287,6 +346,7 @@ class HyperLiquidClient:
         # Round to 5 decimals — safe for all HL assets (min tick 0.00001)
         limit_px = round(limit_px, 5)
 
+        from hyperliquid.utils.types import Cloid
         try:
             result = self._exchange.order(
                 symbol,
@@ -295,6 +355,7 @@ class HyperLiquidClient:
                 limit_px,
                 {"limit": {"tif": "Ioc"}},
                 reduce_only=True,
+                cloid=Cloid.from_str(cloid) if cloid else None,
             )
             print(f"[TRADE] CLOSE {symbol} qty={qty}")
             return result
@@ -303,6 +364,28 @@ class HyperLiquidClient:
             traceback.print_exc()
             return None
 
+    def _make_cloid(self, symbol: str, action: str, stable_id: Optional[str] = None) -> str:
+        """Generate a client order ID for HL idempotency.
+
+        HL dedupes orders by cloid server-side. If a retry fires after the
+        first order already landed (response lost mid-flight), the duplicate
+        cloid is rejected by HL instead of creating a second fill.
+
+        HL's Cloid.from_str() expects a 32-character hex string. We generate
+        that by hashing a stable local seed (symbol + action + stable_id).
+        If stable_id is None, one is generated from current timestamp — but
+        callers should generate stable_id ONCE and pass it so retries within
+        retry_with_backoff reuse the same cloid.
+
+        Bug #1 fix: removed random component so retries produce identical cloid.
+        """
+        import hashlib as _hashlib
+        if stable_id is None:
+            import time as _time
+            stable_id = str(int(_time.time()))
+        seed = f"{symbol}:{action}:{stable_id}"
+        cloid = "0x" + _hashlib.sha256(seed.encode()).hexdigest()[:32]
+        return cloid
     @retry_with_backoff(max_attempts=3, base_delay=1.0, max_delay=8.0)
     def withdraw_to_wallet(self, amount: float, destination: Optional[str] = None) -> Optional[dict]:
         """
@@ -344,10 +427,15 @@ def get_hyperliquid_client(instance: Optional[object] = None) -> HyperLiquidClie
     private_key = None
     account_address = None
     try:
-        private_key = instance.get_private_key()
-        account_address = instance.get_account_address()
+        # Prefer the engine-level credential selector (hl_credential_id -> Credential table).
+        # Falls back to instance's own encrypted key, then to global env client.
+        private_key, account_address = instance.get_resolved_hl_credentials()
     except Exception as e:
-        print(f"[ERROR] Failed to load per-instance credentials for {instance.slug}: {e}")
+        print(f"[ERROR] Failed to resolve HL credentials for {instance.slug}: {e}")
     if private_key or account_address:
-        return HyperLiquidClient(private_key=private_key, account_address=account_address)
+        return HyperLiquidClient(
+            private_key=private_key,
+            account_address=account_address,
+            dry_run=getattr(instance, "dry_run", None),
+        )
     return hl_client

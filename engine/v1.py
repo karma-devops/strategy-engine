@@ -38,6 +38,7 @@ class EngineV1Strategy(BaseStrategy):
     MAX_ADAPTIVE_LEN = 30
     VOLATILITY_FLOOR = 1.0
     EQUITY_CURVE_MIN_SAMPLES = 3
+    MAX_EQUITY_HISTORY = 100  # Pine: array.size > 100 → shift (FIFO cap)
 
     # ------------------------------------------------------------------
     #  INPUT DEFAULTS (exact Pine defaults)
@@ -78,8 +79,37 @@ class EngineV1Strategy(BaseStrategy):
     EPSILON = 0.02
 
     # ------------------------------------------------------------------
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__(name="eve_engine_v1")
+        # Apply kwargs overrides
+        for k, v in kwargs.items():
+            if hasattr(self, k.upper()):
+                setattr(self, k.upper(), v)
+            elif hasattr(self, k):
+                setattr(self, k)
+
+    @classmethod
+    def get_parameters(cls):
+        """Declare configurable parameters (Pine input.* equivalent)."""
+        return [
+            {"name": "atr_mult", "type": "float", "default": 1.8, "min": 0.5, "max": 3.0, "step": 0.1, "label": "ATR Multiplier"},
+            {"name": "atr_mult_guard", "type": "float", "default": 0.9, "min": 0.3, "max": 2.0, "step": 0.1, "label": "ATR Guard Multiplier"},
+            {"name": "risk_per_trade_pct", "type": "float", "default": 97.0, "min": 10.0, "max": 100.0, "step": 1.0, "label": "Risk % Per Trade"},
+            {"name": "growth_target_x", "type": "float", "default": 50.0, "min": 2.0, "max": 200.0, "step": 5.0, "label": "Growth Target (x)"},
+            {"name": "use_momentum", "type": "bool", "default": True, "label": "Use Momentum Filter"},
+            {"name": "momentum_thresh", "type": "int", "default": 18, "min": 5, "max": 50, "label": "Momentum Threshold"},
+            {"name": "trade_direction", "type": "select", "default": "Both", "options": ["Both", "Long Only", "Short Only"], "label": "Trade Direction"},
+            {"name": "man_activation", "type": "int", "default": 18, "min": 2, "max": 100, "label": "Trail Activation (ticks)"},
+            {"name": "man_offset", "type": "int", "default": 6, "min": 1, "max": 50, "label": "Trail Offset (ticks)"},
+            {"name": "sma_slow", "type": "int", "default": 50, "min": 10, "max": 200, "label": "SMA Slow Period"},
+            {"name": "ema_medm", "type": "int", "default": 18, "min": 5, "max": 50, "label": "EMA Medium Period"},
+            {"name": "ema_fast", "type": "int", "default": 6, "min": 2, "max": 20, "label": "EMA Fast Period"},
+        ]
+
+    @classmethod
+    def get_default_config(cls):
+        """Default config for strategy_config column."""
+        return {p["name"]: p["default"] for p in cls.get_parameters()}
 
     # ------------------------------------------------------------------
     #  Helper: Wilder-smoothed RMA
@@ -561,11 +591,43 @@ class EngineV1Strategy(BaseStrategy):
             "in_date_range": in_date_range,
         }
 
+        # ── Exit contract: strategy declares its exits, consumers are neutral ──
+        # V1 Pine: strategy.exit(stop=stopLoss, trail_points=activeActivation, trail_offset=activeOffset)
+        # No fixed TP, no time-based exit. Only stop + trailing + trend reversal.
+        sl_long = float(active_activation)  # placeholder, computed below
+        sl_short = float(active_activation)
+
+        # Compute stop prices from metadata (same formula as Pine calcSize)
+        atr_val = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else close * 0.01
+        atr_prev = float(atr.iloc[-2]) if len(atr) > 1 and not pd.isna(atr.iloc[-2]) else atr_val
+        atr_mult_use_val = float(atr_mult_use)
+        low_prev = float(df["low"].iloc[-2])
+        high_prev = float(df["high"].iloc[-2])
+        stop_price_long = low_prev - atr_prev * atr_mult_use_val
+        stop_price_short = high_prev + atr_prev * atr_mult_use_val
+
+        exit_config = {
+            "stop_loss_long": float(round(stop_price_long, 8)),
+            "stop_loss_short": float(round(stop_price_short, 8)),
+            "take_profit_long": None,   # V1 has no fixed TP
+            "take_profit_short": None,
+            "trail_activation": int(active_activation),
+            "trail_offset": int(active_offset),
+            "use_time_exit": False,      # V1 has no time-based exit
+            "time_exit_bars": None,
+            "engine_mode": "Swing",     # V1 is swing-only
+            "fan_up_trend": bool(fan_up_trend.iloc[-1]) if not pd.isna(fan_up_trend.iloc[-1]) else False,
+            "fan_dn_trend": bool(fan_dn_trend.iloc[-1]) if not pd.isna(fan_dn_trend.iloc[-1]) else False,
+            "fast_ema": float(round(float(fast_ema.iloc[-1]), 8)),
+            "medm_ema": float(round(float(medm_ema.iloc[-1]), 8)),
+        }
+
         return {
             "token": symbol,
             "signal": round(float(signal), 4),
             "direction": direction,
             "metadata": metadata,
+            "exit_config": exit_config,
         }
 
 

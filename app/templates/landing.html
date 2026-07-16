@@ -150,12 +150,12 @@
 <body>
     <!-- Nav -->
     <nav class="pub-nav">
-        <a href="#/" class="pub-logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></a>
+        <a href="/" class="pub-logo"><span class="logo-l">PULS</span><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg><span class="logo-r">R</span></a>
         <div class="pub-nav-links">
-            <a href="#/about">About</a>
-            <a href="#/faq">FAQ</a>
+            <a href="/about">About</a>
+            <a href="/faq">FAQ</a>
             <button class="mode-toggle" onclick="toggleMode()" id="modeToggle"><span id="modeIcon">○</span><span id="modeLabel">dark</span></button>
-            <a href="#/login" class="btn-login">Sign In</a>
+            <a href="/login" class="btn-login">Sign In</a>
             <button class="pub-mobile-menu" onclick="toggleMobileMenu()">☰</button>
         </div>
     </nav>
@@ -166,8 +166,8 @@
             <h1>Strategy execution engine for <span class="accent">HyperLiquid</span> perpetuals</h1>
             <p>PineScript-fidelity backtesting. Multi-engine fleet management. Real-time position tracking. All from one dashboard.</p>
             <div class="hero-cta">
-                <a href="#/login" class="primary">Start Trading</a>
-                <a href="#/about" class="secondary">Learn More</a>
+                <a href="/login" class="primary">Start Trading</a>
+                <a href="/about" class="secondary">Learn More</a>
             </div>
         </div>
         <div class="features">
@@ -297,9 +297,9 @@
                     <button type="submit">Sign In</button>
                 </form>
                 <div style="text-align:center;margin-top:var(--space-4);font-size:var(--text-sm);color:var(--text-muted)">
-                    No account? <a href="#/signup" style="color:var(--brand);text-decoration:none">Sign up</a>
+                    No account? <a href="/signup" style="color:var(--brand);text-decoration:none">Sign up</a>
                 </div>
-                <div class="login-back"><a href="#/">← Back to home</a></div>
+                <div class="login-back"><a href="/">← Back to home</a></div>
             </div>
         </div>
     </div>
@@ -323,9 +323,9 @@
                     </a>
                 </div>
                 <div style="font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-4)">
-                    Already have access? <a href="#/login" style="color:var(--brand);text-decoration:none">Sign in</a>
+                    Already have access? <a href="/login" style="color:var(--brand);text-decoration:none">Sign in</a>
                 </div>
-                <div class="login-back"><a href="#/">← Back to home</a></div>
+                <div class="login-back"><a href="/">← Back to home</a></div>
             </div>
         </div>
     </div>
@@ -392,33 +392,73 @@
             var pass = document.getElementById('login-pass').value;
             var err = document.getElementById('login-error');
 
-            // Use Basic Auth — redirect to dashboard with credentials in URL
-            // The FastAPI backend handles auth via HTTP Basic
-            var url = window.location.origin + '/?auth=' + btoa(user + ':' + pass);
-            // Actually, use Basic auth redirect
-            window.location.href = '/' + (user && pass ? '' : '');
-            // Try fetch with basic auth
-            fetch('/health', { headers: { 'Authorization': 'Basic ' + btoa(user + ':' + pass) } })
-                .then(r => {
+            if (!user || !pass) {
+                err.textContent = 'Please enter username and password';
+                return;
+            }
+
+            // Verify credentials via health endpoint with Basic Auth
+            var auth = btoa(user + ':' + pass);
+            fetch('/health', { headers: { 'Authorization': 'Basic ' + auth } })
+                .then(function(r) {
                     if (r.ok) {
-                        sessionStorage.setItem('pulsr_auth', btoa(user + ':' + pass));
-                        window.location.href = '/dashboard';
-                    } else {
+                        // Credentials valid — store and redirect
+                        sessionStorage.setItem('pulsr_auth', auth);
+                        // Use XMLHttpRequest to set Basic Auth for the browser session
+                        // then redirect to dashboard
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('GET', '/app/dashboard', true, user, pass);
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                window.location.href = '/app/dashboard';
+                            }
+                        };
+                        xhr.send();
+                    } else if (r.status === 401) {
                         err.textContent = 'Invalid credentials';
+                    } else {
+                        err.textContent = 'Server error (' + r.status + ')';
                     }
                 })
-                .catch(() => { err.textContent = 'Connection error'; });
+                .catch(function() {
+                    // Network error — try redirect anyway, browser will prompt for auth
+                    window.location.href = '/app/dashboard';
+                });
         }
 
         // ── Init ──
         function init() {
             applyMode(getPreferredMode());
-            var hash = location.hash.replace('#/', '') || 'home';
-            if (hash === '') hash = 'home';
-            navigateTo(hash);
+            // Use server-provided page name, fall back to hash, then 'home'
+            var page = '{{ page }}' || location.hash.replace('#/', '') || 'home';
+            if (page === '' || page === 'None') page = 'home';
+            navigateTo(page);
             // Register service worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+            }
+            // ── Check if already authenticated ──
+            var auth = sessionStorage.getItem('pulsr_auth');
+            if (auth) {
+                var creds = atob(auth);
+                fetch('/health', { headers: { 'Authorization': 'Basic ' + auth } })
+                    .then(r => {
+                        if (r.ok) {
+                            // Already logged in — show dashboard link
+                            var navLinks = document.querySelector('.pub-nav-links');
+                            if (navLinks) {
+                                var dashLink = document.createElement('a');
+                                dashLink.href = '//' + creds + '@' + location.host + '/app/dashboard';
+                                dashLink.textContent = 'Dashboard';
+                                dashLink.className = 'pub-nav-link';
+                                dashLink.style.cssText = 'background:var(--brand);color:#fff;padding:8px 16px;border-radius:var(--radius-sm);font-weight:600;';
+                                navLinks.appendChild(dashLink);
+                            }
+                            // Show logged-in state on login page
+                            var loginBtn = document.querySelector('.login-form button[type=submit]');
+                            if (loginBtn) { loginBtn.textContent = 'Go to Dashboard'; loginBtn.onclick = function(e) { e.preventDefault(); window.location.href = '//' + creds + '@' + location.host + '/app/dashboard'; }; }
+                        }
+                    }).catch(() => {});
             }
         }
         if (document.readyState === 'loading') {

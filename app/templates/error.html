@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — {{ error_code|default(404) }}{% endblock %}
+{% block heading %}{% endblock %}
+{% block content %}
+<style>
+    .error-wrap { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 48px); padding: var(--space-6); }
+    .error-card { text-align: center; max-width: 480px; }
+    .error-code { font-family: var(--font-display); font-size: 72px; font-weight: var(--weight-bold); color: var(--brand); line-height: 1; margin-bottom: var(--space-2); letter-spacing: -2px; }
+    .error-code .pulse { display: inline-block; animation: errorPulse 2s ease-in-out infinite; }
+    @keyframes errorPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .error-title { font-size: var(--text-lg); color: var(--text-primary); margin-bottom: var(--space-2); }
+    .error-msg { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-5); line-height: 1.6; }
+    .error-actions { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; }
+    .error-btn { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: var(--weight-medium); text-decoration: none; transition: all var(--dur-fast) var(--ease-out); }
+    .error-btn.primary { background: var(--brand); color: #fff; }
+    .error-btn.primary:hover { background: var(--brand-hover, #0a8fa8); }
+    .error-btn.secondary { background: var(--surface-inset); color: var(--text-secondary); border: 1px solid var(--border-default); }
+    .error-btn.secondary:hover { background: var(--surface-hover); color: var(--text-primary); }
+    .error-btn svg { width: 16px; height: 16px; }
+</style>
+<div class="error-wrap">
+    <div class="error-card">
+        <div class="error-code"><span class="pulse">{{ error_code|default(404) }}</span></div>
+        <div class="error-title">{{ error_title|default("Page not found") }}</div>
+        <div class="error-msg">{{ error|default("The page you're looking for doesn't exist or has been moved.") }}</div>
+        <div class="error-actions">
+            <a href="/app/dashboard" class="error-btn primary">
+                <svg viewBox="0 0 16 16"><path d="M1 8l7-6 7 6v6a1 1 0 0 1-1 1H9v-4H7v4H2a1 1 0 0 1-1-1V8z" fill="currentColor"/></svg>
+                Dashboard
+            </a>
+            <a href="javascript:history.back()" class="error-btn secondary">
+                <svg viewBox="0 0 16 16"><path d="M7 1L1 8l6 7m-6-7h14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Go Back
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Account{% endblock %}
+{% block heading %}Account{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Portfolio Value</div>
+        <div class="kpi-value">{{ portfolio_value | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Start Balance</div>
+        <div class="kpi-value">{{ user.start_balance | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Open PnL</div>
+        <div class="kpi-value {% if open_pnl >= 0 %}positive{% else %}negative{% endif %}">{{ open_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Active Engines</div>
+        <div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <h2>Engines</h2>
+    {% if instances %}
+    <div class="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}">
+            <h3>{{ inst.name }}</h3>
+            <div class="fleet-sub">{{ inst.token }}</div>
+            <div class="fleet-row"><span class="label">Status</span><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
+            <div class="fleet-row"><span class="label">Mode</span><span class="tag tag-{% if inst.dry_run %}flat{% else %}long{% endif %}">{% if inst.dry_run %}Paper{% else %}Live{% endif %}</span></div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No engines yet. <a href="/instances/new" style="color:var(--brand);">Add one →</a></div>
+    {% endif %}
+</div>
+{% endblock %}

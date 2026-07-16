@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — {{ mode_label }}{% endblock %}
+{% block heading %}{{ mode_label }}{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Total PnL</div>
+        <div class="kpi-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}">{{ total_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Active Engines</div>
+        <div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Mode</div>
+        <div class="kpi-value"><span class="tag tag-{% if mode == 'paper' %}flat{% else %}long{% endif %}">{% if mode == 'paper' %}Paper Trading{% else %}Live Trading{% endif %}</span></div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <h2>Equity Curve</h2>
+    <div id="equityChart" style="height:280px;"></div>
+</div>
+
+<div class="chart-card">
+    <h2>Engines</h2>
+    {% if instances %}
+    <div class="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}">
+            <div class="fleet-card-head">
+                <h3>{{ inst.name }}</h3>
+                <span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}">{{ inst.status }}</span>
+            </div>
+            <div class="fleet-sub">{{ inst.token }}</div>
+            <div class="fleet-row"><span class="label">Mode</span><span class="tag tag-{% if inst.dry_run %}flat{% else %}long{% endif %}">{% if inst.dry_run %}Paper Trading{% else %}Live Trading{% endif %}</span></div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No {{ mode_label }} engines. Toggle an engine's mode in <a href="/app/engines" style="color:var(--brand);">Engines →</a></div>
+    {% endif %}
+</div>
+
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+const equityData = {{ equity_series | tojson }};
+const chart = LightweightCharts.createChart(document.getElementById('equityChart'), {
+    layout: { background: { color: 'transparent' }, textColor: '#9aa4b2' },
+    grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
+    rightPriceScale: { borderColor: 'rgba(255,255,255,0.08)' },
+    timeScale: { borderColor: 'rgba(255,255,255,0.08)' },
+    width: document.getElementById('equityChart').clientWidth,
+    height: 280,
+});
+const series = chart.addAreaSeries({ lineColor: '#39d0d8', topColor: 'rgba(57,208,216,0.4)', bottomColor: 'rgba(57,208,216,0.02)' });
+series.setData(equityData);
+if (equityData.length) chart.timeScale().fitContent();
+window.addEventListener('resize', () => chart.applyOptions({ width: document.getElementById('equityChart').clientWidth }));
+</script>
+{% endblock %}

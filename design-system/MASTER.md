@@ -176,16 +176,27 @@ Font: `--text-sm`, `--weight-semibold`. Padding: 10px 16px.
 | Padding | 8px 10px |
 | Layout | flex row: time / symbol / side badge / pnl (right-aligned) |
 
-### 5.7 Stat (metrics grid item)
+### 5.8 Chat Widget (shared, Phase 9/10)
 
-| Property | Value |
-|----------|-------|
-| Background | `--surface-raised` |
-| Border | 1px solid `--border-subtle` |
-| Radius | `--radius-md` |
-| Padding | 12px |
-| Label | `--text-xs`, `--text-muted`, uppercase, `--tracking-wide` |
-| Value | `--text-md` (16px), `--weight-bold`, tabular-nums |
+Shared across Assistant (full page), Strategy Studio, Backtester, Dashboard (slim).
+
+| Element | Token | Value / Notes |
+|----------|-------|---------------|
+| Toggle button | `linear-gradient(--brand-hover, --brand)` | white glyph, `radius-full`, 52px |
+| Panel | `--surface-card` bg, `--border-default` border, `--radius-lg` | 380px / 560px, `box-shadow` + teal ring |
+| Header | `--surface-raised` bg, `--border-subtle` bottom border | title (`--text-primary`, Space Grotesk 600) |
+| Model select | `--surface-inset` bg, `--border-default`, `--text-secondary` | `--text-xs` |
+| Session chip | `--surface-card` bg, `--text-muted` | active = `--brand-bg` + `--brand` text |
+| User bubble | `--brand` bg, `#fff` text | `radius` 12px, bottom-right 4px |
+| Assistant bubble | `--surface-raised` bg, `--text-primary`, `--border-default` | `radius` 12px, bottom-left 4px; `code`/`pre` use `--font-mono` + `--surface-inset` |
+| Input | `--surface-inset` bg, `--border-default`, `--text-primary` | focus = `--brand` border + ring |
+| Send button | `--brand` bg, `#fff` text | hover `--brand-hover`, active scale 0.96 |
+| Dashboard slim | `chat-dashboard` class: wide bottom bar, 46px collapsed, expands to full panel on `.expanded` |
+
+**Fonts:** body Inter (`--font-body`), code JetBrains Mono (`--font-mono`).
+**Motion:** all transitions `--dur-fast` `--ease-out` (hover/active).
+**Scrollbar:** thin teal (`--border-strong` → `--brand-border` on hover).
+**Rule:** widget CSS references ONLY semantic/component tokens — never raw hex. Loaded in `layout.html` (shared shell), so every page inherits it.
 
 ---
 

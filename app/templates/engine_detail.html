@@ -1,0 +1,802 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — {{ inst.name }}{% endblock %}
+{% block heading %}{{ inst.name }}{% endblock %}
+{% block content %}
+<style>
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .modal-card { background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-lg); width: 90%; max-width: 480px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle); }
+    .modal-head h2 { font-family: var(--font-display); font-size: var(--text-md); margin: 0; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: var(--text-lg); cursor: pointer; padding: var(--space-1); }
+    .modal-close:hover { color: var(--text-primary); }
+    .modal-body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); overflow-y: auto; flex: 1; }
+    .modal-card form { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    .modal-field { display: flex; flex-direction: column; gap: 2px; }
+    .modal-field label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
+    .modal-field input, .modal-field select { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-family: var(--font-body); font-size: var(--text-sm); height: 36px; }
+    .modal-field input:focus, .modal-field select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+    .modal-hint { font-size: var(--text-xs); color: var(--text-muted); }
+    .modal-readonly { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); padding: var(--space-3); background: var(--surface-inset); border-radius: var(--radius-sm); font-size: var(--text-sm); }
+    .modal-readonly .label { color: var(--text-muted); text-transform: uppercase; font-size: var(--text-xs); letter-spacing: var(--tracking-wide); }
+    .modal-readonly .mono { color: var(--text-secondary); font-family: var(--font-mono); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
+    @media (max-width: 768px) {
+        .modal-card { width: 95vw; max-width: none; margin: 0; border-radius: 0; height: 100vh; max-height: 100vh; }
+        .modal-overlay { align-items: flex-end; }
+        .modal-body { padding: var(--space-3); gap: var(--space-3); }
+        .modal-field input, .modal-field select { height: 44px; font-size: 16px; }
+        .modal-actions { flex-direction: column; gap: var(--space-2); padding: var(--space-3); }
+        .modal-actions button, .modal-actions .btn-sm { width: 100%; height: 44px; }
+        .streak-grid { grid-template-columns: 1fr; }
+        #engine-controls { flex-wrap: wrap; gap: var(--space-2); }
+        #engine-controls .fleet-btn { flex: 1 1 calc(50% - var(--space-2)); min-width: 120px; height: 44px; font-size: var(--text-sm); justify-content: center; }
+        #engine-controls a { flex: 1 1 100%; text-align: center; margin-left: 0; margin-top: var(--space-1); }
+        .detail-two-col { grid-template-columns: 1fr !important; }
+        #engine-controls-top { flex-wrap: wrap; }
+        #engine-controls-top .btn-sm, #engine-controls-top .fleet-btn { min-height: 44px; font-size: var(--text-sm); }
+        .kpi-grid { grid-template-columns: 1fr 1fr !important; }
+    }
+    .perf-spark { width: 100%; height: 40px; display: block; margin-top: var(--space-2); }
+    .perf-spark path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .perf-spark path.positive { stroke: var(--color-profit); }
+    .perf-spark path.negative { stroke: var(--color-loss); }
+    .perf-spark path.neutral { stroke: var(--text-muted); }
+    .perf-spark circle { r: 3; }
+    .perf-spark circle.positive { fill: var(--color-profit); }
+    .perf-spark circle.negative { fill: var(--color-loss); }
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+    .streak-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+    @media (max-width: 768px) { .streak-grid { grid-template-columns: 1fr; } }
+    .tip-i { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; background: var(--surface-raised); color: var(--text-muted); cursor: help; margin-left: 3px; vertical-align: middle; position: relative; flex-shrink: 0; border: 1px solid var(--border-default); transition: all var(--dur-fast) var(--ease-out); }
+    .tip-i:hover { background: var(--brand-bg); color: var(--brand); border-color: var(--brand); }
+    .tip-i svg { width: 7px; height: 7px; }
+    .tip-i svg path { fill: currentColor; }
+</style>
+
+{# ── Settings shortcut bar ── #}
+<div id="engine-controls-top" style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3);flex-wrap:wrap;">
+    <button class="btn-sm" onclick="openSettings()" style="background:var(--brand);color:#fff;border:1px solid var(--brand);font-weight:var(--weight-semibold);padding:var(--space-2) var(--space-3);">
+        ⚙ Edit Settings
+    </button>
+    {% if inst.status == 'running' %}
+    <button class="fleet-btn btn-stop" onclick="apiPost('/api/v2/instances/{{ slug }}/stop')">Stop</button>
+    <button class="fleet-btn btn-close" onclick="apiPost('/api/v2/instances/{{ slug }}/close')">Close Position</button>
+    {% else %}
+    <button class="fleet-btn btn-start" onclick="apiPost('/api/v2/instances/{{ slug }}/start')">Start</button>
+    {% endif %}
+    <button class="fleet-btn btn-restart" onclick="apiPost('/api/v2/instances/{{ slug }}/restart')">Restart</button>
+    <a href="/app/engines" style="margin-left:auto;display:flex;align-items:center;color:var(--text-muted);text-decoration:none;font-size:var(--text-sm);">← All Engines</a>
+</div>
+
+{# ── KPI Row (3 items) with tooltips ── #}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Status<span class="tip-i" data-tip="Current engine state — running or stopped"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+        <div class="kpi-value"><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Unrealized PnL<span class="tip-i" data-tip="Current profit/loss on open position, marked to market"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+        <div class="kpi-value {% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" id="kpi-pnl">{{ inst.unrealized_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Mode<span class="tip-i" data-tip="Paper mode = no real orders. Live = real HL orders with real capital"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+        <div class="kpi-value {% if inst.dry_run %}positive{% else %}negative{% endif %}">{% if inst.dry_run %}PAPER{% else %}LIVE{% endif %}</div>
+    </div>
+</div>
+
+{# ── Performance Hero with sparkline ── #}
+<div class="chart-card perf-hero">
+    <div class="card-head">
+        <h2>Performance — {{ inst.token }}</h2>
+        <span class="tag tag-{{ inst.status }}">{{ inst.status }}</span>
+    </div>
+    <div class="perf-grid">
+        <div class="perf-cell">
+            <div class="perf-label">Win Rate<span class="tip-i" data-tip="Percentage of closed trades that were profitable"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+            <div class="perf-value" id="perf-wr">{{ win_rate }}%</div>
+        </div>
+        <div class="perf-cell">
+            <div class="perf-label">Total PnL<span class="tip-i" data-tip="Sum of realized PnL from all closed trades"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+            <div class="perf-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}" id="perf-pnl">{{ total_pnl | format_usd }}</div>
+        </div>
+        <div class="perf-cell">
+            <div class="perf-label">Closed Trades<span class="tip-i" data-tip="Total number of trades that have been opened and closed"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+            <div class="perf-value">{{ total_trades }}</div>
+        </div>
+        <div class="perf-cell">
+            <div class="perf-label">Max Drawdown<span class="tip-i" data-tip="Largest peak-to-trough decline in equity during the period"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></div>
+            <div class="perf-value negative" id="perf-dd">{{ max_drawdown_pct | format_pct }}</div>
+        </div>
+        <div class="perf-cell" style="grid-column: span 1;">
+            <div class="perf-label">Equity Trend</div>
+            <svg class="perf-spark" id="perf-spark" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+    </div>
+</div>
+
+{# ── Two-column: Position + Strategy ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);" class="detail-two-col">
+    <div class="chart-card" style="margin-bottom:0;">
+        <h2>Position</h2>
+        <div id="pos-card" class="pos-card">
+            <div class="pos-head">
+                <span class="tag tag-{{ (inst.position_side or 'flat') | lower }}">{{ inst.position_side or 'FLAT' }}</span>
+                <span class="pos-token">{{ inst.token }}</span>
+            </div>
+            <div class="pos-row"><span class="label">Size</span><span class="mono">{{ '%.4f' | format(inst.position_size) }}</span></div>
+            <div class="pos-row"><span class="label">Entry</span><span class="mono">{{ '%.4f' | format(inst.entry_price) }}</span></div>
+            <div class="pos-row"><span class="label">Mark</span><span class="mono" id="pos-mark">{{ '%.4f' | format(inst.mark_price) }}</span></div>
+            <div class="pos-row"><span class="label">Unreal. PnL</span><span class="mono {% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" id="pos-pnl">{{ inst.unrealized_pnl | format_usd }}</span></div>
+            <div class="pos-row"><span class="label">Leverage<span class="tip-i" data-tip="Position multiplier. Higher = more risk"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></span><span class="mono">{{ inst.leverage }}x</span></div>
+        </div>
+    </div>
+    <div class="chart-card" style="margin-bottom:0;">
+        <div class="card-head">
+            <h2>Strategy</h2>
+            <a href="/app/strategies/{{ inst.strategy_id }}" class="btn-sm" style="text-decoration:none;">View details →</a>
+        </div>
+        <div class="pos-card">
+            <div class="pos-row"><span class="label">Strategy</span><span class="mono">{{ inst.strategy_id }}</span></div>
+            <div class="pos-row"><span class="label">Timeframe</span><span class="mono">{{ inst.timeframe }}</span></div>
+            <div class="pos-row"><span class="label">Mode</span><span class="mono">{{ inst.mode }}</span></div>
+            <div class="pos-row"><span class="label">Activation</span><span class="mono">{{ inst.activation }}</span></div>
+            <div class="pos-row"><span class="label">Offset</span><span class="mono">{{ inst.offset }}</span></div>
+            <div class="pos-row"><span class="label">Profile</span><span class="mono">{{ inst.profile }}</span></div>
+            <div class="pos-row"><span class="label">Max Pos<span class="tip-i" data-tip="Maximum % of account equity allocated per trade"><svg viewBox="0 0 8 8"><path d="M3 1.5h2v1H3zM3 3h2v3.5H3z"/></svg></span></span><span class="mono">{{ (inst.max_position_pct * 100) | format_pct | replace('+','') | replace('%','') }}%</span></div>
+        </div>
+    </div>
+</div>
+
+{# ── Tab Pills ── #}
+<div class="tab-pills">
+    <button class="tab-pill active" onclick="switchTab('returns', this)">Returns Distribution</button>
+    <button class="tab-pill" onclick="switchTab('profit', this)">Profit Structure</button>
+    <button class="tab-pill" onclick="switchTab('streaks', this)">Run-ups & Drawdowns</button>
+</div>
+
+{# ── Tab 1: Returns Distribution ── #}
+<div class="tab-section active" id="tab-returns">
+    <div class="analytics-grid">
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>Returns Distribution</h2>
+            {% if dist_bins %}
+            <svg class="chart-histogram" id="hist-svg" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+            <div class="chart-legend">
+                <span><span class="dot loss"></span>Losers · avg {{ avg_loss }}%</span>
+                <span><span class="dot win"></span>Winners · avg +{{ avg_profit }}%</span>
+            </div>
+            {% else %}
+            <div class="chart-empty">No trades yet.</div>
+            {% endif %}
+        </div>
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>PnL Distribution</h2>
+            {% if total_trades > 0 %}
+            <div style="display:flex;gap:var(--space-4);align-items:center;">
+                <svg class="chart-donut" id="donut-svg" viewBox="0 0 160 160"></svg>
+                <div class="donut-legend">
+                    <div class="row"><span class="dot win"></span><span class="label">Winners</span><span class="val">{{ wins }} ({{ '%.1f' | format(wins / total_trades * 100 if total_trades else 0) }}%)</span></div>
+                    <div class="row"><span class="dot loss"></span><span class="label">Losers</span><span class="val">{{ losses }} ({{ '%.1f' | format(losses / total_trades * 100 if total_trades else 0) }}%)</span></div>
+                    <div class="row"><span class="dot be"></span><span class="label">Breakeven</span><span class="val">{{ breakevens }} ({{ '%.1f' | format(breakevens / total_trades * 100 if total_trades else 0) }}%)</span></div>
+                </div>
+            </div>
+            {% else %}
+            <div class="chart-empty">No trades yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ── Tab 2: Profit Structure (waterfall) ── #}
+<div class="tab-section" id="tab-profit">
+    <div class="chart-card">
+        <h2>Profit Structure</h2>
+        {% if total_trades > 0 %}
+        <svg class="chart-waterfall" id="waterfall-svg" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+            <span><span class="dot win"></span>Total Profit: ${{ '%.2f' | format(total_profit) }}</span>
+            <span><span class="dot loss"></span>Total Loss: ${{ '%.2f' | format(total_loss) }}</span>
+            <span><span class="dot cost"></span>Commission: ${{ '%.2f' | format(commission) }}</span>
+            <span><span class="dot net"></span>Net PnL: ${{ '%.2f' | format(net_pnl) }}</span>
+        </div>
+        {% else %}
+        <div class="chart-empty">No trades yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Tab 3: Run-ups & Drawdowns ── #}
+<div class="tab-section" id="tab-streaks">
+    <div class="streak-grid">
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>Alternating Growth & Decline</h2>
+            {% if streaks %}
+            <svg class="chart-streak" id="streak-svg" viewBox="0 0 400 140" preserveAspectRatio="none"></svg>
+            {% else %}
+            <div class="chart-empty" style="height:140px;">No streak data.</div>
+            {% endif %}
+        </div>
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>Comparison</h2>
+            {% if streaks %}
+            <svg class="chart-compare" id="compare-svg" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+            {% else %}
+            <div class="chart-empty" style="height:120px;">No streak data.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ── Trade History ── #}
+<div class="chart-card">
+    <h2>Trade History</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr><th>Time</th><th>Side</th><th>Size</th><th>Entry</th><th>Exit</th><th>PnL ($)</th><th>PnL (%)</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% if trades %}
+                {% for t in trades %}
+                {% set open = (t.exit_price is none) %}
+                <tr class="{% if open %}row-open{% elif t.pnl_usd >= 0 %}row-win{% else %}row-loss{% endif %}">
+                    <td>{{ t.timestamp | replace('T', ' ') | truncate(19, True, '') if t.timestamp else '-' }}</td>
+                    <td><span class="tag tag-{{ (t.side or 'flat') | lower }}">{{ t.side or '-' }}</span></td>
+                    <td class="mono">{{ '%.4f' | format(t.size) }}</td>
+                    <td class="mono">{{ '%.2f' | format(t.entry_price) }}</td>
+                    <td class="mono">{% if t.exit_price %}{{ '%.2f' | format(t.exit_price) }}{% else %}—{% endif %}</td>
+                    <td class="mono {% if t.pnl_usd >= 0 %}positive{% else %}negative{% endif %}">{{ '%.2f' | format(t.pnl_usd) }}</td>
+                    <td class="mono">{{ '%.1f' | format(t.pnl_pct) }}%</td>
+                    <td>{% if open %}OPEN{% else %}CLOSED{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr><td colspan="8" class="muted">No trades yet.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ── Recent Signals ── #}
+{% if signals %}
+<div class="chart-card">
+    <h2>Recent Signals</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Time</th><th>Direction</th><th>Strength</th></tr></thead>
+            <tbody>
+                {% for s in signals %}
+                <tr>
+                    <td>{{ s.timestamp | replace('T', ' ') | truncate(19, True, '') if s.timestamp else '-' }}</td>
+                    <td><span class="tag tag-{{ (s.direction or 'flat') | lower }}">{{ s.direction or '-' }}</span></td>
+                    <td class="mono">{{ '%.2f' | format(s.strength) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Runner Console ── #}
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Runner Console <span class="sse-dot" id="sse-dot" title="Live stream status"></span></h2>
+        <div class="card-actions">
+            <button class="btn-sm" onclick="copyConsole()" title="Copy log">Copy</button>
+            <button class="btn-sm" onclick="clearConsole()" title="Clear log">Clear</button>
+        </div>
+    </div>
+    <div id="console-log" class="console-log"></div>
+</div>
+
+{# ── Controls are now at the top of the page ── #}
+
+{# ── Settings Modal (preserved from Phase 2) ── #}
+<div class="modal-overlay" id="settings-modal" style="display:none;" onclick="if(event.target===this)closeSettings()">
+    <div class="modal-card">
+        <div class="modal-head">
+            <h2>Engine Settings</h2>
+            <button class="modal-close" onclick="closeSettings()" aria-label="Close">✕</button>
+        </div>
+        <form id="settings-form" onsubmit="saveSettings(event)">
+            <div class="modal-body">
+                <div class="modal-field">
+                    <label for="s-name">Name</label>
+                    <input id="s-name" name="name" type="text" value="{{ inst.name }}">
+                </div>
+                <div class="modal-field">
+                    <label for="s-token">Token</label>
+                    <input id="s-token" name="token" type="text" value="{{ inst.token }}" placeholder="e.g. ETH">
+                </div>
+                <div class="modal-field">
+                    <label for="s-strategy">Strategy</label>
+                    <select id="s-strategy" name="strategy_id">
+                        <option value="{{ inst.strategy_id }}" selected>{{ inst.strategy_id }}</option>
+                    </select>
+                    <span class="modal-hint">Only strategies with Python conversion</span>
+                </div>
+                <div class="modal-field">
+                    <label for="s-timeframe">Timeframe</label>
+                    <select id="s-timeframe" name="timeframe">
+                        <option value="5m" {% if inst.timeframe == '5m' %}selected{% endif %}>5m</option>
+                        <option value="15m" {% if inst.timeframe == '15m' %}selected{% endif %}>15m</option>
+                        <option value="30m" {% if inst.timeframe == '30m' %}selected{% endif %}>30m</option>
+                        <option value="1h" {% if inst.timeframe == '1h' %}selected{% endif %}>1h</option>
+                        <option value="4h" {% if inst.timeframe == '4h' %}selected{% endif %}>4h</option>
+                        <option value="1d" {% if inst.timeframe == '1d' %}selected{% endif %}>1d</option>
+                    </select>
+                </div>
+                <div class="modal-field">
+                    <label for="s-leverage">Leverage</label>
+                    <input id="s-leverage" name="leverage" type="number" min="1" max="50" value="{{ inst.leverage }}">
+                    <span class="modal-hint">Capped by HL maxLeverage per token</span>
+                </div>
+                <div class="modal-field">
+                    <label for="s-maxpos">Max Position %</label>
+                    <input id="s-maxpos" name="max_position_pct" type="number" min="1" max="100" step="0.01" value="{{ (inst.max_position_pct * 100) | format_pct | replace('+','') | replace('%','') }}">
+                </div>
+                <div class="modal-field">
+                    <label for="s-dryrun">Dry Run (Paper)</label>
+                    <select id="s-dryrun" name="dry_run">
+                        <option value="1" {% if inst.dry_run %}selected{% endif %}>Paper</option>
+                        <option value="0" {% if not inst.dry_run %}selected{% endif %}>Live</option>
+                    </select>
+                </div>
+                <div class="modal-field">
+                    <label for="s-balance">Start Balance</label>
+                    <input id="s-balance" name="start_balance" type="number" step="0.01" value="{{ inst.start_balance or 0 }}">
+                    <span class="modal-hint">0 = use account default</span>
+                </div>
+                <div class="modal-field">
+                    <label for="s-hlcred">HyperLiquid Account</label>
+                    <select id="s-hlcred" name="hl_credential_id">
+                        <option value="" {% if not hl_credential_id %}selected{% endif %}>Global (default account)</option>
+                        {% for c in hl_credentials %}
+                        <option value="{{ c.id }}" {% if c.id == hl_credential_id %}selected{% endif %}>{{ c.label }} {% if c.priority == 0 %}(Main){% elif c.priority == 1 %}(Secondary){% elif c.priority == 2 %}(Tertiary){% endif %} — {{ c.preview }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="modal-hint">Global = your default account. Pick a specific key to isolate this engine.</span>
+                </div>
+                {# ── Strategy Parameters (dynamic from strategy script) ── #}
+                {% if strategy_parameters %}
+                <div class="modal-readonly" style="grid-template-columns: 1fr; padding: var(--space-2) var(--space-3); margin-top: var(--space-2);">
+                    <span class="label" style="margin-bottom: var(--space-1);">Strategy Parameters</span>
+                </div>
+                <div id="strategy-params-container" style="display: flex; flex-direction: column; gap: var(--space-2);">
+                    {% for p in strategy_parameters %}
+                    <div class="modal-field">
+                        <label for="sp-{{ p.name }}">{{ p.label }}</label>
+                        {% if p.type == 'select' %}
+                        <select id="sp-{{ p.name }}" name="sp_{{ p.name }}" data-param="{{ p.name }}" data-type="select">
+                            {% for opt in p.options %}
+                            <option value="{{ opt }}" {% if strategy_config.get(p.name, p.default) == opt %}selected{% endif %}>{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                        {% elif p.type == 'bool' %}
+                        <select id="sp-{{ p.name }}" name="sp_{{ p.name }}" data-param="{{ p.name }}" data-type="bool">
+                            <option value="true" {% if strategy_config.get(p.name, p.default) %}selected{% endif %}>Enabled</option>
+                            <option value="false" {% if not strategy_config.get(p.name, p.default) %}selected{% endif %}>Disabled</option>
+                        </select>
+                        {% elif p.type == 'int' %}
+                        <input id="sp-{{ p.name }}" name="sp_{{ p.name }}" type="number" data-param="{{ p.name }}" data-type="int"
+                               min="{{ p.min or '' }}" max="{{ p.max or '' }}" value="{{ strategy_config.get(p.name, p.default) }}">
+                        {% elif p.type == 'float' %}
+                        <input id="sp-{{ p.name }}" name="sp_{{ p.name }}" type="number" step="{{ p.step or '0.1' }}" data-param="{{ p.name }}" data-type="float"
+                               min="{{ p.min or '' }}" max="{{ p.max or '' }}" value="{{ strategy_config.get(p.name, p.default) }}">
+                        {% endif %}
+                        {% if p.group %}<span class="modal-hint">{{ p.group }}</span>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="modal-readonly">
+                    <span class="label">Activation</span><span class="mono">{{ inst.activation }}</span>
+                    <span class="label">Offset</span><span class="mono">{{ inst.offset }}</span>
+                    <span class="label">Poll</span><span class="mono">{{ inst.poll_interval_seconds }}s</span>
+                    <span class="label">Mode</span><span class="mono">{{ inst.mode }}</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-sm" onclick="closeSettings()">Cancel</button>
+                <button type="submit" class="btn-sm" style="background:var(--brand);color:#fff;border:1px solid var(--brand);">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const SLUG = "{{ slug }}";
+    const distBins = {{ dist_bins | tojson | safe }};
+    const wins = {{ wins }};
+    const losses = {{ losses }};
+    const breakevens = {{ breakevens }};
+    const totalTrades = {{ total_trades }};
+    const sparklineData = {{ sparkline_data | tojson | safe }};
+    const streaks = {{ streaks | tojson | safe }};
+    const totalProfit = {{ total_profit }};
+    const totalLoss = {{ total_loss }};
+    const commission = {{ commission }};
+    const netPnl = {{ net_pnl }};
+    const avgProfit = {{ avg_profit }};
+    const avgLoss = {{ avg_loss }};
+
+    // ── Tab switching ──
+    function switchTab(name, btn) {
+        document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    // ── Sparkline (performance hero) ──
+    function buildPerfSpark() {
+        const svg = document.getElementById('perf-spark');
+        if (!svg || !sparklineData || sparklineData.length < 2) return;
+        const W = 200, H = 40, PAD = 4;
+        const vals = sparklineData;
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = (max - min) || 1;
+        const n = vals.length;
+        const pts = vals.map((v, i) => [PAD + (i / (n - 1)) * (W - 2 * PAD), H - PAD - ((v - min) / span) * (H - 2 * PAD)]);
+        let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+        for (let i = 1; i < pts.length; i++) d += ' L' + pts[i][0].toFixed(1) + ',' + pts[i][1].toFixed(1);
+        const last = pts[pts.length - 1];
+        const sign = vals[vals.length - 1] >= vals[0] ? 'positive' : 'negative';
+        svg.innerHTML = '<path class="' + sign + '" d="' + d + '"/><circle class="' + sign + '" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '"/>';
+    }
+
+    // ── Histogram ──
+    function buildHistogram() {
+        const svg = document.getElementById('hist-svg');
+        if (!svg || !distBins.length) return;
+        const W = 600, H = 180, PAD_L = 35, PAD_R = 10, PAD_T = 10, PAD_B = 30;
+        const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+        const maxCount = Math.max(...distBins.map(b => b.count), 1);
+        const barW = innerW / distBins.length;
+        let s = '';
+        // Horizontal grid lines (4 ticks)
+        for (let g = 0; g <= 4; g++) {
+            const gy = PAD_T + (g / 4) * innerH;
+            const gv = Math.round(maxCount - (g / 4) * maxCount);
+            s += '<line class="grid-line" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>';
+            s += '<text class="axis-tick" x="' + (PAD_L - 4) + '" y="' + (gy + 3).toFixed(1) + '" text-anchor="end">' + gv + '</text>';
+        }
+        // Zero line
+        const zeroBinIdx = distBins.findIndex(b => b.lo <= 0 && b.hi > 0);
+        if (zeroBinIdx >= 0) { const zx = PAD_L + zeroBinIdx * barW + barW / 2; s += '<line class="zero-line" x1="' + zx + '" y1="' + PAD_T + '" x2="' + zx + '" y2="' + (H - PAD_B) + '"/>'; }
+        // Bars
+        distBins.forEach((b, i) => {
+            const x = PAD_L + i * barW + 2;
+            const h = (b.count / maxCount) * innerH;
+            const y = H - PAD_B - h;
+            s += '<rect class="bar fade-up ' + (b.is_win ? 'win' : 'loss') + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (barW - 4).toFixed(1) + '" height="' + h.toFixed(1) + '" style="animation-delay:' + (i * 0.03) + 's"/>';
+        });
+        // Avg lines
+        const allLos = distBins[0].lo, allHi = distBins[distBins.length - 1].hi;
+        const span = allHi - allLos || 1;
+        const xForPct = p => PAD_L + ((p - allLos) / span) * innerW;
+        s += '<line class="avg-line win" x1="' + xForPct(avgProfit).toFixed(1) + '" y1="' + PAD_T + '" x2="' + xForPct(avgProfit).toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+        s += '<line class="avg-line loss" x1="' + xForPct(avgLoss).toFixed(1) + '" y1="' + PAD_T + '" x2="' + xForPct(avgLoss).toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+        // X-axis labels
+        s += '<text class="axis-label" x="' + PAD_L + '" y="' + (H - 8) + '">' + allLos.toFixed(1) + '%</text>';
+        s += '<text class="axis-label" x="' + (W / 2) + '" y="' + (H - 8) + '" text-anchor="middle">0%</text>';
+        s += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (H - 8) + '" text-anchor="end">' + allHi.toFixed(1) + '%</text>';
+        svg.innerHTML = s;
+    }
+
+    // ── Donut ──
+    function buildDonut() {
+        const svg = document.getElementById('donut-svg');
+        if (!svg) return;
+        const total = wins + losses + breakevens;
+        if (total === 0) return;
+        const cx = 80, cy = 80, r = 55, C = 2 * Math.PI * r;
+        let offset = 0, s = '';
+        [{c: wins, cls: 'win'}, {c: losses, cls: 'loss'}, {c: breakevens, cls: 'be'}].forEach(seg => {
+            if (seg.c === 0) return;
+            const dash = (seg.c / total) * C;
+            s += '<circle class="arc ' + seg.cls + '" cx="' + cx + '" cy="' + cy + '" r="' + r + '" stroke-dasharray="' + dash.toFixed(1) + ' ' + (C - dash).toFixed(1) + '" stroke-dashoffset="' + (-offset).toFixed(1) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+            offset += dash;
+        });
+        s += '<text class="center-val" x="' + cx + '" y="' + (cy - 6) + '">' + total + '</text>';
+        s += '<text class="center-label" x="' + cx + '" y="' + (cy + 12) + '">Trades</text>';
+        svg.innerHTML = s;
+    }
+
+    // ── Waterfall ──
+    function buildWaterfall() {
+        const svg = document.getElementById('waterfall-svg');
+        if (!svg || totalTrades === 0) return;
+        const W = 600, H = 180, PAD_L = 45, PAD_R = 10, PAD_T = 10, PAD_B = 40;
+        const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+        const bars = [
+            {label: 'Total Profit', val: totalProfit, cls: 'profit'},
+            {label: 'Total Loss', val: totalLoss, cls: 'loss'},
+            {label: 'Commission', val: commission, cls: 'cost'},
+            {label: 'Net PnL', val: netPnl, cls: netPnl >= 0 ? 'net' : 'net negative'}
+        ];
+        const maxVal = Math.max(...bars.map(b => Math.abs(b.val)), 0.01);
+        const barW = innerW / bars.length * 0.55;
+        const gap = innerW / bars.length * 0.45;
+        // Zero baseline at middle of chart
+        const zeroY = PAD_T + innerH * 0.4;
+        const scale = (innerH * 0.4) / maxVal; // Scale so bars fit above/below zero
+        let s = '';
+        // Grid lines (4 horizontal)
+        for (let g = 0; g <= 4; g++) {
+            const gy = PAD_T + (g / 4) * innerH;
+            const gv = (maxVal - (g / 4) * maxVal * 2).toFixed(2);
+            s += '<line class="wf-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>';
+            s += '<text class="wf-axis" x="' + (PAD_L - 4) + '" y="' + (gy + 3).toFixed(1) + '">' + gv + '</text>';
+        }
+        // Zero line
+        s += '<line class="wf-zero" x1="' + PAD_L + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + zeroY.toFixed(1) + '"/>';
+        // Bars
+        let prevY = zeroY;
+        bars.forEach((b, i) => {
+            const x = PAD_L + i * (barW + gap) + gap / 2;
+            const h = Math.abs(b.val) * scale;
+            let y, barTop;
+            // Profit/loss/cost go up from zero, net PnL goes up or down
+            if (b.cls === 'net negative') {
+                y = zeroY; barTop = zeroY + h;
+            } else if (b.cls === 'loss') {
+                y = zeroY; barTop = zeroY + h; // Loss goes down
+            } else {
+                y = zeroY - h; barTop = y; // Profit/cost go up
+            }
+            s += '<rect class="wf-bar fade-up ' + b.cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" style="animation-delay:' + (i * 0.05) + 's"/>';
+            // Connector from prev bar top to current
+            if (i > 0) {
+                const prevX = PAD_L + (i - 1) * (barW + gap) + gap / 2 + barW;
+                s += '<line class="wf-connector" x1="' + prevX.toFixed(1) + '" y1="' + prevY.toFixed(1) + '" x2="' + x.toFixed(1) + '" y2="' + barTop.toFixed(1) + '"/>';
+            }
+            prevY = barTop;
+            // Labels
+            const labelY = b.cls === 'loss' || b.cls === 'net negative' ? zeroY + h + 14 : y - 4;
+            const valY = b.cls === 'loss' || b.cls === 'net negative' ? zeroY + h + 14 : y - 4;
+            s += '<text class="wf-label" x="' + (x + barW / 2).toFixed(1) + '" y="' + (H - PAD_B + 15) + '">' + b.label + '</text>';
+            s += '<text class="wf-value" x="' + (x + barW / 2).toFixed(1) + '" y="' + (b.cls === 'loss' || b.cls === 'net negative' ? zeroY + h + 12 : y - 4).toFixed(1) + '">$' + b.val.toFixed(2) + '</text>';
+        });
+        svg.innerHTML = s;
+    }
+
+    // ── Streak bars ──
+    function buildStreaks() {
+        const svg = document.getElementById('streak-svg');
+        if (!svg || !streaks.length) return;
+        const W = 400, H = 140, PAD_L = 35, PAD_R = 10, PAD_T = 8, PAD_B = 18;
+        const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+        const maxAbs = Math.max(...streaks.map(s => Math.abs(s.pnl)), 0.01);
+        const zeroY = PAD_T + innerH / 2;
+        const scale = (innerH / 2) / maxAbs;
+        const barW = innerW / streaks.length * 0.7;
+        const gap = innerW / streaks.length * 0.3;
+        let content = '';
+        // Grid lines (3 horizontal: top, mid, bottom)
+        for (let g = 0; g <= 3; g++) {
+            const gy = PAD_T + (g / 3) * innerH;
+            const gv = (maxAbs - (g / 3) * maxAbs * 2).toFixed(1);
+            content += '<line class="streak-grid" x1="' + PAD_L + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + gy.toFixed(1) + '"/>';
+            content += '<text class="axis-label" x="' + (PAD_L - 4) + '" y="' + (gy + 3).toFixed(1) + '" text-anchor="end">' + gv + '</text>';
+        }
+        // Zero line
+        content += '<line class="streak-zero" x1="' + PAD_L + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + zeroY.toFixed(1) + '"/>';
+        // Bars
+        streaks.forEach((st, i) => {
+            const x = PAD_L + i * (barW + gap) + gap / 2;
+            const h = Math.max(Math.abs(st.pnl) * scale, 2); // Min 2px height
+            const y = st.type === 'up' ? zeroY - h : zeroY;
+            content += '<rect class="bar fade-up ' + st.type + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" style="animation-delay:' + (i * 0.03) + 's"/>';
+        });
+        svg.innerHTML = content;
+    }
+
+    // ── Comparison bars (diverging from zero center) ──
+    function buildCompare() {
+        const svg = document.getElementById('compare-svg');
+        if (!svg || !streaks.length) return;
+        const W = 400, H = 120, PAD_L = 80, PAD_R = 60, PAD_T = 8, PAD_B = 8;
+        const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+        const upStreaks = streaks.filter(s => s.type === 'up');
+        const downStreaks = streaks.filter(s => s.type === 'down');
+        const stats = [
+            {label: 'Max run-up', val: Math.max(...upStreaks.map(s => s.pnl), 0), cls: 'up'},
+            {label: 'Avg run-up', val: upStreaks.length ? upStreaks.reduce((a, s) => a + s.pnl, 0) / upStreaks.length : 0, cls: 'up'},
+            {label: 'Max drawdown', val: Math.min(...downStreaks.map(s => s.pnl), 0), cls: 'down'},
+            {label: 'Avg drawdown', val: downStreaks.length ? downStreaks.reduce((a, s) => a + s.pnl, 0) / downStreaks.length : 0, cls: 'down'},
+        ];
+        const maxAbs = Math.max(...stats.map(s => Math.abs(s.val)), 0.01);
+        const centerX = PAD_L + innerW / 2;
+        const scale = (innerW / 2) / maxAbs;
+        const rowH = innerH / stats.length;
+        const barH = Math.min(rowH - 6, 16);
+        let content = '';
+        // Grid lines (vertical, 5 ticks: -max, -half, 0, +half, +max)
+        for (let g = 0; g <= 4; g++) {
+            const gx = PAD_L + (g / 4) * innerW;
+            const gv = (-maxAbs + (g / 4) * maxAbs * 2).toFixed(1);
+            content += '<line class="cmp-grid" x1="' + gx.toFixed(1) + '" y1="' + PAD_T + '" x2="' + gx.toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+            content += '<text class="axis-label" x="' + gx.toFixed(1) + '" y="' + (H - 1) + '" text-anchor="middle">' + gv + '</text>';
+        }
+        // Zero line (center)
+        content += '<line class="cmp-zero" x1="' + centerX.toFixed(1) + '" y1="' + PAD_T + '" x2="' + centerX.toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+        // Bars (diverging from center)
+        stats.forEach((st, i) => {
+            const y = PAD_T + i * rowH + (rowH - barH) / 2;
+            const w = Math.abs(st.val) * scale;
+            const x = st.val >= 0 ? centerX : centerX - w;
+            content += '<text class="hbar-label" x="' + (PAD_L - 6) + '" y="' + (y + barH / 2 + 3).toFixed(1) + '" text-anchor="end">' + st.label + '</text>';
+            content += '<rect class="hbar fade-up ' + st.cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + barH.toFixed(1) + '" style="animation-delay:' + (i * 0.04) + 's"/>';
+            const valX = st.val >= 0 ? centerX + w + 4 : centerX - w - 4;
+            const anchor = st.val >= 0 ? 'start' : 'end';
+            content += '<text class="hbar-value" x="' + valX.toFixed(1) + '" y="' + (y + barH / 2 + 3).toFixed(1) + '" text-anchor="' + anchor + '">$' + st.val.toFixed(2) + '</text>';
+        });
+        svg.innerHTML = content;
+    }
+
+    // Build all charts
+    buildPerfSpark();
+    buildHistogram();
+    buildDonut();
+    buildWaterfall();
+    buildStreaks();
+    buildCompare();
+
+    // ── Live API loop ──
+    const API_KEY = "{{ api_key }}";
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    function apiPost(path) {
+        fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(j => { addConsole('cmd', (j.message || path) + (j.ok !== undefined ? ' [ok=' + j.ok + ']' : '')); refresh(); })
+            .catch(e => addConsole('err', 'POST ' + path + ' failed: ' + e));
+    }
+
+    function refresh() {
+        fetch(API_BASE + '/api/v2/summary', { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) return;
+                const inst = (d.instances || []).find(i => i.slug === SLUG);
+                if (!inst) return;
+                const pnlEl = document.getElementById('kpi-pnl');
+                if (pnlEl) { pnlEl.textContent = fmtUsd(inst.unrealized_pnl); pnlEl.className = 'kpi-value ' + (inst.unrealized_pnl >= 0 ? 'positive' : 'negative'); }
+                const posMark = document.getElementById('pos-mark');
+                if (posMark) posMark.textContent = (parseFloat(inst.mark_price) || 0).toFixed(4);
+                const posPnl = document.getElementById('pos-pnl');
+                if (posPnl) { posPnl.textContent = fmtUsd(inst.unrealized_pnl); posPnl.className = 'mono ' + (inst.unrealized_pnl >= 0 ? 'positive' : 'negative'); }
+            })
+            .catch(e => addConsole('err', 'summary fetch failed: ' + e));
+    }
+
+    // ── Settings modal ──
+    function openSettings() {
+        document.getElementById('settings-modal').style.display = 'flex';
+        fetch(API_BASE + '/api/v2/strategies', { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                const sel = document.getElementById('s-strategy');
+                if (!sel || !d.strategies) return;
+                const cur = sel.value;
+                sel.innerHTML = '';
+                d.strategies.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.strategy_id || s;
+                    opt.textContent = s.display_name || s.name || s.strategy_id || s;
+                    if (opt.value === cur) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+                if (!Array.from(sel.options).some(o => o.value === cur)) {
+                    const opt = document.createElement('option');
+                    opt.value = cur; opt.textContent = cur; opt.selected = true;
+                    sel.appendChild(opt);
+                }
+            }).catch(() => {});
+    }
+    function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+    function saveSettings(e) {
+        e.preventDefault();
+        const body = {
+            name: document.getElementById('s-name').value,
+            token: document.getElementById('s-token').value.toUpperCase(),
+            strategy_id: document.getElementById('s-strategy').value,
+            timeframe: document.getElementById('s-timeframe').value,
+            leverage: parseInt(document.getElementById('s-leverage').value) || 1,
+            max_position_pct: (parseFloat(document.getElementById('s-maxpos').value) || 97) / 100,
+            dry_run: document.getElementById('s-dryrun').value === '1',
+            start_balance: parseFloat(document.getElementById('s-balance').value) || 0,
+            hl_credential_id: document.getElementById('s-hlcred').value || null,
+        };
+        // Collect strategy parameters (Port 1: strategy_config)
+        const strategyConfig = {};
+        document.querySelectorAll('[data-param]').forEach(el => {
+            const name = el.dataset.param;
+            const type = el.dataset.type;
+            if (type === 'bool') {
+                strategyConfig[name] = el.value === 'true';
+            } else if (type === 'int') {
+                strategyConfig[name] = parseInt(el.value) || 0;
+            } else if (type === 'float') {
+                strategyConfig[name] = parseFloat(el.value) || 0;
+            } else {
+                strategyConfig[name] = el.value;
+            }
+        });
+
+        // Save instance settings first
+        fetch(API_BASE + '/api/v2/instances/' + SLUG, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify(body)
+        })
+        .then(r => r.json())
+        .then(j => {
+            if (!j.ok) { showToast(j.message || 'Save failed', 'error'); return; }
+            // Then save strategy config
+            if (Object.keys(strategyConfig).length > 0) {
+                return fetch(API_BASE + '/api/v2/instances/' + SLUG + '/strategy-config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    body: JSON.stringify(strategyConfig)
+                }).then(r => r.json()).then(j2 => {
+                    if (j2.ok) { showToast('Settings + strategy config saved', 'success'); closeSettings(); refresh(); }
+                    else { showToast('Instance saved, strategy config failed: ' + (j2.message || ''), 'error'); }
+                });
+            }
+            showToast('Settings saved', 'success'); closeSettings(); refresh();
+        })
+        .catch(err => showToast('Save error: ' + err, 'error'));
+    }
+
+    // ── Console helpers ──
+    function copyConsole() {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const txt = Array.from(box.children).map(l => l.textContent).join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => addConsole('cmd', 'Console copied'));
+    }
+    function clearConsole() {
+        const box = document.getElementById('console-log');
+        if (box) box.innerHTML = '<div class="console-line">Console cleared.</div>';
+    }
+    function addConsole(kind, msg) {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const line = document.createElement('div');
+        line.className = 'console-line console-' + (kind || 'info');
+        const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+        line.textContent = '[' + t + '] ' + msg;
+        box.insertBefore(line, box.firstChild);
+        while (box.childElementCount > 200) box.removeChild(box.lastChild);
+    }
+
+    // ── SSE ──
+    if (typeof EventSource !== 'undefined') {
+        const es = new EventSource(API_BASE + '/stream');
+        const sseDot = document.getElementById('sse-dot');
+        es.onopen = () => { if (sseDot) sseDot.className = 'sse-dot live'; };
+        es.onmessage = ev => {
+            if (sseDot) sseDot.className = 'sse-dot live';
+            try {
+                const e = JSON.parse(ev.data);
+                if (e.type === 'log') addConsole(e.log.level || 'info', e.log.message);
+                else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
+                else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
+                else if (e.type === 'ping') {}
+            } catch (_) {}
+        };
+        es.onerror = () => { if (sseDot) sseDot.className = 'sse-dot dead'; addConsole('err', 'SSE stream disconnected'); };
+    }
+
+    refresh();
+    setInterval(refresh, 3000);
+</script>
+{% endblock %}

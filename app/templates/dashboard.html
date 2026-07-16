@@ -1,146 +1,410 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PULS-R Strategy Engine</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div class="app">
-        <!-- Top Bar -->
-        <header class="topbar">
-            <div class="topbar-left">
-                <div class="logo">
-                    <span class="logo-text">PULS<span class="logo-accent">·</span>R</span>
-                </div>
-                <span class="status-pill" id="global-status">
-                    <span class="status-dot"></span>
-                    <span class="status-text">Ready</span>
-                </span>
-            </div>
-            <div class="topbar-right">
-                <span class="clock" id="clock">--:--:--</span>
-                <button class="btn-icon" onclick="refreshAll()" title="Refresh">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                </button>
-                <a href="/withdrawals" class="btn-icon" title="Withdrawals">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 6l-5-5-5 5M17 18l-5 5-5-5"/></svg>
-                </a>
-                <a href="/instances/new" class="btn-icon btn-icon-accent" title="Add Engine">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </a>
-            </div>
-        </header>
-
-        <!-- Stats Bar -->
-        <div class="stats-bar" id="stats-bar">
-            <div class="stat">
-                <span class="stat-label">Account Value</span>
-                <div class="stat-value-row">
-                    <span class="stat-value" id="stat-account">-</span>
-                    <span class="stat-unit">USDC</span>
-                </div>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Drawdown</span>
-                <div class="stat-value-row">
-                    <span class="stat-value" id="stat-drawdown">-</span>
-                    <span class="stat-unit">30D</span>
-                </div>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Active Engines</span>
-                <div class="stat-value-row">
-                    <span class="stat-value" id="stat-active">-</span>
-                    <span class="stat-unit">Running</span>
-                </div>
-            </div>
-            <div class="stat">
-                <span class="stat-label">Open PnL</span>
-                <div class="stat-value-row">
-                    <span class="stat-value" id="stat-pnl">-</span>
-                    <span class="stat-unit">Unrealized</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Layout -->
-        <div class="main">
-            <!-- Left: Graph + Fleet -->
-            <div class="left-panel">
-                <div class="card">
-                    <div class="card-head">
-                        <h2>Equity Curve</h2>
-                        <span class="tag tag-neutral" id="pulse-range">30D</span>
-                    </div>
-                    <div id="pulse-canvas" class="chart-area"></div>
-                </div>
-
-                <div class="card">
-                    <div class="card-head">
-                        <h2>Fleet <span class="tag tag-neutral" id="fleet-count">0</span></h2>
-                        <button class="btn-sm fleet-toggle" onclick="toggleFleet()" id="fleet-toggle-btn">Collapse</button>
-                    </div>
-                    <div id="instances-grid" class="fleet-grid">
-                        <div class="empty">Loading engines...</div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-head">
-                        <h2>Trade History</h2>
-                        <span class="tag tag-neutral" id="trade-count">0</span>
-                    </div>
-                    <div id="trade-history" class="trade-list">
-                        <div class="empty">No trades yet.</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right: Engine Detail -->
-            <div class="right-panel">
-                <div class="card detail-card">
-                    <div class="card-head">
-                        <h2 id="detail-title">Engine Detail</h2>
-                        <div class="card-actions" id="detail-actions"></div>
-                    </div>
-                    <div class="tabs" id="detail-tabs">
-                        <button class="tab active" data-tab="overview">Overview</button>
-                        <button class="tab" data-tab="signals">Signals</button>
-                        <button class="tab" data-tab="trades">Trades</button>
-                        <button class="tab" data-tab="backtests">Backtests</button>
-                        <button class="tab" data-tab="alerts">Alerts</button>
-                        <button class="tab" data-tab="settings">Settings</button>
-                    </div>
-                    <div id="tab-overview" class="tab-pane active"></div>
-                    <div id="tab-signals" class="tab-pane"></div>
-                    <div id="tab-trades" class="tab-pane"></div>
-                    <div id="tab-backtests" class="tab-pane"></div>
-                    <div id="tab-alerts" class="tab-pane"></div>
-                    <div id="tab-settings" class="tab-pane"></div>
-                </div>
-
-                <div class="card">
-                    <div class="card-head">
-                        <h2>Activity Log</h2>
-                        <div class="card-actions">
-                            <button class="btn-sm" onclick="copyLogs()">Copy</button>
-                            <button class="btn-sm" onclick="clearConsole()">Clear</button>
-                        </div>
-                    </div>
-                    <div class="log-area" id="console">
-                        <div class="log-line info">Dashboard initialized...</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+{% extends "layout.html" %}
+{% block title %}PULS-R — Dashboard{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/chat_widget.css">
+{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Account Value <span class="tip-i" data-tip="Total account value across all engines (equity + unrealized PnL)">ⓘ</span></div>
+        <div class="kpi-value" id="kpi-account">{{ account_value | format_usd }}</div>
     </div>
+    <div class="kpi">
+        <div class="kpi-label">Drawdown (30D) <span class="tip-i" data-tip="Maximum drawdown from peak equity over the last 30 days">ⓘ</span></div>
+        <div class="kpi-value negative" id="kpi-drawdown">{{ drawdown_pct | format_pct }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Active Engines <span class="tip-i" data-tip="Running engine count vs total configured engines">ⓘ</span></div>
+        <div class="kpi-value" id="kpi-active">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Open PnL <span class="tip-i" data-tip="Sum of unrealized profit/loss across all open positions">ⓘ</span></div>
+        <div class="kpi-value {% if open_pnl >= 0 %}positive{% else %}negative{% endif %}" id="kpi-pnl">{{ open_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Mode <span class="tip-i" data-tip="DRY RUN uses simulated orders. LIVE trades real money on HyperLiquid.">ⓘ</span></div>
+        <div class="kpi-value" id="kpi-dry">{% if dry_run_global %}DRY RUN{% else %}LIVE{% endif %}</div>
+    </div>
+</div>
+<div id="connect-prompt" class="chart-card" style="display:none;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);border:1px dashed var(--brand);background:var(--brand-bg);margin-bottom:var(--space-3);">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <div>
+        <div style="font-weight:var(--weight-semibold);color:var(--text-primary);">No HyperLiquid account connected</div>
+        <div style="font-size:var(--text-sm);color:var(--text-muted);margin-top:2px;">Connect your wallet and HyperLiquid credentials to see live account values and start trading.</div>
+    </div>
+    <a href="/app/account/secrets" style="flex-shrink:0;padding:8px 16px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;text-decoration:none;font-weight:var(--weight-semibold);font-size:var(--text-sm);white-space:nowrap;">Connect Wallet →</a>
+</div>
 
-    <script>window.API_KEY = "{{ api_key }}";</script>
-    <script src="/static/app.js"></script>
-</body>
-</html>
+<div class="dash-row">
+    <div class="chart-card">
+        <div class="pulse-head">
+            <h2>Pulse Graph — Account Total</h2>
+            <span class="pulse-change" id="pulse-change">—</span>
+        </div>
+        <div class="pulse-wrap">
+            <svg class="pulse-svg" id="pulse-svg" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-label="Equity pulse">
+                <defs>
+                    <linearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--emerald-500)" stop-opacity="0.28"/>
+                        <stop offset="100%" stop-color="var(--coral-500)" stop-opacity="0.04"/>
+                    </linearGradient>
+                </defs>
+                <path class="pulse-area" id="pulse-area" d=""/>
+                <path class="pulse-path" id="pulse-path" d=""/>
+                <circle class="pulse-dot" id="pulse-dot" cx="0" cy="0" r="4"/>
+            </svg>
+            <div id="pulse-empty" class="empty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;">No equity data yet.</div>
+        </div>
+        <div class="pulse-stats" id="pulse-stats">
+            <div class="pstat"><span class="pstat-label">Last</span><span class="pstat-value" id="ps-last">—</span></div>
+            <div class="pstat"><span class="pstat-label">High</span><span class="pstat-value" id="ps-high">—</span></div>
+            <div class="pstat"><span class="pstat-label">Low</span><span class="pstat-value" id="ps-low">—</span></div>
+            <div class="pstat"><span class="pstat-label">Peak Δ</span><span class="pstat-value" id="ps-peak">—</span></div>
+        </div>
+        <h2 style="margin-top:var(--space-3);">Recent Trades</h2>
+        <div id="trades-compact" class="trades-compact"></div>
+    </div>
+    <div class="chart-card">
+        <div class="card-head">
+            <h2>Agent Console <span class="sse-dot" id="sse-dot" title="Live stream status"></span></h2>
+            <div class="card-actions">
+                <button class="btn-sm" onclick="copyConsole()" title="Copy log">Copy</button>
+                <button class="btn-sm" onclick="clearConsole()" title="Clear log">Clear</button>
+            </div>
+        </div>
+        <div id="console-log" class="console-log"></div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Open Positions</h2>
+        <span class="tag tag-flat" id="pos-count">0</span>
+    </div>
+    <div class="pos-grid" id="pos-grid">
+        <div class="empty">No open positions.</div>
+    </div>
+    <div class="pos-footer">
+        <button class="btn-close-all" onclick="closeAllPositions()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            Close All
+        </button>
+    </div>
+</div>
+
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Fleet</h2>
+        <a href="/instances/new" class="btn-sm" style="color:var(--tb-500);border-color:var(--tb-500);">+ Add</a>
+    </div>
+    {% if instances %}
+    <div class="fleet-grid" id="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="location.href='/app/engines/{{ inst.slug }}'" style="cursor:pointer;">
+            <h3>{{ inst.name }}</h3>
+            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            <div class="fleet-row"><span class="label">Status</span><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+            <div class="fleet-row"><span class="label">Leverage</span><span style="font-family:var(--font-mono);">{{ inst.leverage }}x</span></div>
+            <div class="fleet-row"><span class="label">Size</span><span style="font-family:var(--font-mono);">{{ '%.4f' | format(inst.position_size or 0) }}</span></div>
+            <div class="fleet-row"><span class="label">Mark</span><span style="font-family:var(--font-mono);">{{ '%.4f' | format(inst.mark_price or 0) }}</span></div>
+            <div class="fleet-row"><span class="label">Max Pos</span><span style="font-family:var(--font-mono);">{{ (inst.max_position_pct * 100) | format_pct | replace('+','') | replace('%','') }}%</span></div>
+            <div class="fleet-row"><span class="label">Dry Run</span><span>{{ 'Yes' if inst.dry_run else 'No (LIVE)' }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No engines yet. <a href="/instances/new" style="color:var(--tb-500);">Add one →</a></div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{% include 'chat_widget.html' %}
+<script>
+    const equityData = {{ equity_series | tojson | safe }};
+    const tradesData = {{ trades | tojson | safe }};
+
+    // ── SVG Pulse Graph (trade + account data driven) ──
+    function buildPulse() {
+        const path = document.getElementById('pulse-path');
+        const area = document.getElementById('pulse-area');
+        const dot = document.getElementById('pulse-dot');
+        const empty = document.getElementById('pulse-empty');
+        if (!path) return;
+        const W = 1000, H = 200, PAD = 8;
+        if (!equityData || equityData.length < 2) {
+            path.setAttribute('d', '');
+            area.setAttribute('d', '');
+            dot.setAttribute('cx', 0); dot.setAttribute('cy', 0);
+            empty.style.display = 'flex';
+            return;
+        }
+        empty.style.display = 'none';
+        const vals = equityData.map(d => parseFloat(d.value) || 0);
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = (max - min) || 1;
+        const n = equityData.length;
+        const pts = equityData.map((d, i) => {
+            const x = PAD + (i / (n - 1)) * (W - 2 * PAD);
+            const y = H - PAD - ((parseFloat(d.value) || 0) - min) / span * (H - 2 * PAD);
+            return [x, y];
+        });
+        // smooth cubic path
+        let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+        for (let i = 1; i < pts.length; i++) {
+            const p0 = pts[i - 1], p1 = pts[i];
+            const cx = (p0[0] + p1[0]) / 2;
+            d += ' C' + cx.toFixed(1) + ',' + p0[1].toFixed(1) + ' ' + cx.toFixed(1) + ',' + p1[1].toFixed(1) + ' ' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1);
+        }
+        const last = pts[pts.length - 1];
+        path.setAttribute('d', d);
+        area.setAttribute('d', d + ' L' + last[0].toFixed(1) + ',' + (H - PAD) + ' L' + pts[0][0].toFixed(1) + ',' + (H - PAD) + ' Z');
+        dot.setAttribute('cx', last[0].toFixed(1));
+        dot.setAttribute('cy', last[1].toFixed(1));
+        // ── SIGN-AWARE COLOR: red when net change is negative ──
+        const first = vals[0], lastV = vals[vals.length - 1];
+        const netChange = lastV - first;
+        const neg = netChange < 0;
+        path.classList.toggle('negative', neg);
+        dot.classList.toggle('negative', neg);
+        // ── Live % change badge ──
+        const pctEl = document.getElementById('pulse-change');
+        if (pctEl) {
+            const pct = first ? (netChange / first) * 100 : 0;
+            pctEl.textContent = (neg ? '▼ ' : '▲ ') + Math.abs(pct).toFixed(2) + '%';
+            pctEl.className = 'pulse-change ' + (neg ? 'negative' : 'positive');
+        }
+        // ── Stat strip: Last / High / Low / Peak Δ ──
+        const psLast = document.getElementById('ps-last');
+        const psHigh = document.getElementById('ps-high');
+        const psLow = document.getElementById('ps-low');
+        const psPeak = document.getElementById('ps-peak');
+        if (psLast) psLast.textContent = '$' + lastV.toFixed(2);
+        if (psHigh) psHigh.textContent = '$' + max.toFixed(2);
+        if (psLow) psLow.textContent = '$' + min.toFixed(2);
+        if (psPeak) {
+            const peakDelta = max - min;
+            psPeak.textContent = (peakDelta >= 0 ? '+' : '-') + '$' + Math.abs(peakDelta).toFixed(2);
+            psPeak.className = 'pstat-value ' + (peakDelta >= 0 ? 'positive' : 'negative');
+        }
+        // set dash length for draw animation
+        const len = path.getTotalLength ? path.getTotalLength() : 2000;
+        path.style.setProperty('--len', len.toFixed(0));
+        // replay animation on each rebuild
+        path.style.animation = 'none'; void path.offsetWidth; path.style.animation = '';
+    }
+    buildPulse();
+
+    // ---- Live API <-> UI loop (bidirectional) ----
+    const API_KEY = "{{ api_key }}";
+    const DRY = {{ 'true' if dry_run_global else 'false' }};
+    // Strip any basic-auth creds from the URL (browsers reject fetch with embedded credentials)
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const fmtPct = n => ((parseFloat(n) || 0) >= 0 ? '+' : '') + (parseFloat(n) || 0).toFixed(2) + '%';
+    const sideClass = s => (s || 'FLAT').toLowerCase();
+
+    function ctrlBtn(label, cls, fn) {
+        const b = document.createElement('button');
+        b.className = 'fleet-btn ' + cls;
+        b.textContent = label;
+        b.onclick = fn;
+        return b;
+    }
+
+    function renderPositions(instances) {
+        const grid = document.getElementById('pos-grid');
+        const count = document.getElementById('pos-count');
+        if (!grid) return;
+        const open = (instances || []).filter(i => i.position_side && i.position_side !== 'FLAT' && (parseFloat(i.position_size) || 0) !== 0);
+        if (count) count.textContent = open.length;
+        if (!open.length) {
+            grid.innerHTML = '<div class="empty">No open positions.</div>';
+            return;
+        }
+        grid.innerHTML = '';
+        open.forEach(inst => {
+            const card = document.createElement('div');
+            card.className = 'pos-card';
+            const sideCls = (inst.position_side || 'FLAT').toLowerCase();
+            const pnl = parseFloat(inst.unrealized_pnl) || 0;
+            const sym = inst.token || '';
+            card.innerHTML =
+                '<div class="pos-head"><span class="tag tag-' + sideCls + '">' + inst.position_side + '</span>' +
+                '<span class="pos-token">' + sym + '</span>' +
+                '<span class="pos-engine">' + inst.name + '</span></div>' +
+                '<div class="pos-row"><span class="label">Size</span><span class="mono">' + (parseFloat(inst.position_size) || 0).toFixed(4) + '</span></div>' +
+                '<div class="pos-row"><span class="label">Entry</span><span class="mono">' + fmtUsd(inst.entry_price) + '</span></div>' +
+                '<div class="pos-row"><span class="label">Mark</span><span class="mono">' + fmtUsd(inst.mark_price) + '</span></div>' +
+                '<div class="pos-row"><span class="label">Unreal. PnL</span><span class="mono ' + (pnl >= 0 ? 'positive' : 'negative') + '">' + fmtUsd(pnl) + '</span></div>' +
+                '<div class="pos-row"><span class="label">Lev</span><span class="mono">' + (inst.leverage || '-') + 'x</span></div>' +
+                '<div class="pos-actions-row">' +
+                    '<button class="btn-position-action btn-close-position" onclick="closePosition(\'' + sym + '\')" title="Close Position">' +
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+                    '<a href="https://app.hyperliquid.xyz/trade/' + sym + '" target="_blank" class="btn-position-action btn-chart" title="View Chart on Exchange">' +
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></a>' +
+                '</div>';
+            grid.appendChild(card);
+        });
+    }
+
+    function renderTradesCompact(trades) {
+        const box = document.getElementById('trades-compact');
+        if (!box) return;
+        if (!trades || !trades.length) { box.innerHTML = '<div class="empty" style="padding:8px;">No trades yet.</div>'; return; }
+        box.innerHTML = trades.slice(0, 12).map(t => {
+            const time = (t.timestamp || '').replace('T', ' ').slice(0, 19);
+            const pnl = parseFloat(t.pnl_usd) || 0;
+            const pnlStr = (pnl >= 0 ? '+' : '-') + '$' + Math.abs(pnl).toFixed(2);
+            const pnlCls = pnl >= 0 ? 'positive' : 'negative';
+            const side = (t.side || 'LONG').toLowerCase();
+            return '<div class="trade-line"><span class="trade-time">' + time + '</span>' +
+                   '<span class="trade-token">' + (t.instance_id || '') + '</span>' +
+                   '<span class="side ' + side + '">' + (t.side || 'LONG') + '</span>' +
+                   '<span class="trade-pnl ' + pnlCls + '">' + pnlStr + '</span></div>';
+        }).join('');
+    }
+
+    function copyConsole() {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const txt = Array.from(box.children).map(l => l.textContent).join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => addConsole('cmd', 'Console copied to clipboard'));
+    }
+    function clearConsole() {
+        const box = document.getElementById('console-log');
+        if (box) box.innerHTML = '<div class="console-line">Console cleared.</div>';
+    }
+    function closePosition(symbol) {
+        if (!confirm('Close ' + symbol + ' position?')) return;
+        apiPost('/api/v2/instances/' + symbol + '/close');
+    }
+    function closeAllPositions() {
+        if (!confirm('Close ALL open positions? This cannot be undone.')) return;
+        fetch(API_BASE + '/api/v2/kill?reset=false', { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json()).then(j => { addConsole('cmd', 'Kill-all sent: ' + (j.message || '')); refresh(); })
+            .catch(e => addConsole('err', 'kill-all failed: ' + e));
+    }
+    function emergencyStop() {
+        if (!confirm('EMERGENCY STOP — close ALL positions on ALL engines and halt?')) return;
+        fetch(API_BASE + '/api/v2/kill?reset=false', { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json()).then(j => { addConsole('err', 'EMERGENCY STOP: ' + (j.message || '')); refresh(); })
+            .catch(e => addConsole('err', 'e-stop failed: ' + e));
+    }
+
+    function renderFleet(instances) {
+        const grid = document.getElementById('fleet-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        if (!instances || !instances.length) {
+            grid.innerHTML = '<div class="empty">No engines yet. <a href="/instances/new" style="color:var(--brand);">Add one →</a></div>';
+            return;
+        }
+        instances.forEach(inst => {
+            const card = document.createElement('div');
+            card.className = 'fleet-card' + (inst.status === 'running' ? ' running' : '');
+            const pnlCls = (inst.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative';
+            card.innerHTML =
+                '<h3>' + inst.name + '</h3>' +
+                '<div class="fleet-sub">' + inst.token + ' · ' + inst.strategy_id + ' · ' + inst.timeframe + '</div>' +
+                '<div class="fleet-row"><span class="label">Status</span><span class="tag tag-' + inst.status + '">' + inst.status + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Unrealized PnL</span><span class="' + pnlCls + '" style="font-family:var(--font-mono);">' + fmtUsd(inst.unrealized_pnl) + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Leverage</span><span style="font-family:var(--font-mono);">' + inst.leverage + 'x</span></div>' +
+                '<div class="fleet-row"><span class="label">Size</span><span style="font-family:var(--font-mono);">' + (parseFloat(inst.position_size) || 0).toFixed(4) + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Mark</span><span style="font-family:var(--font-mono);">' + (parseFloat(inst.mark_price) || 0).toFixed(4) + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Max Pos</span><span style="font-family:var(--font-mono);">' + ((inst.max_position_pct * 100) || 0).toFixed(0) + '%</span></div>' +
+                '<div class="fleet-row"><span class="label">Dry Run</span><span>' + (inst.dry_run ? 'Yes' : 'No (LIVE)') + '</span></div>';
+            const actions = document.createElement('div');
+            actions.className = 'fleet-actions';
+            const slug = inst.slug;
+            if (inst.status === 'running') {
+                actions.appendChild(ctrlBtn('Stop', 'btn-stop', () => apiPost('/api/v2/instances/' + slug + '/stop')));
+                actions.appendChild(ctrlBtn('Close', 'btn-close', () => apiPost('/api/v2/instances/' + slug + '/close')));
+            } else {
+                actions.appendChild(ctrlBtn('Start', 'btn-start', () => apiPost('/api/v2/instances/' + slug + '/start')));
+            }
+            actions.appendChild(ctrlBtn('Restart', 'btn-restart', () => apiPost('/api/v2/instances/' + slug + '/restart')));
+            card.appendChild(actions);
+            grid.appendChild(card);
+        });
+    }
+
+    function apiPost(path) {
+        fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(j => { addConsole('cmd', (j.message || path) + (j.ok !== undefined ? ' [ok=' + j.ok + ']' : '')); refresh(); })
+            .catch(e => addConsole('err', 'POST ' + path + ' failed: ' + e));
+    }
+
+    function refresh() {
+        fetch(API_BASE + '/api/v2/summary', { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) return;
+                document.getElementById('kpi-account').textContent = fmtUsd(d.account_value);
+                document.getElementById('kpi-drawdown').textContent = fmtPct(d.drawdown_pct);
+                document.getElementById('kpi-active').innerHTML = d.active_engines + ' <span style="font-size:var(--text-sm);color:var(--text-muted);">/ ' + d.total_engines + '</span>';
+                const pnlEl = document.getElementById('kpi-pnl');
+                pnlEl.textContent = fmtUsd(d.open_pnl);
+                pnlEl.className = 'kpi-value ' + (d.open_pnl >= 0 ? 'positive' : 'negative');
+                document.getElementById('kpi-dry').textContent = d.dry_run_global ? 'DRY RUN' : 'LIVE';
+                document.getElementById('kpi-dry').className = 'kpi-value ' + (d.dry_run_global ? 'positive' : 'negative');
+                renderFleet(d.instances);
+                renderPositions(d.instances);
+                renderTradesCompact(d.trades || []);
+                if (d.equity_series && d.equity_series.length) {
+                    equityData.length = 0;
+                    d.equity_series.forEach(p => equityData.push(p));
+                    buildPulse();
+                }
+                // ── Show connect prompt if no HL credentials and zero balance ──
+                var connectPrompt = document.getElementById('connect-prompt');
+                if (connectPrompt) {
+                    if (!d.has_hl_credentials && d.account_value === 0 && d.active_engines === 0) {
+                        connectPrompt.style.display = 'flex';
+                    } else {
+                        connectPrompt.style.display = 'none';
+                    }
+                }
+            })
+            .catch(e => addConsole('err', 'summary fetch failed: ' + e));
+    }
+
+    // ---- Runner console log (SSE /stream -> prepend) ----
+    function addConsole(kind, msg) {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const line = document.createElement('div');
+        line.className = 'console-line console-' + (kind || 'info');
+        const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+        line.textContent = '[' + t + '] ' + msg;
+        box.insertBefore(line, box.firstChild);
+        while (box.childElementCount > 200) box.removeChild(box.lastChild);
+    }
+
+    if (typeof EventSource !== 'undefined') {
+        const es = new EventSource(API_BASE + '/stream');
+        const sseDot = document.getElementById('sse-dot');
+        es.onopen = () => { if (sseDot) sseDot.className = 'sse-dot live'; };
+        es.onmessage = ev => {
+            if (sseDot) sseDot.className = 'sse-dot live';
+            try {
+                const e = JSON.parse(ev.data);
+                if (e.type === 'log') addConsole(e.log.level || 'info', e.log.message);
+                else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
+                else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
+                else if (e.type === 'ping') { /* keepalive */ }
+            } catch (_) {}
+        };
+        es.onerror = () => { if (sseDot) sseDot.className = 'sse-dot dead'; addConsole('err', 'SSE stream disconnected'); };
+    }
+
+    // Initial paint + poll every 3s (backend -> frontend, near-live)
+    refresh();
+    setInterval(refresh, 3000);
+</script>
+<script src="/static/chat_widget.js"></script>
+{% endblock %}
