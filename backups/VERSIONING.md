@@ -103,3 +103,20 @@ v89 | engine-settings-mobile | 2026-07-15 1650 | engine_detail.html: settings bu
 **Verification:** 61/61 tests PASS (health, strategy API, instances, strategy-config CRUD, 12 UI routes, engine detail HTML, metadata, stats, swagger, strategy instantiation x19, DB schema). Browser-verified: 15 `data-param` fields in modal DOM.
 **Clean slate:** All processes killed, HL positions closed, `template_empty_STABLE.db` saved, `dev_test.db` fresh from template.
 **Known issues:** None. Phases 9-10 pending (Studio clone, Python upload, multi-tenant, live test).
+
+---
+
+## Aetheris Session (2026-07-16, e3f7461df4ce)
+
+### `v200_a2-lightweight-charts-library_2026-07-16_1500` — **LATEST**
+**State:** Pre-add of TradingView Lightweight Charts v5.2.0 + PulsRChart wrapper. 
+**Files:** app/templates/layout.html, app/templates/testing_paper.html, app/static/tokens.css, app/static/style.css
+**Change:** none yet — this is the pre-edit snapshot
+**Sprint A:** Foundation. Sprint B: paper-trading pilot (operator chose this as the redesign anchor).
+
+## Active Series — UI/UX Redesign (operator choice: full project, starting with paper trading, using lightweight-charts)
+
+### `v104_pt1.1-fleet-clickable-sparks_2026-07-16_1440` (earlier this session)
+**State:** Pre Part 1.1 — clickable fleet cards + sparkline container
+**Files:** app/templates/testing_paper.html
+**Committed:** f1ee4c0 (combined with later commits)

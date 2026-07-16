@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="/static/tokens.css">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/chat_widget.css">
+    <script src="/static/lightweight-charts.standalone.production.js"></script>
+    <script src="/static/pulsr-chart.js"></script>
     <link rel="manifest" href="/static/manifest.json">
     {% block head %}{% endblock %}
     <meta name="theme-color" content="#08798E">
@@ -192,7 +194,7 @@
         @media (max-width: 768px) { .dash-row { grid-template-columns: 1fr; } }
 
         /* ── KPI Stats ── */
-        .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-2); margin-bottom: var(--space-3); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin-bottom: var(--space-3); }
         .kpi {
             background: var(--surface-card); border: 1px solid var(--border-subtle);
             border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
@@ -202,6 +204,9 @@
         .kpi-value { font-size: var(--text-md); font-weight: var(--weight-bold); font-variant-numeric: tabular-nums; margin-top: 2px; }
         .kpi-value.positive { color: var(--color-profit); }
         .kpi-value.negative { color: var(--color-loss); }
+        .kpi-primary { border-color: var(--brand); border-width: 1px; }
+        .kpi-large { font-size: var(--text-xl); }
+        .kpi-sub { font-size: var(--text-xs); color: var(--text-muted); margin-top: 2px; }
 
         /* ── Cards ── */
         .chart-card {
@@ -426,7 +431,7 @@
             .mobile-nav a.active { color: var(--brand); }
             .mobile-nav a svg { width: 20px; height: 20px; }
             .content { padding-bottom: 70px; }
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
             .bt-form { grid-template-columns: repeat(2, 1fr); }
         }
 
@@ -783,9 +788,8 @@
             var sunIcon = document.getElementById('mode-icon-sun');
             var moonIcon = document.getElementById('mode-icon-moon');
             if (sunIcon && moonIcon) {
-                sunIcon.style.display = mode === 'light' ? 'none' : 'none';
-                moonIcon.style.display = mode === 'dark' ? 'inline' : 'none';
                 sunIcon.style.display = mode === 'light' ? 'inline' : 'none';
+                moonIcon.style.display = mode === 'dark' ? 'inline' : 'none';
             }
             try { localStorage.setItem('pulsr-mode', mode); } catch(_) {}
         }
