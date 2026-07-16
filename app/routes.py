@@ -352,6 +352,21 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
         total_pnl = round(sum(t["pnl_usd"] for t in closed), 2)
         wins = sum(1 for t in closed if t["pnl_usd"] > 0)
         win_rate = round(100.0 * wins / len(closed), 1) if closed else 0.0
+        # P14e: paper trades for the collapsible section below live trades
+        paper_rows = db.query(Trade).filter(Trade.user_id == user.id, Trade.dry_run == True).order_by(Trade.timestamp.desc()).limit(100).all()
+        paper_data = [{
+            "id": t.id,
+            "time": t.timestamp.strftime("%Y-%m-%d %H:%M") if t.timestamp else "",
+            "instance": t.instance_id,
+            "side": t.side,
+            "size": round(t.size, 4),
+            "entry_price": round(t.entry_price, 6) if t.entry_price else 0.0,
+            "exit_price": round(t.exit_price, 6) if t.exit_price else None,
+            "pnl_usd": round(t.pnl_usd, 2),
+            "pnl_pct": round(t.pnl_pct, 2),
+            "fees": round((t.entry_cost or 0.0) + (t.exit_cost or 0.0), 4),
+            "open": t.exit_price is None,
+        } for t in paper_rows]
         return templates.TemplateResponse(
             request,
             "trades.html",
@@ -359,6 +374,7 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
                 "request": request,
                 "api_key": config.AGENT_API_KEY or "",
                 "trades": trade_data,
+                "paper_trades": paper_data,
                 "open_count": open_count,
                 "total_trades": len(trade_data),
                 "closed_count": len(closed),

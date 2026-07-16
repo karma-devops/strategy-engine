@@ -107,6 +107,49 @@
     {% endif %}
 </div>
 
+<!-- P14e: Paper Trades (collapsible, below live) -->
+{% if paper_trades %}
+<div class="card" style="margin-top:24px;">
+    <details>
+        <summary style="cursor:pointer;font-size:1.1rem;font-weight:600;color:var(--text-muted);padding:8px 0;">
+            Paper Trades ({{ paper_trades|length }}) — dry-run only
+        </summary>
+        <div style="overflow-x:auto;margin-top:12px;">
+        <table class="data-table" id="paper-trades-table">
+            <thead>
+            <tr>
+                <th>Time</th>
+                <th>Engine</th>
+                <th>Side</th>
+                <th>Size</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>PnL $</th>
+                <th>PnL %</th>
+                <th>Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for t in paper_trades %}
+            <tr class="trade-row" data-engine="{{ t.instance }}" data-side="{{ t.side }}" data-status="{{ 'open' if t.open else 'closed' }}">
+                <td>{{ t.time }}</td>
+                <td>{{ t.instance }}</td>
+                <td><span class="badge {% if t.side == 'LONG' %}badge-buy{% else %}badge-sell{% endif %}">{{ t.side }}</span></td>
+                <td>{{ t.size }}</td>
+                <td>{{ t.entry_price }}</td>
+                <td>{{ t.exit_price if t.exit_price else '—' }}</td>
+                <td style="color:{% if t.pnl_usd > 0 %}var(--color-profit){% elif t.pnl_usd < 0 %}var(--color-loss){% else %}var(--text-muted){% endif %};">{{ t.pnl_usd }}</td>
+                <td>{{ t.pnl_pct }}</td>
+                <td>{% if t.open %}<span class="badge badge-open">OPEN</span>{% else %}Closed{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </details>
+</div>
+{% endif %}
+
 <script>
 (function() {
     const rows = Array.from(document.querySelectorAll('.trade-row'));

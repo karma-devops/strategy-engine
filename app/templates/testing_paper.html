@@ -93,4 +93,43 @@ function renderEquity(canvas, data) {
 }
 renderEquity(document.getElementById('equityChart'), equityData);
 </script>
+
+<!-- P14e: Paper Trades Table -->
+{% if paper_trades %}
+<div class="card" style="margin-top:24px;">
+    <div class="card-head">
+        <h2>Paper Trade History</h2>
+        <span class="tag tag-flat">{{ paper_trades|length }}</span>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px;">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Time</th>
+            <th>Engine</th>
+            <th>Side</th>
+            <th>Size</th>
+            <th>PnL $</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for t in paper_trades %}
+        <tr>
+            <td>{{ t.time }}</td>
+            <td>{{ t.instance }}</td>
+            <td><span class="badge {% if t.side == 'LONG' %}badge-buy{% else %}badge-sell{% endif %}">{{ t.side }}</span></td>
+            <td>{{ t.size }}</td>
+            <td style="color:{% if t.pnl_usd > 0 %}var(--color-profit){% elif t.pnl_usd < 0 %}var(--color-loss){% else %}var(--text-muted){% endif %};">{{ t.pnl_usd }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="margin-top:24px;">
+    <div class="empty">No paper trades yet. Start a dry-run engine to generate simulated trades.</div>
+</div>
+{% endif %}
+
 {% endblock %}
