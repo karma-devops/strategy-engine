@@ -432,10 +432,21 @@ def get_hyperliquid_client(instance: Optional[object] = None) -> HyperLiquidClie
         private_key, account_address = instance.get_resolved_hl_credentials()
     except Exception as e:
         print(f"[ERROR] Failed to resolve HL credentials for {instance.slug}: {e}")
+    inst_dry_run = getattr(instance, "dry_run", None)
     if private_key or account_address:
         return HyperLiquidClient(
             private_key=private_key,
             account_address=account_address,
-            dry_run=getattr(instance, "dry_run", None),
+            dry_run=inst_dry_run,
+        )
+    # No per-instance credentials — use global env keys but still respect
+    # the instance's dry_run setting (per-instance override > global env).
+    global_key = config.HYPER_LIQUID_ETH_PRIVATE_KEY
+    global_addr = config.ACCOUNT_ADDRESS
+    if global_key and global_addr:
+        return HyperLiquidClient(
+            private_key=global_key,
+            account_address=global_addr,
+            dry_run=inst_dry_run,
         )
     return hl_client
