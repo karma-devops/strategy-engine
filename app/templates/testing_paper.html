@@ -27,9 +27,13 @@
     {% if instances %}
     <div class="fleet-grid">
         {% for inst in instances %}
-        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}">
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}"
+             onclick="window.location='/app/engines/{{ inst.slug }}'"
+             style="cursor:pointer;">
             <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}">{{ inst.status }}</span></div>
-            <div class="fleet-sub">{{ inst.token }}</div>
+            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            {# Per-instance sparkline container (populated by buildSparkline in scripts block) #}
+            <div id="spark-{{ inst.slug }}" data-equity="[]"></div>
             <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
         </div>
         {% endfor %}
