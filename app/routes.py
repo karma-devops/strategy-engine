@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
 from config import config
-from api.auth import verify_ui_credentials
+from api.auth import verify_ui_credentials, require_ui_or_api
 from instances.models import engine, Instance, AccountSnapshot, Trade, Signal, Backtest, User, Strategy, Credential, get_or_seed_operator
 from instances.manager import manager
 from engine.registry import get_strategy
@@ -1460,32 +1460,3 @@ def withdrawals_page(request: Request, username: str = Depends(verify_ui_credent
     return templates.TemplateResponse(request, "withdrawals.html", context={"request": request})
 
 
-# ── User API Key Endpoints ──
-
-@router.get("/api/v2/users/me/api-key")
-@limiter.limit(READ_LIMIT)
-def get_user_api_key(request: Request, username: str = Depends(verify_ui_credentials)):
-    """Return the current user's PULS-R API key. Auto-generates one if missing."""
-    from instances.models import SessionLocal, get_or_seed_operator
-    db = SessionLocal()
-    try:
-        user = get_or_seed_operator(db)
-        return {"ok": True, "api_key": user.api_key, "username": user.username}
-    finally:
-        db.close()
-
-
-@router.post("/api/v2/users/me/api-key/regenerate")
-@limiter.limit(WRITE_LIMIT)
-def regenerate_api_key(request: Request, username: str = Depends(verify_ui_credentials)):
-    """Regenerate the current user's PULS-R API key."""
-    from instances.models import SessionLocal, generate_api_key, get_or_seed_operator
-    db = SessionLocal()
-    try:
-        user = get_or_seed_operator(db)
-        user.api_key = generate_api_key()
-        db.commit()
-        db.refresh(user)
-        return {"ok": True, "api_key": user.api_key, "username": user.username}
-    finally:
-        db.close()

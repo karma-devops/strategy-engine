@@ -95,8 +95,18 @@ def require_ui_or_api(request: Request):
     """Accept either valid UI Basic auth or valid API key."""
     # First try API key (stateless)
     api_key = request.headers.get(API_KEY_HEADER)
-    if config.AGENT_API_KEY and secrets.compare_digest(api_key, config.AGENT_API_KEY):
+    if api_key and config.AGENT_API_KEY and secrets.compare_digest(api_key, config.AGENT_API_KEY):
         return "api"
+    # Check per-user PULS-R keys (puls_*_key format)
+    if api_key and api_key.startswith("puls_"):
+        from instances.models import SessionLocal, User
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.api_key == api_key).first()
+            if user:
+                return "api"
+        finally:
+            db.close()
 
     # Fall back to HTTP Basic via manually parsing Authorization header
     auth = request.headers.get("Authorization", "")

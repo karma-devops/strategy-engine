@@ -16,7 +16,7 @@ from instances.models import get_or_seed_operator
 from withdrawal.scheduler import scheduler as withdrawal_scheduler
 from api import instances, signals, positions, metrics, withdrawals, stream, strategies, killswitch, backtests, monitoring, metadata, credentials
 from app import routes as ui_routes
-from api.auth import verify_api_key, verify_ui_credentials
+from api.auth import verify_api_key, verify_ui_credentials, require_ui_or_api
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT, AUTH_LIMIT, add_rate_limiting, api_key_or_ip
 
 
@@ -80,6 +80,36 @@ def public_signup(request: Request):
 @limiter.limit(READ_LIMIT)
 def health(request: Request):
     return {"status": "ok", "dry_run": config.DRY_RUN}
+
+# ── User API Key Endpoints (accept Basic Auth OR X-API-Key) ──
+
+@app.get("/api/v2/users/me/api-key")
+@limiter.limit(READ_LIMIT)
+def get_user_api_key(request: Request, auth_mode: str = Depends(require_ui_or_api)):
+    """Return the current user's PULS-R API key. Auto-generates one if missing."""
+    from instances.models import SessionLocal, get_or_seed_operator
+    db = SessionLocal()
+    try:
+        user = get_or_seed_operator(db)
+        return {"ok": True, "api_key": user.api_key, "username": user.username}
+    finally:
+        db.close()
+
+
+@app.post("/api/v2/users/me/api-key/regenerate")
+@limiter.limit(WRITE_LIMIT)
+def regenerate_api_key(request: Request, auth_mode: str = Depends(require_ui_or_api)):
+    """Regenerate the current user's PULS-R API key."""
+    from instances.models import SessionLocal, generate_api_key, get_or_seed_operator
+    db = SessionLocal()
+    try:
+        user = get_or_seed_operator(db)
+        user.api_key = generate_api_key()
+        db.commit()
+        db.refresh(user)
+        return {"ok": True, "api_key": user.api_key, "username": user.username}
+    finally:
+        db.close()
 
 # API routers (require X-API-Key + rate limit)
 app.include_router(instances.router, prefix="/api/v2", dependencies=[Depends(verify_api_key)])
