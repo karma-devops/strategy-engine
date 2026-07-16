@@ -56,10 +56,10 @@ def verify_api_key(request: Request):
         return api_key
     # Check per-user PULS-R keys (puls_*_key format)
     if api_key.startswith("puls_"):
-        from instances.models import SessionLocal, User
+        from instances.models import SessionLocal, find_user_by_api_key
         db = SessionLocal()
         try:
-            user = db.query(User).filter(User.api_key == api_key).first()
+            user = find_user_by_api_key(api_key, db)
             if user:
                 return api_key
         finally:
@@ -99,10 +99,10 @@ def require_ui_or_api(request: Request):
         return "api"
     # Check per-user PULS-R keys (puls_*_key format)
     if api_key and api_key.startswith("puls_"):
-        from instances.models import SessionLocal, User
+        from instances.models import SessionLocal, find_user_by_api_key
         db = SessionLocal()
         try:
-            user = db.query(User).filter(User.api_key == api_key).first()
+            user = find_user_by_api_key(api_key, db)
             if user:
                 return "api"
         finally:

@@ -86,12 +86,24 @@ def health(request: Request):
 @app.get("/api/v2/users/me/api-key")
 @limiter.limit(READ_LIMIT)
 def get_user_api_key(request: Request, auth_mode: str = Depends(require_ui_or_api)):
-    """Return the current user's PULS-R API key. Auto-generates one if missing."""
-    from instances.models import SessionLocal, get_or_seed_operator
+    """Return the current user's PULS-R API key (decrypted for display)."""
+    from instances.models import SessionLocal, get_or_seed_operator, decrypt_api_key, encrypt_api_key, hash_api_key
     db = SessionLocal()
     try:
         user = get_or_seed_operator(db)
-        return {"ok": True, "api_key": user.api_key, "username": user.username}
+        # Migration: if api_key is plaintext (old format), re-encrypt it
+        if user.api_key and user.api_key.startswith("puls_"):
+            plaintext = user.api_key
+            user.api_key = encrypt_api_key(plaintext)
+            user.api_key_hash = hash_api_key(plaintext)
+            db.commit()
+            db.refresh(user)
+        # Decrypt for display
+        try:
+            plaintext = decrypt_api_key(user.api_key) if user.api_key else ""
+        except Exception:
+            plaintext = ""  # Decryption failed — key may be corrupted
+        return {"ok": True, "api_key": plaintext, "username": user.username}
     finally:
         db.close()
 
@@ -99,15 +111,14 @@ def get_user_api_key(request: Request, auth_mode: str = Depends(require_ui_or_ap
 @app.post("/api/v2/users/me/api-key/regenerate")
 @limiter.limit(WRITE_LIMIT)
 def regenerate_api_key(request: Request, auth_mode: str = Depends(require_ui_or_api)):
-    """Regenerate the current user's PULS-R API key."""
-    from instances.models import SessionLocal, generate_api_key, get_or_seed_operator
+    """Regenerate the current user's PULS-R API key (encrypted storage)."""
+    from instances.models import SessionLocal, generate_api_key, get_or_seed_operator, store_user_api_key
     db = SessionLocal()
     try:
         user = get_or_seed_operator(db)
-        user.api_key = generate_api_key()
-        db.commit()
-        db.refresh(user)
-        return {"ok": True, "api_key": user.api_key, "username": user.username}
+        new_key = generate_api_key()
+        store_user_api_key(user, new_key, db)
+        return {"ok": True, "api_key": new_key, "username": user.username}
     finally:
         db.close()
 

@@ -65,7 +65,9 @@ class User(Base):
     assistant_model = Column(String(64), default="glm-5.1")  # chat model (Assistant + dashboard)
     coder_model = Column(String(64), default="glm-5.1")      # Pine->Python conversion model (Studio)
     # Phase 18: per-user API key (auto-generated on signup)
-    api_key = Column(String(64), nullable=True, unique=True, index=True)  # puls_<uuid4>_key
+    # api_key stores Fernet-encrypted key; api_key_hash stores SHA256 for O(1) lookup
+    api_key = Column(Text, nullable=True)  # Fernet-encrypted puls_<uuid4>_key
+    api_key_hash = Column(String(64), nullable=True, unique=True, index=True)  # SHA256 hex digest
     created_at = Column(DateTime, default=_now_utc)
     updated_at = Column(DateTime, default=_now_utc, onupdate=_now_utc)
 
@@ -538,7 +540,8 @@ def _migrate_columns(engine):
         "strategies": [("parent_strategy_id", "VARCHAR(64)"), ("version", "VARCHAR(16)")],
         "trades": [("user_id", "VARCHAR(36)")],
         "users": [
-            ("api_key", "VARCHAR(64)"),
+            ("api_key", "TEXT"),
+            ("api_key_hash", "VARCHAR(64)"),
             ("email", "VARCHAR(256)"),
             ("password_hash", "VARCHAR(256)"),
             ("withdrawal_eth_address", "VARCHAR(64)"),
@@ -588,6 +591,37 @@ def generate_api_key() -> str:
     return f"puls_{uuid.uuid4().hex[:24]}_key"
 
 
+def hash_api_key(plaintext: str) -> str:
+    """SHA256 hash of API key for O(1) DB lookup (no plaintext stored)."""
+    import hashlib
+    return hashlib.sha256(plaintext.encode()).hexdigest()
+
+
+def encrypt_api_key(plaintext: str) -> str:
+    """Fernet-encrypt an API key for storage."""
+    fernet = _get_fernet()
+    return fernet.encrypt(plaintext.encode()).decode()
+
+
+def decrypt_api_key(encrypted: str) -> str:
+    """Fernet-decrypt an API key for display."""
+    fernet = _get_fernet()
+    return fernet.decrypt(encrypted.encode()).decode()
+
+
+def store_user_api_key(user, plaintext_key: str, db):
+    """Set a user's API key: encrypt for storage, hash for lookup."""
+    user.api_key = encrypt_api_key(plaintext_key)
+    user.api_key_hash = hash_api_key(plaintext_key)
+    db.commit()
+
+
+def find_user_by_api_key(plaintext_key: str, db):
+    """Look up a user by plaintext API key via hash match."""
+    key_hash = hash_api_key(plaintext_key)
+    return db.query(User).filter(User.api_key_hash == key_hash).first()
+
+
 def get_or_seed_operator(db=None) -> "User":
     """Return the singleton operator user, seeding it on first run.
 
@@ -600,19 +634,23 @@ def get_or_seed_operator(db=None) -> "User":
     try:
         user = db.query(User).filter(User.username == "operator").first()
         if user is None:
+            plaintext_key = generate_api_key()
             user = User(
                 username="operator",
                 display_name="Operator",
                 start_balance=1000.0,
                 default_dry_run=True,
-                api_key=generate_api_key(),
+                api_key=encrypt_api_key(plaintext_key),
+                api_key_hash=hash_api_key(plaintext_key),
             )
             db.add(user)
             db.commit()
             db.refresh(user)
         elif not user.api_key:
             # Backfill: generate API key for existing users without one
-            user.api_key = generate_api_key()
+            plaintext_key = generate_api_key()
+            user.api_key = encrypt_api_key(plaintext_key)
+            user.api_key_hash = hash_api_key(plaintext_key)
             db.commit()
             db.refresh(user)
         return user
