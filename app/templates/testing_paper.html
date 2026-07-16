@@ -13,7 +13,7 @@
 </style>
 
 <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-label">Active Engines<span class="tip-i" data-tip="Paper engines currently running (dry_run=True)"></span></div><div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div></div>
+    <div class="kpi"><div class="kpi-label">Active Engines<span class="tip-i" data-tip="Paper engines currently running (dry_run=True)"></span></div><div class="kpi-value" id="kpi-active-engines">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div></div>
     <div class="kpi"><div class="kpi-label">Mode<span class="tip-i" data-tip="Paper trading uses simulated orders, no real money at risk"></span></div><div class="kpi-value"><span class="tag tag-flat">Paper Trading</span></div></div>
 </div>
 
@@ -30,7 +30,7 @@
         <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}"
              onclick="window.location='/app/engines/{{ inst.slug }}'"
              style="cursor:pointer;">
-            <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}">{{ inst.status }}</span></div>
+            <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}" id="status-{{ inst.slug }}" data-status="{{ inst.status }}">{{ inst.status }}</span></div>
             <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
             {# Per-instance sparkline container (populated by buildSparkline in scripts block) #}
             <div id="spark-{{ inst.slug }}" data-equity="[]"></div>
@@ -71,17 +71,61 @@ const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\
 
 // paperApiPost — fire-and-forget action on a paper engine. Reuses the
 // same endpoint as live engines, just with dry_run=true on the instance.
-// Refreshes the page after 800ms so the user sees the new status.
+// Updates the DOM in-place via refreshPaperStatus() — no page reload.
 function paperApiPost(path, label) {
     fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
         .then(r => r.json())
         .then(j => {
             const ok = (j && j.ok);
             showPaperToast((label || path) + ' → ' + (j.message || (ok ? 'ok' : 'failed')), ok);
-            if (ok) setTimeout(() => location.reload(), 800);
+            if (ok) {
+                // Status takes a moment to flip; poll once after 600ms then again at 1.4s
+                setTimeout(refreshPaperStatus, 600);
+                setTimeout(refreshPaperStatus, 1400);
+            }
         })
         .catch(e => showPaperToast((label || path) + ' failed: ' + e, false));
 }
+
+// B.5 — Live status refresh. Fetches /api/v2/instances, diffs against the
+// rendered DOM, updates only the elements that changed. No flicker, no
+// full reload. Called after actions + on a 3s background poll.
+function refreshPaperStatus() {
+    if (!API_KEY) return;
+    fetch(API_BASE + '/api/v2/instances', { headers: { 'X-API-Key': API_KEY } })
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok || !j.instances) return;
+            const insts = j.instances.filter(i => i.dry_run);
+            // Update KPI active count
+            const active = insts.filter(i => i.status === 'running').length;
+            const total = insts.length;
+            const kpi = document.getElementById('kpi-active-engines');
+            if (kpi) {
+                const desired = active + ' <span style="font-size:var(--text-sm);color:var(--text-muted);">/ ' + total + '</span>';
+                if (kpi.innerHTML.trim() !== desired.trim()) kpi.innerHTML = desired;
+            }
+            // Update each engine status pill
+            for (const i of insts) {
+                const pill = document.getElementById('status-' + i.slug);
+                if (pill && pill.getAttribute('data-status') !== i.status) {
+                    pill.setAttribute('data-status', i.status);
+                    pill.textContent = i.status;
+                    // Swap color class
+                    pill.classList.remove('tag-running', 'tag-flat');
+                    pill.classList.add(i.status === 'running' ? 'tag-running' : 'tag-flat');
+                    // Also update parent .fleet-card class
+                    const card = pill.closest('.fleet-card');
+                    if (card) card.classList.toggle('running', i.status === 'running');
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+// Background poll every 3s — picks up engine state changes that happen
+// outside the user's actions (e.g., engine stops on its own).
+setInterval(refreshPaperStatus, 3000);
 
 // Minimal toast — uses a single fixed div created on first call.
 let _paperToast = null;
