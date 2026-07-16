@@ -342,6 +342,7 @@ class InstanceRunner:
                 executed=executed,
                 metadata_json=metadata,
                 reasoning_text=reasoning_text,
+                dry_run=self.instance.dry_run,
             )
             db.add(signal_row)
             db.commit()
@@ -603,6 +604,7 @@ class InstanceRunner:
             entry_cost=entry_cost,
             exit_cost=exit_cost,
             price_diff=(mark_px - entry_px),
+            dry_run=self.instance.dry_run,
         )
         db.add(trade)
         db.commit()
@@ -738,6 +740,7 @@ class InstanceRunner:
             instance_id=self.id,
             account_value=account_value,
             withdrawable=withdrawable,
+            dry_run=self.instance.dry_run,
         )
         db.add(snap)
         db.commit()
