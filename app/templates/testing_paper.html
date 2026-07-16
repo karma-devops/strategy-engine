@@ -36,28 +36,23 @@
             <div id="spark-{{ inst.slug }}" data-equity="[]"></div>
             <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
             {# Per-instance action buttons — event.stopPropagation() prevents card-level navigation #}
-            <div class="fleet-actions" onclick="event.stopPropagation()" style="display:flex;gap:var(--space-1);margin-top:var(--space-2);flex-wrap:wrap;">
+            <div class="fleet-actions" onclick="event.stopPropagation()" style="display:flex;gap:var(--space-2);margin-top:var(--space-3);flex-wrap:wrap;">
                 {% if inst.status == 'running' %}
                 <button class="fleet-btn btn-stop" type="button"
                         onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/stop', '{{ inst.name }}')"
-                        aria-label="Stop engine {{ inst.name }}"
-                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">⏹ Stop</button>
+                        aria-label="Stop engine {{ inst.name }}">⏹ Stop</button>
                 <button class="fleet-btn btn-close" type="button"
                         onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/close', '{{ inst.name }}')"
-                        aria-label="Close position for {{ inst.name }}"
-                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">✕ Close</button>
+                        aria-label="Close position for {{ inst.name }}">✕ Close</button>
                 {% else %}
                 <button class="fleet-btn btn-start" type="button"
                         onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/start', '{{ inst.name }}')"
-                        aria-label="Start engine {{ inst.name }}"
-                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">▶ Start</button>
+                        aria-label="Start engine {{ inst.name }}">▶ Start</button>
                 {% endif %}
                 <button class="fleet-btn btn-restart" type="button"
                         onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/restart', '{{ inst.name }}')"
-                        aria-label="Restart engine {{ inst.name }}"
-                        style="height:32px;padding:0 10px;font-size:var(--text-xs);">↻ Restart</button>
-                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" aria-label="Edit settings for {{ inst.name }}"
-                   style="height:32px;width:32px;display:flex;align-items:center;justify-content:center;background:var(--surface-inset);border:1px solid var(--border-default);color:var(--text-secondary);text-decoration:none;font-size:13px;flex-shrink:0;">⚙</a>
+                        aria-label="Restart engine {{ inst.name }}">↻ Restart</button>
+                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn fleet-btn-icon" aria-label="Edit settings for {{ inst.name }}">⚙</a>
             </div>
         </div>
         {% endfor %}
