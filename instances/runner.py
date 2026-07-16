@@ -565,28 +565,48 @@ class InstanceRunner:
         return close_result is not None, exit_cost
 
     def _close_active_trade(self, db, position, reason: str, entry_cost: float = 0.0, exit_cost: float = 0.0):
-        """Record the closing trade row and position snapshot after exit."""
+        """Record the closing trade row and position snapshot after exit.
+
+        Falls back to self._active_trade data when position is None (HL already
+        cleared the position) so the Trade record is never lost.
+        """
+        # Prefer live position data; fall back to tracked active trade
         if position:
             entry_px = float(position.get("entryPx", 0))
             mark_px = float(position.get("markPx", 0)) if "markPx" in position else entry_px
             pnl = float(position.get("unrealizedPnl", 0))
             pnl_pct = float(position.get("returnOnEquity", 0)) * 100
             szi = float(position.get("szi", 0))
-            trade = Trade(
-                instance_id=self.id,
-                side="LONG" if szi > 0 else "SHORT",
-                size=abs(szi),
-                entry_price=entry_px,
-                exit_price=mark_px,
-                pnl_usd=pnl,
-                pnl_pct=pnl_pct,
-                entry_cost=entry_cost,
-                exit_cost=exit_cost,
-                price_diff=(mark_px - entry_px),
-            )
-            db.add(trade)
-            db.commit()
-        add_log(f"[{self.instance.token}] Trade closed: {reason}", "info")
+            side = "LONG" if szi > 0 else "SHORT"
+            size = abs(szi)
+        elif self._active_trade:
+            # HL already cleared the position — use tracked data
+            at = self._active_trade
+            entry_px = float(at.get("entry_price", 0))
+            mark_px = float(at.get("best_price", 0)) or entry_px
+            size = float(at.get("size", 0))
+            side = at.get("side", "LONG")
+            pnl = 0.0  # unknown without live position
+            pnl_pct = 0.0
+        else:
+            add_log(f"[{self.instance.token}] Trade closed: {reason} (no position data)", "info")
+            return
+
+        trade = Trade(
+            instance_id=self.id,
+            side=side,
+            size=size,
+            entry_price=entry_px,
+            exit_price=mark_px,
+            pnl_usd=pnl,
+            pnl_pct=pnl_pct,
+            entry_cost=entry_cost,
+            exit_cost=exit_cost,
+            price_diff=(mark_px - entry_px),
+        )
+        db.add(trade)
+        db.commit()
+        add_log(f"[{self.instance.token}] Trade closed: {reason} | {side} {size:.4f} PnL=${pnl:.4f}", "info")
 
     def _evaluate_exit(
         self,
