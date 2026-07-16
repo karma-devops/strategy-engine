@@ -77,7 +77,11 @@
         <span class="tag tag-flat" id="pos-count">0</span>
     </div>
     <div class="pos-grid" id="pos-grid">
-        <div class="empty">No open positions.</div>
+        <div class="empty-state" style="padding:var(--space-6);">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="empty-title">No open positions</div>
+        <div class="empty-desc">Active positions will appear here when engines execute trades.</div>
+    </div>
     </div>
     <div class="pos-footer">
         <button class="btn-close-all" onclick="closeAllPositions()">
@@ -119,7 +123,12 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty">No engines yet. <a href="/instances/new" style="color:var(--tb-500);">Add one →</a></div>
+    <div class="empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <div class="empty-title">No engines yet</div>
+        <div class="empty-desc">Create your first trading engine to start receiving signals and executing trades.</div>
+        <div class="empty-action"><a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);border-color:var(--brand);">+ Add Engine</a></div>
+    </div>
     {% endif %}
 </div>
 
@@ -226,7 +235,7 @@
         const open = (instances || []).filter(i => i.position_side && i.position_side !== 'FLAT' && (parseFloat(i.position_size) || 0) !== 0);
         if (count) count.textContent = open.length;
         if (!open.length) {
-            grid.innerHTML = '<div class="empty">No open positions.</div>';
+            grid.innerHTML = '<div class="empty-state" style="padding:var(--space-6);"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="empty-title">No open positions</div><div class="empty-desc">Active positions will appear here when engines execute trades.</div></div>';
             return;
         }
         grid.innerHTML = '';
@@ -258,7 +267,7 @@
     function renderTradesCompact(trades) {
         const box = document.getElementById('trades-compact');
         if (!box) return;
-        if (!trades || !trades.length) { box.innerHTML = '<div class="empty" style="padding:8px;">No trades yet.</div>'; return; }
+        if (!trades || !trades.length) { box.innerHTML = '<div class="empty" style="padding:var(--space-4);">No trades yet.</div>'; return; }
         box.innerHTML = trades.slice(0, 12).map(t => {
             const time = (t.timestamp || '').replace('T', ' ').slice(0, 19);
             const pnl = parseFloat(t.pnl_usd) || 0;
@@ -304,7 +313,7 @@
         if (!grid) return;
         grid.innerHTML = '';
         if (!instances || !instances.length) {
-            grid.innerHTML = '<div class="empty">No engines yet. <a href="/instances/new" style="color:var(--brand);">Add one →</a></div>';
+            grid.innerHTML = '<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><div class="empty-title">No engines yet</div><div class="empty-desc">Create your first trading engine to start receiving signals.</div><div class="empty-action"><a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);border-color:var(--brand);">+ Add Engine</a></div></div>';
             return;
         }
         instances.forEach(inst => {

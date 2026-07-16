@@ -96,7 +96,11 @@
             <span><span class="dot win"></span>Winners · avg +{{ avg_profit }}%</span>
         </div>
         {% else %}
-        <div class="chart-empty">No trades yet.</div>
+        <div class="empty-state" style="padding:var(--space-6);">
+            <svg width="64" height="48" viewBox="0 0 90 72" aria-hidden="true" style="opacity:0.3;"><path fill="none" stroke="var(--brand)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg>
+            <div class="empty-title">No trades yet</div>
+            <div class="empty-desc">Start an engine to begin generating signals. Trades populate this chart within ~1 poll cycle (15s default). Historical data loads last 500 candles.</div>
+        </div>
         {% endif %}
     </div>
     <div class="chart-card" style="margin-bottom:0;">
@@ -111,7 +115,11 @@
             </div>
         </div>
         {% else %}
-        <div class="chart-empty">No trades yet.</div>
+        <div class="empty-state" style="padding:var(--space-6);">
+            <svg width="64" height="48" viewBox="0 0 90 72" aria-hidden="true" style="opacity:0.3;"><path fill="none" stroke="var(--brand)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg>
+            <div class="empty-title">No trades yet</div>
+            <div class="empty-desc">Start an engine to begin generating signals. Trades populate this chart within ~1 poll cycle.</div>
+        </div>
         {% endif %}
     </div>
 </div>

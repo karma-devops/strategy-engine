@@ -452,6 +452,11 @@
 
         /* ── Empty State ── */
         .empty { padding: var(--space-8) var(--space-4); text-align: center; color: var(--text-muted); font-size: var(--text-sm); }
+        .empty-state { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:var(--space-8) var(--space-4);text-align:center;gap:var(--space-3); }
+        .empty-state .empty-icon { width:48px;height:48px;color:var(--text-muted);opacity:0.4;flex-shrink:0; }
+        .empty-state .empty-title { font-size:var(--text-md);font-weight:var(--weight-semibold);color:var(--text-primary); }
+        .empty-state .empty-desc { font-size:var(--text-sm);color:var(--text-muted);max-width:280px;line-height:var(--leading-normal); }
+        .empty-state .empty-action { margin-top:var(--space-1); }
         .muted { color: var(--text-muted); }
 
         /* ── Toasts ── */
