@@ -42,14 +42,14 @@ def verify_api_key(request: Request):
     """Verify that the X-API-Key header matches AGENT_API_KEY or a per-user PULS-R key."""
     if not config.AGENT_API_KEY:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="AGENT_API_KEY not configured on server",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
         )
     api_key = request.headers.get(API_KEY_HEADER)
     if not api_key:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid or missing API key",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
         )
     # Check global API key first (fast path)
     if secrets.compare_digest(api_key, config.AGENT_API_KEY or ""):
@@ -65,8 +65,8 @@ def verify_api_key(request: Request):
         finally:
             db.close()
     raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Invalid or missing API key",
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
     )
 
 

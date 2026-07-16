@@ -286,6 +286,13 @@ class HyperLiquidClient:
             print(f"[ERROR] Cannot open {symbol}: invalid qty {qty}")
             return None
 
+        # Minimum order size guard — HL rejects orders below ~$10 notional
+        min_notional = 10.0
+        actual_notional = qty * mid
+        if actual_notional < min_notional:
+            print(f"[ERROR] Cannot open {symbol}: notional ${actual_notional:.2f} below HL minimum ${min_notional:.2f} (qty={qty} @ ${mid:.6f})")
+            return None
+
         is_buy = side.lower() == "long"
         # Use IOC limit order with 0.5% slippage to simulate market fill
         limit_px = mid * (1.005 if is_buy else 0.995)
