@@ -14,12 +14,15 @@ router = APIRouter()
 
 @router.get("/metrics")
 @limiter.limit(READ_LIMIT)
-def get_metrics(request: Request, dry_run: bool = None, db: Session = Depends(get_db)):
+def get_metrics(request: Request, dry_run: bool = None, instance_id: str = None, db: Session = Depends(get_db)):
     q_signals = db.query(Signal)
     q_trades = db.query(Trade)
     if dry_run is not None:
         q_signals = q_signals.filter(Signal.dry_run == dry_run)
         q_trades = q_trades.filter(Trade.dry_run == dry_run)
+    if instance_id is not None:
+        q_signals = q_signals.filter(Signal.instance_id == instance_id)
+        q_trades = q_trades.filter(Trade.instance_id == instance_id)
     total_signals = q_signals.count()
     buy_signals = q_signals.filter(Signal.direction == "BUY").count()
     sell_signals = q_signals.filter(Signal.direction == "SELL").count()

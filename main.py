@@ -122,6 +122,34 @@ def regenerate_api_key(request: Request, auth_mode: str = Depends(require_ui_or_
     finally:
         db.close()
 
+# ── Admin System Logs (Basic Auth only, verbose) ──
+@app.get("/api/v2/system/logs")
+@limiter.limit(READ_LIMIT)
+def system_logs(request: Request, limit: int = 200, username: str = Depends(verify_ui_credentials)):
+    """Full verbose system logs — admin only (Basic Auth required)."""
+    from instances.events import get_logs
+    logs = get_logs(limit)
+    return {
+        "ok": True,
+        "count": len(logs),
+        "logs": logs,
+        "requested_by": username,
+    }
+
+@app.get("/api/v2/system/errors")
+@limiter.limit(READ_LIMIT)
+def system_errors(request: Request, username: str = Depends(verify_ui_credentials)):
+    """Error-level logs only — admin only (Basic Auth required)."""
+    from instances.events import get_logs
+    all_logs = get_logs(200)
+    errors = [l for l in all_logs if l.get("level") in ("error", "warn")]
+    return {
+        "ok": True,
+        "count": len(errors),
+        "errors": errors,
+        "requested_by": username,
+    }
+
 # API routers (require X-API-Key + rate limit)
 app.include_router(instances.router, prefix="/api/v2", dependencies=[Depends(verify_api_key)])
 app.include_router(signals.router, prefix="/api/v2", dependencies=[Depends(verify_api_key)])

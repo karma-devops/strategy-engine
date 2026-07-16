@@ -65,8 +65,8 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
             "unrealized_pnl_pct": i.unrealized_pnl_pct or 0.0,
         } for i in instances]
 
-        # Equity snapshots for the Pulse Graph
-        snapshots = db.query(AccountSnapshot).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
+        # Equity snapshots for the Pulse Graph — LIVE ONLY (P14d)
+        snapshots = db.query(AccountSnapshot).filter(AccountSnapshot.dry_run == False).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
         equity_series = [{"time": s.timestamp.isoformat(), "value": s.account_value} for s in snapshots]
         latest = snapshots[-1] if snapshots else None
 
@@ -85,9 +85,10 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
         open_pnl = sum((i.unrealized_pnl or 0.0) for i in instances)
         dry_global = all(i.dry_run for i in instances) if instances else True
 
-        # Recent trades for the Active Trades table (server-rendered, no client fetch)
+        # Recent trades for the Active Trades table — LIVE ONLY (P14d)
         trades = (
             db.query(Trade)
+            .filter(Trade.dry_run == False)
             .order_by(Trade.timestamp.desc())
             .limit(15)
             .all()
@@ -293,8 +294,10 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
         ).all()
         inst_data, equity_series = [], []
         for i in instances:
+            # P14d: paper-only snapshots
             snaps = db.query(AccountSnapshot).filter(
                 AccountSnapshot.instance_id == i.slug, AccountSnapshot.user_id == user.id,
+                AccountSnapshot.dry_run == True,
             ).order_by(AccountSnapshot.timestamp.asc()).all()
             series = [{"time": int(s.timestamp.timestamp()), "value": round(s.account_value, 2)} for s in snaps]
             equity_series.extend(series)
@@ -303,11 +306,19 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
                 "unrealized_pnl": i.unrealized_pnl or 0.0, "start_balance": i.start_balance or 0.0,
             })
         equity_series.sort(key=lambda x: x["time"])
+        # P14d: paper trades for this user's dry_run instances
+        paper_trades = db.query(Trade).filter(Trade.user_id == user.id, Trade.dry_run == True).order_by(Trade.timestamp.desc()).limit(50).all()
+        paper_trade_data = [{
+            "time": t.timestamp.strftime("%Y-%m-%d %H:%M") if t.timestamp else "",
+            "instance": t.instance_id, "side": t.side,
+            "size": round(t.size, 4), "pnl_usd": round(t.pnl_usd, 2),
+        } for t in paper_trades]
         return templates.TemplateResponse(
             request, "testing_paper.html",
             context={
                 "request": request, "api_key": config.AGENT_API_KEY or "",
                 "instances": inst_data, "equity_series": equity_series,
+                "paper_trades": paper_trade_data,
                 "active_engines": sum(1 for i in inst_data if i["status"] == "running"),
                 "total_engines": len(inst_data),
                 "active": "testing",
@@ -318,11 +329,11 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
 @router.get("/app/trades", response_class=HTMLResponse)
 @limiter.limit(READ_LIMIT)
 def trades_page(request: Request, username: str = Depends(verify_ui_credentials)):
-    """All trades (rich entry/exit log) for the operator user (multi-tenant)."""
+    """All LIVE trades (dry_run=false) for the operator user (multi-tenant). P14d separation."""
     db = Session()
     try:
         user = get_or_seed_operator(db)
-        rows = db.query(Trade).filter(Trade.user_id == user.id).order_by(Trade.timestamp.desc()).limit(200).all()
+        rows = db.query(Trade).filter(Trade.user_id == user.id, Trade.dry_run == False).order_by(Trade.timestamp.desc()).limit(200).all()
         trade_data = [{
             "id": t.id,
             "time": t.timestamp.strftime("%Y-%m-%d %H:%M") if t.timestamp else "",
