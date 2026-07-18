@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Account Settings{% endblock %}
+{% block heading %}Account Settings{% endblock %}
+{% block content %}
+{% if saved %}<div class="bt-msg ok" style="margin-bottom:var(--space-3);">Settings saved.</div>{% endif %}
+<form method="post" action="/app/settings" onsubmit="document.getElementById('theme-input').value=document.documentElement.getAttribute('data-theme')||'pulsr'" style="max-width:720px;display:flex;flex-direction:column;gap:var(--space-4);">
+
+    <!-- Profile -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Profile</h2></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);padding:var(--space-3);">
+            <div class="bt-form-field">
+                <label>Display Name<span class="tip-i" data-tip="Shown in the sidebar and account page"></span></label>
+                <input type="text" name="display_name" value="{{ user.display_name or '' }}" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+            </div>
+            <div class="bt-form-field">
+                <label>Email (for 2FA)<span class="tip-i" data-tip="Used for two-factor authentication notifications"></span></label>
+                <input type="email" name="email" value="{{ user.email or '' }}" placeholder="operator@example.com" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+            </div>
+            <div class="bt-form-field" style="grid-column:1 / -1;">
+                <label>User Icon</label>
+                <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;padding:var(--space-2) 0;">
+                    {% set emojis = ['🦊','🐉','🚀','⚡','🔥','🌌','🦅','🐺','🦈','💎','🎯','🧠','⭐','🌙','☄️','🦾'] %}
+                    {% for emo in emojis %}
+                    <label style="cursor:pointer;font-size:24px;padding:6px 8px;border-radius:var(--radius-sm);border:2px solid {% if user.avatar_emoji == emo %}var(--brand){% else %}var(--input-border){% endif %};background:{% if user.avatar_emoji == emo %}var(--surface-hover){% else %}transparent{% endif %};">
+                        <input type="radio" name="avatar_emoji" value="{{ emo }}" {% if user.avatar_emoji == emo %}checked{% endif %} style="display:none;">{{ emo }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">Image upload coming soon. For now, pick an emoji.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Security</h2></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);padding:var(--space-3);">
+            <div class="bt-form-field">
+                <label>Username</label>
+                <input type="text" value="{{ user.username }}" disabled style="width:100%;background:var(--surface-card);color:var(--text-muted);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+            </div>
+            <div class="bt-form-field">
+                <label>Password</label>
+                <input type="password" name="new_password" placeholder="Change password (leave blank to keep)" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+            </div>
+            <div class="bt-form-field" style="grid-column:1 / -1;">
+                <label style="display:flex;align-items:center;gap:var(--space-2);text-transform:none;letter-spacing:normal;color:var(--text-primary);font-weight:var(--weight-medium);">
+                    <input type="checkbox" name="twofa_enabled" {% if user.twofa_enabled %}checked{% endif %}>
+                    Enable 2FA via Email {% if not user.email %}<span style="color:var(--color-loss);font-size:var(--text-xs);">(set email first)</span>{% endif %}
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trading -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Trading</h2></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);padding:var(--space-3);">
+            <div class="bt-form-field">
+                <label>Start Balance (USDC)</label>
+                <input type="number" step="0.01" name="start_balance" value="{{ user.start_balance }}" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+            </div>
+            <div class="bt-form-field">
+                <label>Default Mode</label>
+                <label style="display:flex;align-items:center;gap:var(--space-2);text-transform:none;letter-spacing:normal;color:var(--text-primary);font-weight:var(--weight-medium);padding-top:8px;">
+                    <input type="checkbox" name="default_dry_run" {% if user.default_dry_run %}checked{% endif %}>
+                    Paper Trading (default for new engines)
+                </label>
+            </div>
+        </div>
+        <p style="color:var(--text-muted);font-size:var(--text-xs);padding:0 var(--space-3) var(--space-3);">
+            Start Balance is the equity baseline for portfolio curve and drawdown math.
+            New engines inherit the Default Mode.
+        </p>
+    </div>
+
+    <!-- Appearance -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Appearance</h2></div>
+        <div style="padding:var(--space-3);">
+            <label style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);letter-spacing:0.02em;font-weight:600;margin-bottom:var(--space-2);display:block;">Theme</label>
+            <input type="hidden" name="theme" id="theme-input" value="{{ user.theme or 'pulsr' }}">
+            <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;">
+                <label onclick="document.getElementById('theme-input').value='pulsr';setTheme('pulsr')" style="cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-2);padding:8px 16px;border-radius:var(--radius-full);border:2px solid {% if user.theme == 'pulsr' or not user.theme %}var(--brand){% else %}var(--border-default){% endif %};background:{% if user.theme == 'pulsr' or not user.theme %}var(--brand-bg){% else %}transparent{% endif %};color:{% if user.theme == 'pulsr' or not user.theme %}var(--brand){% else %}var(--text-muted){% endif %};font-size:var(--text-sm);font-weight:600;transition:all 150ms;">
+                    <span style="width:12px;height:12px;border-radius:50%;background:#0891B2;"></span>
+                    PULS-R
+                </label>
+
+                <label onclick="document.getElementById('theme-input').value='hyperfluid';setTheme('hyperfluid')" style="cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-2);padding:8px 16px;border-radius:var(--radius-full);border:2px solid {% if user.theme == 'hyperfluid' %}var(--brand){% else %}var(--border-default){% endif %};background:{% if user.theme == 'hyperfluid' %}var(--brand-bg){% else %}transparent{% endif %};color:{% if user.theme == 'hyperfluid' %}var(--brand){% else %}var(--text-muted){% endif %};font-size:var(--text-sm);font-weight:600;transition:all 150ms;">
+                    <span style="width:12px;height:12px;border-radius:50%;background:#2DD4BF;"></span>
+                    HYPER
+                </label>
+
+                <label onclick="document.getElementById('theme-input').value='portrait';setTheme('portrait')" style="cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-2);padding:8px 16px;border-radius:var(--radius-full);border:2px solid {% if user.theme == 'portrait' %}var(--brand){% else %}var(--border-default){% endif %};background:{% if user.theme == 'portrait' %}var(--brand-bg){% else %}transparent{% endif %};color:{% if user.theme == 'portrait' %}var(--brand){% else %}var(--text-muted){% endif %};font-size:var(--text-sm);font-weight:600;transition:all 150ms;">
+                    <span style="width:12px;height:12px;border-radius:50%;background:#06d6a0;"></span>
+                    PORTRAIT
+                </label>
+            </div>
+            <p style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-2);">Changes apply instantly. Saved on Save Settings.</p>
+        </div>
+    </div>
+
+    <!-- Wallet -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Wallet</h2></div>
+        <div style="padding:var(--space-3);">
+            <div class="bt-form-field">
+                <label>Withdrawal ETH Address</label>
+                <input type="text" name="withdrawal_eth_address" value="{{ user.withdrawal_eth_address or '' }}" placeholder="0x..." style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);font-family:var(--font-mono);height:36px;">
+                <p style="font-size:var(--text-xs);color:var(--text-muted);margin-top:4px;">Used for withdrawals. Falls back to env ACCOUNT_ADDRESS if not set.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan & Billing -->
+    <div class="chart-card">
+        <div class="card-head"><h2>Plan &amp; Billing</h2></div>
+        <div style="padding:var(--space-3);display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:var(--text-xs);text-transform:uppercase;color:var(--text-muted);">Current Plan</div>
+                <div style="font-size:var(--text-2xl);font-weight:var(--weight-bold);color:var(--brand);text-transform:uppercase;">{{ user.plan or 'free' }}</div>
+            </div>
+            <div style="display:flex;gap:var(--space-2);">
+                <span class="tag tag-flat" style="padding:6px 12px;font-size:var(--text-xs);">Free Tier</span>
+                <button type="button" disabled style="padding:8px 16px;border-radius:var(--radius-sm);background:var(--surface-hover);color:var(--text-muted);font-size:var(--text-sm);border:1px solid var(--input-border);cursor:not-allowed;">Upgrade to Pro</button>
+            </div>
+        </div>
+        <div style="padding:0 var(--space-3) var(--space-3);font-size:var(--text-xs);color:var(--text-muted);">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Engines</span><span>{{ total_engines }} / Unlimited</span></div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Strategies</span><span>{{ total_strategies }} / Unlimited</span></div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Backtests</span><span>Unlimited</span></div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>AI Assistant</span><span>Coming Soon</span></div>
+            <div style="margin-top:var(--space-2);padding-top:var(--space-2);border-top:1px solid var(--border-subtle);">Billing via smart contract - coming soon.</div>
+        </div>
+    </div>
+
+    <!-- Save (sticky on scroll) -->
+    <div class="save-bar" style="position:sticky;bottom:0;background:var(--surface-card,rgba(26,20,16,0.95));border-top:1px solid var(--border-subtle);padding:var(--space-3) 0;display:flex;justify-content:flex-end;gap:var(--space-3);z-index:50;backdrop-filter:blur(8px);">
+        <span id="save-status" style="font-size:var(--text-sm);color:var(--text-muted);align-self:center;"></span>
+        <button type="submit" id="save-btn" style="padding:10px 24px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;font-size:var(--text-sm);font-weight:600;border:none;cursor:pointer;transition:opacity 0.2s;">Save Settings</button>
+    </div>
+</form>
+<script>
+document.getElementById('save-btn').addEventListener('click', function() {
+    this.textContent = 'Saving…'; this.style.opacity = '0.7';
+});
+</script>
+{% endblock %}

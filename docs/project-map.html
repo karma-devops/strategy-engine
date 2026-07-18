@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PULS·R — Full Project Map</title>
+<style>
+  :root {
+    --bg: #0f0a07;
+    --surface: #1a1410;
+    --surface2: #241b14;
+    --border: #3d2e22;
+    --text: #ffe6cb;
+    --text-dim: #9a8270;
+    --accent: #34d399;
+    --accent2: #08798e;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --purple: #a78bfa;
+    --blue: #60a5fa;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  h1 .accent { color: var(--accent); }
+  h2 {
+    font-size: 1.4rem;
+    margin: 40px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  h3 {
+    font-size: 1.05rem;
+    margin: 24px 0 10px;
+    color: var(--accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .subtitle { color: var(--text-dim); font-size: 0.95rem; margin-bottom: 30px; }
+  .tldr {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 24px;
+    font-size: 0.92rem;
+  }
+  .tldr strong { color: var(--accent); }
+
+  /* Flowchart boxes */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: stretch;
+    margin: 16px 0 24px;
+  }
+  .flow-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin: 8px 0;
+  }
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    min-width: 140px;
+  }
+  .box.master { border-color: var(--accent); }
+  .box.db { border-color: var(--purple); }
+  .box.api { border-color: var(--blue); }
+  .box.gui { border-color: var(--warn); }
+  .box .label { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .box.master .label { color: var(--accent); }
+  .box.db .label { color: var(--purple); }
+  .box.api .label { color: var(--blue); }
+  .box.gui .label { color: var(--warn); }
+  .box .detail { color: var(--text-dim); font-size: 0.78rem; font-family: var(--mono); }
+  .arrow {
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+  }
+  .arrow-down { width: 100%; text-align: center; padding: 4px 0; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 24px;
+    font-size: 0.82rem;
+  }
+  th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+  }
+  td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+  }
+  td.method {
+    font-weight: 600;
+    width: 60px;
+  }
+  td.method.get { color: var(--accent); }
+  td.method.post { color: var(--blue); }
+  td.method.put { color: var(--warn); }
+  td.method.delete { color: var(--danger); }
+  tr:hover { background: var(--surface); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge.public { background: rgba(52,211,153,0.15); color: var(--accent); }
+  .badge.auth { background: rgba(96,165,250,0.15); color: var(--blue); }
+  .badge.api { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .badge.live { background: rgba(239,68,68,0.15); color: var(--danger); }
+
+  .section {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+  }
+  .section.master { border-top: 3px solid var(--accent); }
+  .section.db { border-top: 3px solid var(--purple); }
+  .section.api { border-top: 3px solid var(--blue); }
+  .section.gui { border-top: 3px solid var(--warn); }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+  .plan-table { margin: 16px 0; }
+  .plan-table td { font-family: 'Inter', sans-serif; }
+  .plan-table .phase { font-weight: 700; color: var(--accent); width: 60px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 30px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>PULS·R <span class="accent">Project Map</span></h1>
+<p class="subtitle">Full architecture reference · v0.095 · 2026-07-16 · Strategy Engine for HyperLiquid Perpetuals</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Master / Core</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div> Database</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div> API Layer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div> GUI Layer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div> Live / External</div>
+</div>
+
+<!-- ============ MASTER ============ -->
+<div class="section master">
+<h2>1. Master — Core System Flow</h2>
+
+<div class="tldr">
+<strong>TLDR:</strong> FastAPI app (main.py) boots on :8792, loads .env config, initializes SQLite DB, seeds operator user + default fleet, registers all routers. The InstanceManager singleton runs engine threads that poll HL market data, evaluate strategy signals, and execute trades via the exchange client. A standalone worker (scripts/worker.py) can run independently on :9999.
+</div>
+
+<h3>Boot Sequence</h3>
+<div class="flow-row">
+  <div class="box master"><div class="label">main.py</div><div class="detail">FastAPI app factory<br>lifespan handler</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">config.py</div><div class="detail">Loads .env<br>DRY_RUN, HL keys,<br>auth, AI provider</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">init_db()</div><div class="detail">SQLAlchemy create_all<br>_migrate_columns()<br>20 tables</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">seed_default_fleet()</div><div class="detail">get_or_seed_operator()<br>Create engine-1, engine-2<br>dry_run = user.default_dry_run</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">include_router()</div><div class="detail">11 API modules<br>UI routes module<br>Stream module</div></div>
+</div>
+
+<h3>Runtime Signal Flow</h3>
+<div class="flow-row">
+  <div class="box master"><div class="label">InstanceManager</div><div class="detail">Singleton<br>Manages runners<br>Thread per engine</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">InstanceRunner</div><div class="detail">_tick() loop<br>Poll every N sec<br>Fetch HL candles</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">Strategy Engine</div><div class="detail">v1_3 / v1 / v6_1<br>generate_signals()<br>Returns direction+metadata</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">Exchange Client</div><div class="detail">HyperLiquidClient<br>market_open / close<br>dry_run check<br>[DRY RUN] if true</div></div>
+  <div class="arrow">→</div>
+  <div class="box master"><div class="label">Event Bus + DB</div><div class="detail">add_log() → SSE<br>persist Trade, Signal<br>AccountSnapshot</div></div>
+</div>
+
+<h3>Dry-Run Architecture (Critical)</h3>
+<table>
+  <tr><th>Layer</th><th>Variable</th><th>Default</th><th>Effect</th></tr>
+  <tr><td>Global (.env)</td><td>DRY_RUN</td><td>false</td><td>Server always connected to HL. Live account.</td></tr>
+  <tr><td>Per-User</td><td>User.default_dry_run</td><td>true</td><td>New instances seeded as paper trading.</td></tr>
+  <tr><td>Per-Instance</td><td>Instance.dry_run</td><td>true (from user)</td><td>Engine respects this via HyperLiquidClient. UI toggle controls it.</td></tr>
+  <tr><td>Override Flow</td><td colspan="3">get_hyperliquid_client(instance) always passes instance.dry_run to HyperLiquidClient — even when using global env credentials.</td></tr>
+</table>
+
+<h3>Key Files</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td>main.py</td><td>FastAPI app factory, lifespan, router registration</td></tr>
+  <tr><td>config.py</td><td>Env config: ports, DB, HL creds, auth, AI provider</td></tr>
+  <tr><td>core/exchange.py</td><td>HyperLiquidClient — market_open/close, leverage, withdrawal</td></tr>
+  <tr><td>core/market_data.py</td><td>OHLCV fetcher from HL API</td></tr>
+  <tr><td>instances/runner.py</td><td>Per-instance autonomous runner (729 lines) — _tick loop, signal eval, trade execution</td></tr>
+  <tr><td>instances/manager.py</td><td>Singleton fleet manager, seed_default_fleet</td></tr>
+  <tr><td>instances/events.py</td><td>EventBus + add_log() + LOG_BUFFER (SSE source)</td></tr>
+  <tr><td>engine/v1_3.py</td><td>Scalp v1.3 strategy — dual-mode, 6 risk profiles, 15 params</td></tr>
+  <tr><td>engine/v1.py</td><td>Swing v1 strategy — EMA crossover</td></tr>
+  <tr><td>engine/v6_1.py</td><td>PRO v6.1 strategy — triple EMA, dynamic risk</td></tr>
+  <tr><td>backtests/runner.py</td><td>Bar-by-bar backtest engine, tick simulation (1/4/28)</td></tr>
+  <tr><td>scripts/worker.py</td><td>Standalone worker on :9999 — no DB, live only, autonomous</td></tr>
+</table>
+</div>
+
+<!-- ============ DATABASE ============ -->
+<div class="section db">
+<h2>2. Database — 20 Tables (SQLite)</h2>
+
+<div class="tldr">
+<strong>TLDR:</strong> Single SQLite file at data/dev_test.db. Template at data/template_empty_STABLE.db for multi-tenant spawning. 20 SQLAlchemy models. Per-instance dry_run stored in instances table. User API keys (PULS-R format) in users table. All schema migrations handled by idempotent _migrate_columns() on startup.
+</div>
+
+<h3>Schema Flow</h3>
+<div class="flow-row">
+  <div class="box db"><div class="label">User</div><div class="detail">id, username<br>start_balance<br>default_dry_run<br>api_key (PULS-R)</div></div>
+  <div class="arrow">→</div>
+  <div class="box db"><div class="label">Instance</div><div class="detail">slug, user_id<br>token, strategy_id<br>dry_run, leverage<br>status, mode, profile</div></div>
+  <div class="arrow">→</div>
+  <div class="box db"><div class="label">Trade</div><div class="detail">instance_id<br>side, entry/exit<br>pnl_usd, pnl_pct<br>fee, status</div></div>
+</div>
+<div class="flow-row">
+  <div class="box db"><div class="label">Signal</div><div class="detail">instance_id<br>direction, strength<br>reasoning, metadata</div></div>
+  <div class="arrow">→</div>
+  <div class="box db"><div class="label">Backtest</div><div class="detail">instance_id, user_id<br>token, strategy, TF<br>return%, WR, PF, DD<br>equity_history (JSON)</div></div>
+  <div class="arrow">→</div>
+  <div class="box db"><div class="label">AccountSnapshot</div><div class="detail">instance_id<br>equity, value<br>timestamp</div></div>
+</div>
+
+<h3>Full Table Inventory</h3>
+<table>
+  <tr><th>#</th><th>Table</th><th>Model</th><th>Purpose</th><th>Current Rows</th></tr>
+  <tr><td>1</td><td>users</td><td>User</td><td>Operator/tenant identity, start_balance, default_dry_run, PULS-R API key</td><td>1</td></tr>
+  <tr><td>2</td><td>credentials</td><td>Credential</td><td>Encrypted HL keys, wallet addresses, AI provider keys (per-user)</td><td>0</td></tr>
+  <tr><td>3</td><td>instances</td><td>Instance</td><td>Engine instances — token, strategy, dry_run, leverage, status</td><td>2</td></tr>
+  <tr><td>4</td><td>trades</td><td>Trade</td><td>Executed trades — entry/exit, PnL, fee, side</td><td>0</td></tr>
+  <tr><td>5</td><td>signals</td><td>Signal</td><td>Strategy signals — direction, strength, reasoning</td><td>20</td></tr>
+  <tr><td>6</td><td>backtests</td><td>Backtest</td><td>Backtest results — return, WR, PF, DD, Sharpe, equity_history</td><td>3</td></tr>
+  <tr><td>7</td><td>account_snapshots</td><td>AccountSnapshot</td><td>Equity snapshots per instance over time</td><td>20</td></tr>
+  <tr><td>8</td><td>position_snapshots</td><td>PositionSnapshot</td><td>Position state at each tick (entry, mark, size, PnL)</td><td>0</td></tr>
+  <tr><td>9</td><td>kill_switch_states</td><td>KillSwitchState</td><td>Global, withdrawal, per-instance kill flags</td><td>2</td></tr>
+  <tr><td>10</td><td>withdrawal_configs</td><td>WithdrawalConfig</td><td>Phased withdrawal rules, rates, thresholds</td><td>1</td></tr>
+  <tr><td>11</td><td>withdrawal_records</td><td>WithdrawalRecord</td><td>Executed withdrawal history</td><td>0</td></tr>
+  <tr><td>12</td><td>capital_baselines</td><td>CapitalBaseline</td><td>Per-instance equity baselines for drawdown calc</td><td>0</td></tr>
+  <tr><td>13</td><td>monitoring_scores</td><td>MonitoringScore</td><td>Engine health/performance scores</td><td>0</td></tr>
+  <tr><td>14</td><td>rotation_recommendations</td><td>RotationRecommendation</td><td>Strategy rotation suggestions</td><td>0</td></tr>
+  <tr><td>15</td><td>alerts</td><td>Alert</td><td>System alerts (risk, performance, operational)</td><td>0</td></tr>
+  <tr><td>16</td><td>chat_sessions</td><td>ChatSession</td><td>AI chat sessions per user</td><td>0</td></tr>
+  <tr><td>17</td><td>chat_messages</td><td>ChatMessage</td><td>Individual chat messages in sessions</td><td>0</td></tr>
+  <tr><td>18</td><td>strategies</td><td>Strategy</td><td>Uploaded/cloned strategies (pine_source, python_source)</td><td>0</td></tr>
+  <tr><td>19</td><td>candle_cache</td><td>CandleCache</td><td>HL candle data cache for backtests</td><td>724</td></tr>
+  <tr><td>20</td><td>ohlc_data</td><td>OHLCData</td><td>Historical OHLC bars</td><td>5,007</td></tr>
+</table>
+
+<h3>Multi-Tenant Spawning</h3>
+<div class="box db" style="max-width:600px">
+  <div class="label">Tenant Isolation</div>
+  <div class="detail">cp data/template_empty_STABLE.db data/tenant_{user_id}.db<br>Each tenant gets own SQLite file<br>Env credentials = operator fallback only<br>Other tenants must use credentials table</div>
+</div>
+</div>
+
+<!-- ============ API ============ -->
+<div class="section api">
+<h2>3. API — 69 Endpoints (11 Modules + UI Routes)</h2>
+
+<div class="tldr">
+<strong>TLDR:</strong> All /api/v2/* routes require X-API-Key header (global key or PULS-R per-user key). All /app/* routes require HTTP Basic Auth. SSE stream at /stream, logs at /logs. Health at /health (public). Auth via secrets.compare_digest on all comparisons.
+</div>
+
+<h3>Auth Flow</h3>
+<div class="flow-row">
+  <div class="box api"><div class="label">Request</div><div class="detail">Incoming HTTP</div></div>
+  <div class="arrow">→</div>
+  <div class="box api"><div class="label">Path Check</div><div class="detail">/app/* → Basic Auth<br>/api/v2/* → X-API-Key<br>/health → public</div></div>
+  <div class="arrow">→</div>
+  <div class="box api"><div class="label">verify_ui_credentials</div><div class="detail">Basic Auth check<br>secrets.compare_digest<br>returns username</div></div>
+  <div class="arrow">→</div>
+  <div class="box api"><div class="label">verify_api_key</div><div class="detail">Global key OR<br>PULS-R key (DB lookup)<br>secrets.compare_digest</div></div>
+</div>
+
+<h3>API v2 Endpoints (X-API-Key Required)</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Module</th><th>Purpose</th></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/instances</td><td>instances.py</td><td>List all engine instances</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/instances/active</td><td>instances.py</td><td>Active instance count</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/summary</td><td>instances.py</td><td>Fleet summary with enriched position data</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances</td><td>instances.py</td><td>Create new engine instance</td></tr>
+  <tr><td class="method put">PUT</td><td>/api/v2/instances/{slug}</td><td>instances.py</td><td>Update instance (dry_run, leverage, etc.)</td></tr>
+  <tr><td class="method put">PUT</td><td>/api/v2/instances/{slug}/strategy-config</td><td>instances.py</td><td>Update strategy parameters</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/instances/{slug}/strategy-config</td><td>instances.py</td><td>Get current strategy parameters</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances/{slug}/start</td><td>instances.py</td><td>Start engine runner thread</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances/{slug}/stop</td><td>instances.py</td><td>Stop engine runner thread</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances/{slug}/restart</td><td>instances.py</td><td>Restart engine</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances/{slug}/close</td><td>instances.py</td><td>Close open position on exchange</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/instances/{slug}/leverage</td><td>instances.py</td><td>Set leverage on HL + update DB</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/instances/{slug}/trades</td><td>instances.py</td><td>Trades for specific instance</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/trades</td><td>instances.py</td><td>All trades across instances</td></tr>
+  <tr><td class="method delete">DELETE</td><td>/api/v2/instances/{slug}</td><td>instances.py</td><td>Delete instance (cascade: trades, signals, backtests)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/strategies</td><td>strategies.py</td><td>List registered strategies</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/strategies/{id}/parameters</td><td>strategies.py</td><td>Strategy parameters (get_parameters())</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/strategies/{id}/presets</td><td>strategies.py</td><td>Strategy risk presets</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/strategies/{id}/clone</td><td>strategies.py</td><td>Clone strategy (Studio)</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/strategies/{id}/activate</td><td>strategies.py</td><td>Activate pending strategy</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/presets/fleet</td><td>strategies.py</td><td>Default fleet presets</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/strategies/upload</td><td>routes.py</td><td>Upload PineScript strategy</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/strategies/{id}/convert</td><td>routes.py</td><td>AI Pine→Python conversion</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/strategies/{id}/save</td><td>routes.py</td><td>Save converted strategy</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/metadata</td><td>metadata.py</td><td>HL universe (all tokens)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/metadata/{token}</td><td>metadata.py</td><td>Token info (szDecimals, maxLeverage)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/tokens</td><td>metadata.py</td><td>177 USDC perps list</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/stats</td><td>metadata.py</td><td>System stats (uptime, version, dry_run, counts)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/account</td><td>withdrawals.py</td><td>Live HL account value</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/metrics</td><td>metrics.py</td><td>Performance metrics</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/metrics/account</td><td>metrics.py</td><td>Account snapshots + drawdown</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/backtests/run</td><td>backtests.py</td><td>Run backtest (standalone or with instance)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/backtests</td><td>backtests.py</td><td>List backtests</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/backtests/{id}</td><td>backtests.py</td><td>Backtest detail</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/backtests/replay</td><td>backtests.py</td><td>Bar-replay with tick simulation</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/kill/status</td><td>killswitch.py</td><td>Kill switch state</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/kill/global</td><td>killswitch.py</td><td>Global kill (stop all)</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/kill/global/reset</td><td>killswitch.py</td><td>Reset global kill</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/kill/{slug}</td><td>killswitch.py</td><td>Per-instance kill</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/kill/withdrawals</td><td>killswitch.py</td><td>Block withdrawals</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/withdrawals/config</td><td>withdrawals.py</td><td>Withdrawal config</td></tr>
+  <tr><td class="method put">PUT</td><td>/api/v2/withdrawals/config</td><td>withdrawals.py</td><td>Update withdrawal config</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/withdrawals/calculate</td><td>withdrawals.py</td><td>Calculate withdrawal projections</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/withdrawals/history</td><td>withdrawals.py</td><td>Withdrawal history</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/withdrawals/projection</td><td>withdrawals.py</td><td>Future withdrawal projections</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/monitoring/scores</td><td>monitoring.py</td><td>Engine monitoring scores</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/alerts</td><td>monitoring.py</td><td>System alerts</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/testing-pool</td><td>monitoring.py</td><td>Testing pool candidates</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/users/me/api-key</td><td>routes.py</td><td>Get user's PULS-R API key (needs auth fix — P6)</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/users/me/api-key/regenerate</td><td>routes.py</td><td>Regenerate PULS-R API key</td></tr>
+  <tr><td class="method get">GET</td><td>/logs</td><td>stream.py</td><td>Recent log buffer (50 entries)</td></tr>
+  <tr><td class="method get">GET</td><td>/stream</td><td>stream.py</td><td>SSE event stream (real-time)</td></tr>
+</table>
+
+<h3>Chat Endpoints (Basic Auth)</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/chat</td><td>Send message to AI (context-aware, per-user model)</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/chat/sessions</td><td>List user's last 10 chat sessions</td></tr>
+  <tr><td class="method get">GET</td><td>/api/v2/chat/session/{id}</td><td>Get messages for a chat session</td></tr>
+</table>
+
+<h3>Credential Endpoints (Basic Auth)</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/credentials</td><td>Store encrypted credential (HL key, wallet, AI key)</td></tr>
+  <tr><td class="method put">PUT</td><td>/api/v2/credentials/{id}</td><td>Update credential</td></tr>
+  <tr><td class="method delete">DELETE</td><td>/api/v2/credentials/{id}</td><td>Delete credential</td></tr>
+  <tr><td class="method post">POST</td><td>/api/v2/credentials/{id}/test</td><td>Test credential validity</td></tr>
+</table>
+</div>
+
+<!-- ============ GUI ============ -->
+<div class="section gui">
+<h2>4. GUI — Server-Rendered Jinja2 (16 Pages)</h2>
+
+<div class="tldr">
+<strong>TLDR:</strong> No SPA, no Node build. Every page is a server-rendered Jinja2 template extending layout.html. Shared shell: sidebar nav (collapsible sections), topbar (time, kill switch, theme toggle, user dropdown), PWA manifest + service worker. Dark/light theme via localStorage. Mobile: burger menu ≤768px. Assistant chat widget shared across all pages as floating bubble.
+</div>
+
+<h3>Navigation Structure</h3>
+<div class="flow-row">
+  <div class="box gui"><div class="label">Dashboard</div><div class="detail">/app/dashboard<br>KPIs, Pulse Graph<br>Fleet, Console</div></div>
+  <div class="arrow">→</div>
+  <div class="box gui"><div class="label">Engines (collapsible)</div><div class="detail">/app/engines<br>/app/engines/{slug}<br>+ Add Engine</div></div>
+  <div class="arrow">→</div>
+  <div class="box gui"><div class="label">Strategies (collapsible)</div><div class="detail">/app/strategies<br>/app/strategies/{id}<br>Upload, Studio</div></div>
+</div>
+<div class="flow-row">
+  <div class="box gui"><div class="label">Testing (collapsible)</div><div class="detail">/app/testing/historical<br>/app/testing/paper<br>Backtester + Paper</div></div>
+  <div class="arrow">→</div>
+  <div class="box gui"><div class="label">Trades</div><div class="detail">/app/trades<br>All trades log<br>KPIs + table</div></div>
+  <div class="arrow">→</div>
+  <div class="box gui"><div class="label">Account (collapsible)</div><div class="detail">/app/account<br>/app/account/settings<br>/app/account/secrets</div></div>
+  <div class="arrow">→</div>
+  <div class="box gui"><div class="label">Assistant</div><div class="detail">/app/assistant<br>Full-page chat<br>Sessions + model</div></div>
+</div>
+
+<h3>Page Inventory</h3>
+<table>
+  <tr><th>Route</th><th>Template</th><th>Auth</th><th>Content</th></tr>
+  <tr><td>/</td><td>landing.html</td><td><span class="badge public">Public</span></td><td>Landing page, login link</td></tr>
+  <tr><td>/app/dashboard</td><td>dashboard.html</td><td><span class="badge auth">Basic</span></td><td>KPIs (5), Pulse Graph SVG, Fleet cards, Agent Console SSE, Open Positions</td></tr>
+  <tr><td>/app/engines</td><td>engines.html</td><td><span class="badge auth">Basic</span></td><td>Fleet grid with sparklines, Returns Distribution histogram, PnL donut, Runner Console</td></tr>
+  <tr><td>/app/engines/{slug}</td><td>engine_detail.html</td><td><span class="badge auth">Basic</span></td><td>KPIs, Performance sparkline, Position card, Strategy card, Tab pills (Returns/Profit/Streaks), Trade history, Signals, Console, Settings modal</td></tr>
+  <tr><td>/app/trades</td><td>trades.html</td><td><span class="badge auth">Basic</span></td><td>KPIs (Total PnL/WR/Open/Total), trade log table (time, engine, side, size, entry, exit, PnL)</td></tr>
+  <tr><td>/app/strategies</td><td>strategies.html</td><td><span class="badge auth">Basic</span></td><td>Strategy cards (3), KPI bar, Upload button</td></tr>
+  <tr><td>/app/strategies/{id}</td><td>strategy_detail.html</td><td><span class="badge auth">Basic</span></td><td>4 tabs: Overview (params), PineScript (source), Python (source), Documentation</td></tr>
+  <tr><td>/app/strategies/upload</td><td>strategy_upload.html</td><td><span class="badge auth">Basic</span></td><td>Upload form (name, slug, PineScript textarea)</td></tr>
+  <tr><td>/app/strategies/studio</td><td>strategy_studio.html</td><td><span class="badge auth">Basic</span></td><td>Pine→Python converter: pending dropdown, Convert button, Save & Activate, source/output textareas, AI chat</td></tr>
+  <tr><td>/app/testing/historical</td><td>testing_historical.html</td><td><span class="badge auth">Basic</span></td><td>Backtest form (token, strategy, TF, days, leverage), equity curve, metrics grid, runs table, AI chat</td></tr>
+  <tr><td>/app/testing/paper</td><td>testing_paper.html</td><td><span class="badge auth">Basic</span></td><td>Paper trading view</td></tr>
+  <tr><td>/app/assistant</td><td>assistant.html</td><td><span class="badge auth">Basic</span></td><td>Full-page chat: sessions sidebar, model dropdown, message input, thinking animation</td></tr>
+  <tr><td>/app/settings</td><td>settings.html</td><td><span class="badge auth">Basic</span></td><td>Kill switches (global, withdrawal, per-engine), system info, token search</td></tr>
+  <tr><td>/app/account</td><td>account_overview.html</td><td><span class="badge auth">Basic</span></td><td>User account KPIs (start_balance, equity)</td></tr>
+  <tr><td>/app/account/settings</td><td>account.html</td><td><span class="badge auth">Basic</span></td><td>Edit user settings (start_balance, default_dry_run)</td></tr>
+  <tr><td>/app/account/secrets</td><td>account_secrets.html</td><td><span class="badge auth">Basic</span></td><td>4 tabs: Overview, Wallets (ETH), HyperLiquid DEX, AI Inference — encrypted credential storage</td></tr>
+</table>
+
+<h3>Shared Components</h3>
+<table>
+  <tr><th>Component</th><th>File</th><th>Used By</th></tr>
+  <tr><td>Layout shell (sidebar, topbar, PWA)</td><td>layout.html</td><td>All /app/* pages</td></tr>
+  <tr><td>Chat widget (floating bubble)</td><td>chat_widget.html + .js + .css</td><td>Dashboard, Engines, Studio, Backtester</td></tr>
+  <tr><td>Design tokens (dark + light)</td><td>tokens.css</td><td>All pages</td></tr>
+  <tr><td>PWA manifest + service worker</td><td>manifest.json + sw.js</td><td>All pages</td></tr>
+  <tr><td>SVG charts (sparkline, histogram, donut, waterfall, streak)</td><td>layout.html CSS + per-page JS</td><td>Engines, Engine detail</td></tr>
+</table>
+
+</div>
+
+<!-- ============ NEXT 3 PHASES PLAN ============ -->
+<div class="section master">
+<h2>Next 3 Phases — Detailed Plan</h2>
+
+<div class="tldr">
+<strong>TLDR:</strong> P6 = Auth fix (1 surgical edit). P7 = Git commit + version STABLE. P8 = Phase 13 live trade test (start engine in live mode, wait for BUY/SELL signal, verify real order on HL, verify logs show no [DRY RUN], verify trade in DB). Each phase = one turn, backup before, verify after.
+</div>
+
+<h3>Phase P6 — Auth Fix: /api/v2/users/me/api-key</h3>
+<table class="plan-table">
+  <tr><th class="phase">Step</th><th>Action</th><th>File</th><th>Verify</th></tr>
+  <tr><td class="phase">6.1</td><td>Backup v96_pre-phase18-auth</td><td>tar.gz</td><td>stat -c%s non-zero</td></tr>
+  <tr><td class="phase">6.2</td><td>Replace verify_api_key dep with require_ui_or_api on /users/me/api-key GET + /regenerate POST</td><td>app/routes.py (2 route decorators)</td><td>py_compile clean</td></tr>
+  <tr><td class="phase">6.3</td><td>Restart server, test 3 auth modes</td><td>—</td><td>Basic only = 200, API key only = 200, both = 200, neither = 401</td></tr>
+  <tr><td class="phase">6.4</td><td>Browser verify: account settings page loads, API key visible</td><td>browser</td><td>Screenshot confirms</td></tr>
+</table>
+<p><strong>Success criteria:</strong> User can retrieve their API key with either Basic Auth (UI) or X-API-Key (programmatic), without needing both.</p>
+
+<h3>Phase P7 — Git Commit + Version STABLE</h3>
+<table class="plan-table">
+  <tr><th class="phase">Step</th><th>Action</th><th>File</th><th>Verify</th></tr>
+  <tr><td class="phase">7.1</td><td>git add -A + commit all changes</td><td>git</td><td>git status clean</td></tr>
+  <tr><td class="phase">7.2</td><td>Update VERSIONING.md with v96 STABLE</td><td>backups/VERSIONING.md</td><td>Entry present, LATEST STABLE tag</td></tr>
+  <tr><td class="phase">7.3</td><td>Update NOTES.md with session summary</td><td>NOTES.md</td><td>Dates + phase status match reality</td></tr>
+</table>
+<p><strong>Success criteria:</strong> Git clean, all code committed, VERSIONING.md accurate, NOTES.md current.</p>
+
+<h3>Phase P8 — Phase 13: Live Trade Test</h3>
+<table class="plan-table">
+  <tr><th class="phase">Step</th><th>Action</th><th>File</th><th>Verify</th></tr>
+  <tr><td class="phase">8.1</td><td>Backup v97_pre-live-trade-test</td><td>tar.gz</td><td>stat -c%s non-zero</td></tr>
+  <tr><td class="phase">8.2</td><td>Toggle engine-1 dry_run=false via API, start engine</td><td>API PUT + POST start</td><td>Instance dry_run=false, status=running</td></tr>
+  <tr><td class="phase">8.3</td><td>Monitor SSE logs for 15-30 min — wait for BUY/SELL signal</td><td>/logs + /stream</td><td>Signal direction != NEUTRAL</td></tr>
+  <tr><td class="phase">8.4</td><td>When signal triggers: verify real order on HL (check position via API)</td><td>GET /api/v2/instances/engine-1/position</td><td>Position exists on HL, size > 0</td></tr>
+  <tr><td class="phase">8.5</td><td>Verify logs: no [DRY RUN] tag, trade recorded in DB</td><td>/logs + DB trades table</td><td>Trade row exists, no [DRY RUN] in log</td></tr>
+  <tr><td class="phase">8.6</td><td>Verify dashboard: MODE=LIVE, position card shows real data, PnL updates</td><td>browser screenshot</td><td>Position card populated, PnL != $0.00</td></tr>
+  <tr><td class="phase">8.7</td><td>Stop engine, close position, revert dry_run=true</td><td>API POST stop + close + PUT</td><td>Position closed on HL, dry_run reverted</td></tr>
+</table>
+<p><strong>Success criteria:</strong> Engine generates a real BUY/SELL signal, places a real order on HyperLiquid, position appears in UI and DB, no [DRY RUN] tags in logs, trade persists in DB after stop.</p>
+<p><strong>Risk note:</strong> This uses real money ($5.10 account). Position will be closed immediately after verification. If no signal triggers within 30 min, stop engine and report — strategy may need different token/timeframe/market conditions.</p>
+
+</div>
+
+</div>
+</body>
+</html>

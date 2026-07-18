@@ -1,0 +1,21 @@
+{# Shared assistant chat widget — injected into studio / backtester / dashboard / assistant page.
+   context is set by the parent page (assistant|studio|backtester|dashboard). #}
+<div id="chat-widget" class="chat-widget chat-collapsed" data-context="{{ chat_context|default('assistant') }}">
+  <button id="chat-toggle" class="chat-toggle" title="Assistant" aria-label="Open assistant chat">💬</button>
+  <div class="chat-panel">
+    <div class="chat-header">
+      <span class="chat-title">PULS-R Assistant</span>
+      <select id="chat-model" class="chat-model" title="Model">
+        <option value="glm-5.1">GLM-5.1 (recommended)</option>
+      </select>
+      <button id="chat-new" class="chat-new" title="New chat">＋</button>
+      <button id="chat-close" class="chat-close" title="Close">✕</button>
+    </div>
+    <div class="chat-sessions" id="chat-sessions"></div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <textarea id="chat-input" rows="1" placeholder="Ask about strategy, PineScript, Python, backtests…"></textarea>
+      <button id="chat-send" class="chat-send">Send</button>
+    </div>
+  </div>
+</div>

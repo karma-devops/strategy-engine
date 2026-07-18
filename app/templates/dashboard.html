@@ -1,0 +1,927 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Dashboard{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/chat_widget.css">
+{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+<div class="dash-viewport">
+
+{# ── News Ticker Rail (36px, live data, no interaction) ── #}
+<div class="news-ticker" id="news-ticker">
+    <div class="news-ticker-item"><span class="ticker-label">Portfolio</span><span class="ticker-value" id="ticker-account">{{ account_value | format_usd }}</span></div>
+    <div class="news-ticker-item"><span class="ticker-label">PnL</span><span class="ticker-value" id="ticker-pnl">{{ realized_pnl | default(0.0) | format_usd }}</span></div>
+    <div class="news-ticker-item"><span class="ticker-label">Engines</span><span class="ticker-value" id="ticker-engines">{{ active_engines }}/{{ total_engines }}</span></div>
+    <div class="news-ticker-item" style="flex:1;min-width:0;display:flex;gap:var(--space-3);justify-content:flex-end;" id="ticker-tokens">
+        {% for inst in instances %}
+        <span class="ticker-token" data-token="{{ inst.token }}" data-price="{{ inst.mark_price or 0 }}" data-entry="{{ inst.entry_price or 0 }}">
+            <span class="ticker-label">{{ inst.token }}</span>
+            <span class="ticker-value" id="ticker-{{ inst.token|lower }}">{{ (inst.mark_price or 0) | format_usd }}</span>
+        </span>
+        {% endfor %}
+    </div>
+    <div class="news-ticker-item"><span class="ticker-label">Time</span><span class="ticker-value" id="ticker-time">—</span></div>
+</div>
+
+{# ── Mobile Module 1: KPI Hero (minimal, values only) ── #}
+<div class="mobile-module module-hero mobile-only-hidden" id="mobile-kpi-hero">
+    <div class="kpi-compact-row">
+        <div class="kpi-compact">
+            <div class="kpi-label">PORTFOLIO</div>
+            <div class="kpi-value" id="kpi-account-m">{{ account_value | format_usd }}</div>
+        </div>
+        <div class="kpi-compact">
+            <div class="kpi-label">PNL</div>
+            <div class="kpi-value {% if realized_pnl is defined and realized_pnl >= 0 %}pos{% elif realized_pnl is defined %}neg{% endif %}" id="kpi-realized-m">{{ realized_pnl | default(0.0) | format_usd }}</div>
+        </div>
+        <div class="kpi-compact">
+            <div class="kpi-label">ENGINES</div>
+            <div class="kpi-value" id="kpi-engines-m">{{ active_engines }}<span style="font-size:var(--text-sm);color:var(--text-muted);"> / {{ total_engines }}</span></div>
+        </div>
+    </div>
+</div>
+
+{# ── Mobile Module 2: Pulse Graph (mobile) ── #}
+<div class="mobile-module module-chart mobile-only-hidden">
+    <div class="chart-card" style="display:flex;flex-direction:column;gap:var(--space-2);min-height:200px;">
+        <div class="pulse-head" style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);padding:var(--space-2) var(--space-3) 0;">
+            <div style="display:flex;align-items:center;gap:var(--space-2);min-width:0;">
+                <h2 style="font-size:var(--text-sm);margin:0;">Pulse</h2>
+                <span class="pulse-change" id="pulse-change-m">—</span>
+            </div>
+            <div class="pulse-range-chips" style="display:flex;gap:2px;flex-shrink:0;">
+                <button class="chip pulse-range active" data-range="1" onclick="setPulseRange(1)">1H</button>
+                <button class="chip pulse-range" data-range="2" onclick="setPulseRange(2)">2H</button>
+                <button class="chip pulse-range" data-range="6" onclick="setPulseRange(6)">6H</button>
+            </div>
+        </div>
+        <div class="pulse-wrap" style="flex:1;min-height:140px;position:relative;padding:0 var(--space-3) var(--space-2);">
+            <svg class="pulse-svg" id="pulse-svg-m" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-label="Equity pulse" style="width:100%;height:100%;">
+                <defs>
+                    <linearGradient id="pulseGradM" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="var(--emerald-500)" stop-opacity="0.28"/>
+                        <stop offset="100%" stop-color="var(--coral-500)" stop-opacity="0.04"/>
+                    </linearGradient>
+                </defs>
+                <path class="pulse-area" id="pulse-area-m" d=""/>
+                <path class="pulse-path" id="pulse-path-m" d=""/>
+                <circle class="pulse-dot" id="pulse-dot-m" cx="0" cy="0" r="4"/>
+            </svg>
+        </div>
+    </div>
+</div>
+
+{# ── Mobile Module: Recent Trades (6 items) ── #}
+<div class="mobile-module module-trades mobile-only-hidden">
+    <div class="chart-card" style="padding:var(--space-2) var(--space-3);">
+        <div class="card-head" style="margin-bottom:var(--space-2);">
+            <h2 style="font-size:var(--text-sm);">Recent Trades</h2>
+            <a href="/app/trades" style="font-size:11px;color:var(--brand);text-decoration:none;">View All →</a>
+        </div>
+        {% if trades %}
+        <div class="trades-list" id="mobile-trades">
+            {% for t in trades[:6] %}
+            <div class="trade-row" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:12px;">
+                <div style="display:flex;align-items:center;gap:var(--space-2);min-width:0;">
+                    <span class="tag tag-{{ t.side|lower }}" style="font-size:10px;padding:2px 6px;flex-shrink:0;">{{ t.side }}</span>
+                    <span style="color:var(--text-secondary);font-weight:var(--weight-medium);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.instance_id }}</span>
+                    {% if t.dry_run %}<span style="font-size:9px;color:var(--text-muted);flex-shrink:0;">paper</span>{% endif %}
+                </div>
+                <div style="display:flex;align-items:center;gap:var(--space-2);flex-shrink:0;">
+                    <span style="font-family:var(--font-mono);color:var(--text-muted);font-size:10px;">{{ t.size|round(1) }} @ {{ '%.4f'|format(t.entry_price) }}</span>
+                    <span class="{% if t.pnl_usd >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);font-weight:var(--weight-semibold);min-width:50px;text-align:right;font-size:12px;">
+                        {{ t.pnl_usd|format_usd }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding:var(--space-4);text-align:center;color:var(--text-muted);font-size:12px;">No trades yet</div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Main Split: Left 2/3 + Right 1/3 (desktop) / modules (mobile) ── #}
+<div class="dash-split">
+
+    {# ── LEFT COLUMN ── #}
+    <div class="dash-left">
+
+        {# ── Mobile Module 2: Engine Carousel ── #}
+        <div class="mobile-module module-cards">
+        {# ── Engine Carousel ── #}
+        <div class="carousel-wrap">
+            <div class="carousel-header">
+                <input type="text" class="carousel-search" id="engine-search" placeholder="Search engines..." oninput="filterCarousel()">
+                <button class="carousel-btn" onclick="carouselScroll(-1)" id="carousel-prev" aria-label="Previous">‹</button>
+                <button class="carousel-btn" onclick="carouselScroll(1)" id="carousel-next" aria-label="Next">›</button>
+            </div>
+            <div class="carousel-viewport">
+                <div class="carousel-track" id="carousel-track">
+                    {% for inst in instances %}
+                    <div class="fleet-card {% if inst.status == 'running' %}running{% endif %} carousel-item" data-name="{{ inst.name|lower }}" data-token="{{ inst.token|lower }}" data-status="{{ inst.status }}" data-slug="{{ inst.slug }}" data-strategy="{{ inst.strategy_id }}" data-timeframe="{{ inst.timeframe }}" data-position-side="{{ inst.position_side or 'FLAT' }}" data-position-size="{{ inst.position_size or 0 }}" data-unrealized-pnl="{{ inst.unrealized_pnl or 0 }}" data-entry-price="{{ inst.entry_price or 0 }}" data-mark-price="{{ inst.mark_price or 0 }}" data-leverage="{{ inst.leverage or 1 }}" onclick="openFocusModal(this)" style="cursor:pointer;">
+                        <div class="fleet-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <h3>{{ inst.name }}</h3>
+                                <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+                            </div>
+                            <div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
+                                {% if inst.status == 'running' %}
+                                <button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/stop')">⏹</button>
+                                {% else %}
+                                <button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">▶</button>
+                                {% endif %}
+                                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;">⚙</a>
+                            </div>
+                        </div>
+                        <div class="fleet-row"><span class="label">Status</span><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
+                        <div class="fleet-row"><span class="label">Position</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.position_side or 'FLAT' }} {{ '%.1f' | format(inst.position_size or 0) }}</span></div>
+                        <div class="fleet-row"><span class="label">PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        </div>
+        {# ── /Mobile Module 2: Engine Carousel ── #}
+
+        {# ── Open Positions ── #}
+        <div class="mobile-module module-cards">
+        <div class="chart-card" style="padding:0;overflow:hidden;">
+            <div class="card-head" style="padding:var(--space-2) var(--space-3);">
+                <h2 style="font-size:var(--text-sm);margin:0;">Open Positions</h2>
+                <span class="tag tag-flat" id="pos-count-tag" style="font-size:10px;">0</span>
+            </div>
+            <div id="pos-grid" style="display:grid;grid-template-columns:1fr;gap:var(--space-2);padding:0 var(--space-3) var(--space-3);">
+                <div class="empty-state" style="padding:var(--space-4);grid-column:1/-1;"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="empty-title">No open positions</div><div class="empty-desc">Active positions will appear here when engines execute trades.</div></div>
+            </div>
+        </div>
+        </div>
+        {# ── /Open Positions ── #}
+
+        {# ── Mobile Module 3: Assistant (desktop only on mobile, shown via floating FAB) ── #}
+        <div class="mobile-module module-chat desktop-only">
+
+        {# ── AI Assistant (feature card — teal border, gradient header) ── #}
+        <div class="chart-card dash-chat-card" style="border-left:3px solid var(--brand);box-shadow:0 0 12px rgba(14,165,199,0.08);">
+            <div class="card-head" style="background:linear-gradient(135deg,var(--brand-bg),transparent);margin:calc(-1 * var(--space-3));margin-bottom:var(--space-2);padding:var(--space-2) var(--space-3);border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                <h2>Assistant</h2>
+                <span class="tag tag-flat" style="background:var(--brand);color:#fff;">AI</span>
+            </div>
+            <div class="dash-chat-body" id="dash-chat-body" style="flex:1;min-height:0;overflow-y:auto;padding:var(--space-3);">
+                <div class="chat-welcome" id="dash-chat-welcome">
+                    <div class="chat-welcome-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg></div>
+                    <div class="chat-welcome-text" id="dash-chat-greeting">Hello! I'm your trading assistant. Ask me about your engines, positions, or strategy.</div>
+                    <div class="chat-suggestions">
+                        <button class="chat-suggestion" onclick="askQuick('How are my engines performing?')">How are my engines performing?</button>
+                        <button class="chat-suggestion" onclick="askQuick('What is my current PnL?')">What is my current PnL?</button>
+                        <button class="chat-suggestion" onclick="askQuick('Show recent trades')">Show recent trades</button>
+                    </div>
+                </div>
+                <div id="dash-chat-messages" style="display:flex;flex-direction:column;"></div>
+            </div>
+            <div class="dash-chat-input">
+                <input type="text" id="dash-chat-input-field" placeholder="Ask your assistant..." onkeydown="if(event.key==='Enter')sendDashChat()">
+                <button class="btn-sm" style="background:var(--brand);color:#fff;border:1px solid var(--brand);" onclick="sendDashChat()">Send</button>
+            </div>
+        </div>
+        </div>
+        {# ── /Mobile Module 3: Assistant ── #}
+
+    </div>
+
+    {# ── RIGHT COLUMN ── #}
+    <div class="dash-right">
+
+        {# ── Mobile Module: KPI + Pulse Graph (unified card) ── #}
+        <div class="mobile-module module-chart desktop-only">
+
+        {# ── KPI + Pulse Graph (unified card) ── #}
+        <div class="chart-card" style="flex:1;min-height:0;max-height:55vh;display:flex;flex-direction:column;gap:var(--space-2);">
+            <div class="kpi-card" style="padding:var(--space-2) var(--space-3);">
+                <div class="kpi-compact-row">
+                    <div class="kpi-compact">
+                        <div class="kpi-label" style="font-size:9px;">PORTFOLIO</div>
+                        <div class="kpi-value" id="kpi-account" style="font-size:var(--text-lg);font-family:var(--font-display);">{{ account_value | format_usd }}</div>
+                    </div>
+                    <div class="kpi-compact">
+                        <div class="kpi-label" style="font-size:9px;">PNL</div>
+                        <div class="kpi-value {% if realized_pnl is defined and realized_pnl >= 0 %}pos{% elif realized_pnl is defined %}neg{% endif %}" id="kpi-realized" style="font-size:var(--text-lg);font-family:var(--font-display);">{{ realized_pnl | default(0.0) | format_usd }}</div>
+                    </div>
+                    <div class="kpi-compact">
+                        <div class="kpi-label" style="font-size:9px;">ENGINES</div>
+                        <div class="kpi-value" id="kpi-engines" style="font-size:var(--text-lg);font-family:var(--font-display);">{{ active_engines }}<span style="font-size:var(--text-xs);color:var(--text-muted);"> / {{ total_engines }}</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="pulse-head" style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap;padding:0 var(--space-2);">
+                <div style="display:flex;align-items:center;gap:var(--space-2);">
+                    <h2 style="font-size:var(--text-sm);">Pulse</h2>
+                    <span class="pulse-change" id="pulse-change">—</span>
+                    {# P14: Mode toggle — paper/live separation. Click to cycle LIVE → PAPER → ALL #}
+                    <button id="mode-toggle" onclick="cycleMode()" style="font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;letter-spacing:1px;font-weight:700;transition:all 0.2s;">LIVE</button>
+                </div>
+                <div class="pulse-range-chips" style="display:flex;gap:2px;">
+                    <button class="chip pulse-range active" data-range="1" onclick="setPulseRange(1)">1H</button>
+                    <button class="chip pulse-range" data-range="2" onclick="setPulseRange(2)">2H</button>
+                    <button class="chip pulse-range" data-range="6" onclick="setPulseRange(6)">6H</button>
+                    <button class="chip pulse-range" data-range="12" onclick="setPulseRange(12)">12H</button>
+                    <button class="chip pulse-range" data-range="24" onclick="setPulseRange(24)">24H</button>
+                </div>
+            </div>
+            <div class="pulse-wrap" style="flex:1;min-height:0;">
+                <svg class="pulse-svg" id="pulse-svg" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-label="Equity pulse" style="width:100%;height:100%;">
+                    <defs>
+                        <linearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="var(--emerald-500)" stop-opacity="0.28"/>
+                            <stop offset="100%" stop-color="var(--coral-500)" stop-opacity="0.04"/>
+                        </linearGradient>
+                    </defs>
+                    <path class="pulse-area" id="pulse-area" d=""/>
+                    <path class="pulse-path" id="pulse-path" d=""/>
+                    <circle class="pulse-dot" id="pulse-dot" cx="0" cy="0" r="4"/>
+                </svg>
+                <div id="pulse-empty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;">
+                    <div class="chart-loading"><div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div><div class="loading-text">Waiting for equity data</div></div>
+                </div>
+            </div>
+            <div class="pulse-stats" id="pulse-stats">
+                <div class="pstat"><span class="pstat-label">Last</span><span class="pstat-value" id="ps-last">—</span></div>
+                <div class="pstat"><span class="pstat-label">High</span><span class="pstat-value" id="ps-high">—</span></div>
+                <div class="pstat"><span class="pstat-label">Low</span><span class="pstat-value" id="ps-low">—</span></div>
+                <div class="pstat"><span class="pstat-label">Peak Δ</span><span class="pstat-value" id="ps-peak">—</span></div>
+            </div>
+        </div>
+        </div>
+        {# ── /Mobile Module 4: Pulse Graph ── #}
+
+        {# ── Mobile Module 5: Console ── #}
+        <div class="mobile-module module-chat">
+
+        {# ── Agent Console (compact mobile strip) ── #}
+        <div class="chart-card dash-console-card" style="overflow:hidden;">
+            <div class="card-head" style="margin-bottom:2px;">
+                <h2>Console</h2>
+                <div style="display:flex;gap:var(--space-1);">
+                    <button class="btn-sm" onclick="copyConsole()" title="Copy">Copy</button>
+                    <button class="btn-sm" onclick="clearConsole()" title="Clear">Clear</button>
+                </div>
+            </div>
+            <div id="console-log" class="console-log" style="flex:1;min-height:0;overflow-y:auto;font-size:var(--text-xs);"></div>
+        </div>
+        </div>
+        {# ── /Mobile Module 5: Console ── #}
+    </div>
+
+</div>
+</div>
+
+{# ── Hidden elements for JS compat (connect prompt, trades) ── #}
+<div id="connect-prompt" style="display:none;"></div>
+<div id="trades-compact" style="display:none;"></div>
+
+{% endblock %}
+
+{% block scripts %}
+{% include 'chat_widget.html' %}
+<script>
+    const equityData = {{ equity_series | tojson | safe }};
+    const tradesData = {{ trades | tojson | safe }};
+
+    // ── SVG Pulse Graph (trade + account data driven) ──
+    function buildPulse() {
+        const path = document.getElementById('pulse-path');
+        const area = document.getElementById('pulse-area');
+        const dot = document.getElementById('pulse-dot');
+        const empty = document.getElementById('pulse-empty');
+        if (!path) return;
+        const W = 1000, H = 200, PAD = 8;
+        if (!equityData || equityData.length < 2) {
+            // Draw flat pulsing line instead of empty state
+            empty.style.display = 'none';
+            const flatY = H / 2;
+            const startX = PAD;
+            const endX = W - PAD;
+            // Flat line
+            path.setAttribute('d', 'M' + startX + ',' + flatY + ' L' + endX + ',' + flatY);
+            area.setAttribute('d', 'M' + startX + ',' + flatY + ' L' + endX + ',' + flatY + ' L' + endX + ',' + (H - PAD) + ' L' + startX + ',' + (H - PAD) + ' Z');
+            // Pulsing dot at 85% width
+            const dotX = PAD + 0.85 * (W - 2 * PAD);
+            dot.setAttribute('cx', dotX.toFixed(1));
+            dot.setAttribute('cy', flatY.toFixed(1));
+            path.classList.remove('negative');
+            path.classList.add('positive');
+            dot.classList.remove('negative');
+            const pctEl = document.getElementById('pulse-change');
+            if (pctEl) { pctEl.textContent = '0.00%'; pctEl.className = 'pulse-change positive'; }
+            const psLast = document.getElementById('ps-last');
+            const psHigh = document.getElementById('ps-high');
+            const psLow = document.getElementById('ps-low');
+            const psPeak = document.getElementById('ps-peak');
+            if (psLast) psLast.textContent = '$0.00';
+            if (psHigh) psHigh.textContent = '—';
+            if (psLow) psLow.textContent = '—';
+            if (psPeak) psPeak.textContent = '$0.00';
+            return;
+        }
+        empty.style.display = 'none';
+        const vals = equityData.map(d => parseFloat(d.value) || 0);
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = (max - min) || 1;
+        const n = equityData.length;
+        const pts = equityData.map((d, i) => {
+            const x = PAD + (i / (n - 1)) * (W - 2 * PAD);
+            const y = H - PAD - ((parseFloat(d.value) || 0) - min) / span * (H - 2 * PAD);
+            return [x, y];
+        });
+        // smooth cubic path
+        let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+        for (let i = 1; i < pts.length; i++) {
+            const p0 = pts[i - 1], p1 = pts[i];
+            const cx = (p0[0] + p1[0]) / 2;
+            d += ' C' + cx.toFixed(1) + ',' + p0[1].toFixed(1) + ' ' + cx.toFixed(1) + ',' + p1[1].toFixed(1) + ' ' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1);
+        }
+        const last = pts[pts.length - 1];
+        path.setAttribute('d', d);
+        area.setAttribute('d', d + ' L' + last[0].toFixed(1) + ',' + (H - PAD) + ' L' + pts[0][0].toFixed(1) + ',' + (H - PAD) + ' Z');
+        // Position dot at 85% width (not at last data point)
+        const dotX = PAD + 0.85 * (W - 2 * PAD);
+        dot.setAttribute('cx', dotX.toFixed(1));
+        dot.setAttribute('cy', last[1].toFixed(1));
+        // ── SIGN-AWARE COLOR: green up, red down ──
+        const first = vals[0], lastV = vals[vals.length - 1];
+        const netChange = lastV - first;
+        const neg = netChange < 0;
+        path.classList.toggle('negative', neg);
+        path.classList.remove(neg ? 'positive' : 'negative');
+        path.classList.add(neg ? 'negative' : 'positive');
+        dot.classList.toggle('negative', neg);
+        // ── Dynamic gradient: green fill going up, red fill going down ──
+        const gradStops = document.querySelectorAll('#pulseGrad stop');
+        if (gradStops.length >= 2) {
+            gradStops[0].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
+            gradStops[0].setAttribute('stop-opacity', neg ? '0.25' : '0.28');
+            gradStops[1].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
+            gradStops[1].setAttribute('stop-opacity', '0.04');
+        }
+        // ── Live % change badge ──
+        const pctEl = document.getElementById('pulse-change');
+        if (pctEl) {
+            const pct = first ? (netChange / first) * 100 : 0;
+            pctEl.textContent = (neg ? '▼ ' : '▲ ') + Math.abs(pct).toFixed(2) + '%';
+            pctEl.className = 'pulse-change ' + (neg ? 'negative' : 'positive');
+        }
+        // ── Stat strip: Last / High / Low / Peak Δ ──
+        const psLast = document.getElementById('ps-last');
+        const psHigh = document.getElementById('ps-high');
+        const psLow = document.getElementById('ps-low');
+        const psPeak = document.getElementById('ps-peak');
+        if (psLast) psLast.textContent = '$' + lastV.toFixed(2);
+        if (psHigh) psHigh.textContent = '$' + max.toFixed(2);
+        if (psLow) psLow.textContent = '$' + min.toFixed(2);
+        if (psPeak) {
+            const peakDelta = max - min;
+            psPeak.textContent = (peakDelta >= 0 ? '+' : '-') + '$' + Math.abs(peakDelta).toFixed(2);
+            psPeak.className = 'pstat-value ' + (peakDelta >= 0 ? 'positive' : 'negative');
+        }
+        // set dash length for draw animation
+        const len = path.getTotalLength ? path.getTotalLength() : 2000;
+        path.style.setProperty('--len', len.toFixed(0));
+        // replay animation on each rebuild
+        path.style.animation = 'none'; void path.offsetWidth; path.style.animation = '';
+    }
+    buildPulse();
+
+    // ── Mirror pulse graph to mobile SVG ──
+    function mirrorPulseToMobile() {
+        const src = {
+            path: document.getElementById('pulse-path'),
+            area: document.getElementById('pulse-area'),
+            dot: document.getElementById('pulse-dot')
+        };
+        const dst = {
+            path: document.getElementById('pulse-path-m'),
+            area: document.getElementById('pulse-area-m'),
+            dot: document.getElementById('pulse-dot-m')
+        };
+        if (src.path && dst.path && src.path.getAttribute('d')) {
+            dst.path.setAttribute('d', src.path.getAttribute('d'));
+            dst.path.className.baseVal = src.path.className.baseVal;
+        }
+        if (src.area && dst.area && src.area.getAttribute('d')) {
+            dst.area.setAttribute('d', src.area.getAttribute('d'));
+        }
+        if (src.dot && dst.dot) {
+            dst.dot.setAttribute('cx', src.dot.getAttribute('cx'));
+            dst.dot.setAttribute('cy', src.dot.getAttribute('cy'));
+            dst.dot.className.baseVal = src.dot.className.baseVal;
+        }
+        const srcPct = document.getElementById('pulse-change');
+        const dstPct = document.getElementById('pulse-change-m');
+        if (srcPct && dstPct) {
+            dstPct.textContent = srcPct.textContent;
+            dstPct.className = srcPct.className;
+        }
+    }
+    mirrorPulseToMobile();
+
+    // ---- Live API <-> UI loop (bidirectional) ----
+    const API_KEY = "{{ api_key }}";
+    const DRY = {{ 'true' if dry_run_global else 'false' }};
+    // P14: paper/live separation — dashboard defaults to 'live' mode.
+    // Paper and live data are never mixed in the same view.
+    let currentMode = 'live';  // 'live', 'paper', or 'all'
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const fmtPct = n => ((parseFloat(n) || 0) >= 0 ? '+' : '') + (parseFloat(n) || 0).toFixed(2) + '%';
+    const sideClass = s => (s || 'FLAT').toLowerCase();
+
+    function ctrlBtn(label, cls, fn) {
+        const b = document.createElement('button');
+        b.className = 'fleet-btn ' + cls;
+        b.textContent = label;
+        b.onclick = fn;
+        return b;
+    }
+
+    function renderPositions(instances) {
+        const grid = document.getElementById('pos-grid');
+        const count = document.getElementById('pos-count-tag');
+        if (!grid) return;
+        const open = (instances || []).filter(i => i.position_side && i.position_side !== 'FLAT' && (parseFloat(i.position_size) || 0) !== 0);
+        if (count) count.textContent = open.length;
+        if (!open.length) {
+            grid.innerHTML = '<div class="empty-state" style="padding:var(--space-4);grid-column:1/-1;"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="empty-title">No open positions</div><div class="empty-desc">Active positions will appear here when engines execute trades.</div></div>';
+            return;
+        }
+        grid.innerHTML = '';
+        open.forEach(inst => {
+            const card = document.createElement('div');
+            card.className = 'pos-card';
+            const sideCls = (inst.position_side || 'FLAT').toLowerCase();
+            const pnl = parseFloat(inst.unrealized_pnl) || 0;
+            const sym = inst.token || '';
+            const pnlPct = inst.entry_price > 0 ? ((inst.mark_price - inst.entry_price) / inst.entry_price * 100 * (inst.position_side === 'SHORT' ? -1 : 1)) : 0;
+            card.innerHTML =
+                '<div class="pos-side-bar ' + sideCls + '"></div>' +
+                '<div class="pos-body">' +
+                    '<div class="pos-head"><span class="tag tag-' + sideCls + '">' + inst.position_side + '</span>' +
+                    '<span class="pos-token">' + sym + '</span>' +
+                    '<span class="pos-engine">' + inst.name + '</span>' +
+                    (inst.dry_run ? '<span class="tag tag-paper">PAPER</span>' : '<span class="tag tag-live">LIVE</span>') + '</div>' +
+                    '<div class="pos-metrics">' +
+                        '<div class="pos-metric"><span class="label">Size</span><span class="value">' + (parseFloat(inst.position_size) || 0).toFixed(4) + '</span></div>' +
+                        '<div class="pos-metric"><span class="label">Entry</span><span class="value">' + fmtUsd(inst.entry_price) + '</span></div>' +
+                        '<div class="pos-metric"><span class="label">Mark</span><span class="value">' + fmtUsd(inst.mark_price) + '</span></div>' +
+                        '<div class="pos-metric"><span class="label">PnL</span><span class="value ' + (pnl >= 0 ? 'positive' : 'negative') + '">' + fmtUsd(pnl) + ' (' + fmtPct(pnlPct) + ')</span></div>' +
+                        (inst.leverage && inst.leverage > 1 ? '<div class="pos-metric"><span class="label">Lev</span><span class="value">' + inst.leverage + 'x</span></div>' : '') +
+                        (inst.liquidation_price && parseFloat(inst.liquidation_price) > 0 ? '<div class="pos-metric"><span class="label">Liq.</span><span class="value" style="color:var(--red, #ff4757);">' + fmtUsd(inst.liquidation_price) + '</span></div>' : '') +
+                        (inst.stop_loss && parseFloat(inst.stop_loss) > 0 ? '<div class="pos-metric"><span class="label">SL</span><span class="value" style="color:var(--amber, #f59e0b);">' + fmtUsd(inst.stop_loss) + '</span></div>' : '') +
+                        (inst.take_profit && parseFloat(inst.take_profit) > 0 ? '<div class="pos-metric"><span class="label">TP</span><span class="value" style="color:var(--green, #00ff88);">' + fmtUsd(inst.take_profit) + '</span></div>' : '') +
+                    '</div>' +
+                    '<div class="pos-actions-row">' +
+                        '<button class="btn-position-action btn-close-position" onclick="closePosition(\'' + inst.slug + '\')" title="Close Position">' +
+                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+                        '<a href="/app/engines/' + inst.slug + '" class="btn-position-action" title="View Engine">' +
+                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></a>' +
+                        '<a href="https://app.hyperliquid.xyz/trade/' + sym + '" target="_blank" class="btn-position-action btn-chart" title="View Chart on Exchange">' +
+                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></a>' +
+                    '</div>' +
+                '</div>';
+            grid.appendChild(card);
+        });
+    }
+
+    function renderTradesCompact(trades) {
+        const box = document.getElementById('trades-compact');
+        if (!box) return;
+        if (!trades || !trades.length) { box.innerHTML = '<div class="empty" style="padding:var(--space-4);">No trades yet.</div>'; return; }
+        box.innerHTML = trades.slice(0, 12).map(t => {
+            const time = (t.timestamp || '').replace('T', ' ').slice(0, 19);
+            const pnl = parseFloat(t.pnl_usd) || 0;
+            const pnlStr = (pnl >= 0 ? '+' : '-') + '$' + Math.abs(pnl).toFixed(2);
+            const pnlCls = pnl >= 0 ? 'positive' : 'negative';
+            const side = (t.side || 'LONG').toLowerCase();
+            return '<div class="trade-line"><span class="trade-time">' + time + '</span>' +
+                   '<span class="trade-token">' + (t.instance_id || '') + '</span>' +
+                   '<span class="side ' + side + '">' + (t.side || 'LONG') + '</span>' +
+                   '<span class="trade-pnl ' + pnlCls + '">' + pnlStr + '</span></div>';
+        }).join('');
+    }
+
+    function copyConsole() {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const txt = Array.from(box.children).map(l => l.textContent).join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => addConsole('cmd', 'Console copied to clipboard'));
+    }
+    function clearConsole() {
+        const box = document.getElementById('console-log');
+        if (box) box.innerHTML = '<div class="console-line">Console cleared.</div>';
+    }
+    function closePosition(symbol) {
+        if (!confirm('Close ' + symbol + ' position?')) return;
+        apiPost('/api/v2/instances/' + symbol + '/close');
+    }
+    function closeAllPositions() {
+        if (!confirm('Close ALL open positions? This cannot be undone.')) return;
+        fetch(API_BASE + '/api/v2/kill?reset=false', { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json()).then(j => { addConsole('cmd', 'Kill-all sent: ' + (j.message || '')); refresh(); })
+            .catch(e => addConsole('err', 'kill-all failed: ' + e));
+    }
+    function emergencyStop() {
+        if (!confirm('EMERGENCY STOP — close ALL positions on ALL engines and halt?')) return;
+        fetch(API_BASE + '/api/v2/kill?reset=false', { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json()).then(j => { addConsole('err', 'EMERGENCY STOP: ' + (j.message || '')); refresh(); })
+            .catch(e => addConsole('err', 'e-stop failed: ' + e));
+    }
+
+    function renderFleet(instances) {
+        // ponytail: dashboard uses carousel-track, engines page uses fleet-grid — check both
+        const grid = document.getElementById('fleet-grid') || document.getElementById('carousel-track');
+        if (!grid) return;
+        grid.innerHTML = '';
+        if (!instances || !instances.length) {
+            grid.innerHTML = '<div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><div class="empty-title">No engines yet</div><div class="empty-desc">Create your first trading engine to start receiving signals.</div><div class="empty-action"><a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);border-color:var(--brand);">+ Add Engine</a></div></div>';
+            return;
+        }
+        instances.forEach(inst => {
+            const card = document.createElement('div');
+            card.className = 'fleet-card' + (inst.status === 'running' ? ' running' : '');
+            card.style.cursor = 'pointer';
+            card.onclick = () => openFocusModal(card);
+            card.dataset.slug = inst.slug;
+            card.dataset.strategy = inst.strategy_id;
+            card.dataset.timeframe = inst.timeframe;
+            card.dataset.positionSide = inst.position_side || 'FLAT';
+            card.dataset.positionSize = inst.position_size || 0;
+            card.dataset.unrealizedPnl = inst.unrealized_pnl || 0;
+            card.dataset.entryPrice = inst.entry_price || 0;
+            card.dataset.markPrice = inst.mark_price || 0;
+            card.dataset.leverage = inst.leverage || 1;
+            const pnlCls = (inst.unrealized_pnl || 0) >= 0 ? 'positive' : 'negative';
+            const modeTag = inst.dry_run ? 'PAPER' : 'LIVE';
+            const modeCls = inst.dry_run ? 'tag-paper' : 'tag-live';
+            const startStopBtn = inst.status === 'running'
+                ? '<button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" onclick="event.stopPropagation();apiPost(\'/api/v2/instances/' + inst.slug + '/stop\')">⏹</button>'
+                : '<button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="event.stopPropagation();apiPost(\'/api/v2/instances/' + inst.slug + '/start\')">▶</button>';
+            card.innerHTML =
+                '<div class="fleet-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+                    '<div><h3>' + inst.name + '</h3>' +
+                    '<div class="fleet-sub">' + inst.token + ' · ' + inst.strategy_id + ' · ' + inst.timeframe + '</div></div>' +
+                    '<div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;">' +
+                        startStopBtn +
+                        '<a href="/app/engines/' + inst.slug + '" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation()">⚙</a>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="fleet-row"><span class="label">Status</span><span class="tag tag-' + inst.status + '">' + inst.status + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Position</span><span class="' + pnlCls + '" style="font-family:var(--font-mono);">' + (inst.position_side || 'FLAT') + ' ' + (parseFloat(inst.position_size) || 0).toFixed(1) + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Unrealized PnL</span><span class="' + pnlCls + '" style="font-family:var(--font-mono);">' + fmtUsd(inst.unrealized_pnl) + '</span></div>' +
+                '<div class="fleet-row"><span class="label">Leverage</span><span style="font-family:var(--font-mono);">' + inst.leverage + 'x</span></div>' +
+                '<div class="fleet-row"><span class="label">Mode</span><span class="tag ' + modeCls + '">' + modeTag + '</span></div>';
+            grid.appendChild(card);
+        });
+    }
+
+    /* ── Engine Focus Modal ── */
+    function openFocusModal(cardEl) {
+        var d = cardEl.dataset;
+        var modal = document.getElementById('engine-focus-modal');
+        document.getElementById('focus-modal-name').textContent = cardEl.querySelector('h3') ? cardEl.querySelector('h3').textContent : (d.name || '—');
+        document.getElementById('focus-modal-sub').textContent = (d.token || '').toUpperCase() + ' · ' + (d.strategy || '') + ' · ' + (d.timeframe || '');
+        var statusEl = document.getElementById('focus-modal-status');
+        statusEl.textContent = d.status || '—';
+        statusEl.className = 'focus-stat-value ' + (d.status === 'running' ? 'pos' : '');
+        var posText = (d.positionSide || 'FLAT') + ' ' + (d.positionSize || '0');
+        document.getElementById('focus-modal-position').textContent = posText;
+        var pnlVal = parseFloat(d.unrealizedPnl || 0);
+        var pnlEl = document.getElementById('focus-modal-pnl');
+        pnlEl.textContent = fmtUsd(pnlVal);
+        pnlEl.className = 'focus-stat-value ' + (pnlVal >= 0 ? 'pos' : 'neg');
+        document.getElementById('focus-modal-entry').textContent = fmtUsd(parseFloat(d.entryPrice || 0));
+        document.getElementById('focus-modal-price').textContent = fmtUsd(parseFloat(d.markPrice || 0));
+        document.getElementById('focus-modal-leverage').textContent = (d.leverage || '1') + 'x';
+        document.getElementById('focus-modal-view').href = '/app/engines/' + d.slug;
+        document.getElementById('focus-modal-edit').href = '/app/engines/' + d.slug;
+        var toggleBtn = document.getElementById('focus-modal-toggle');
+        if (d.status === 'running') {
+            toggleBtn.textContent = '⏹ Stop';
+            toggleBtn.className = 'fleet-btn fleet-btn-primary';
+            toggleBtn.onclick = function() { apiPost('/api/v2/instances/' + d.slug + '/stop'); closeFocusModal(); };
+        } else {
+            toggleBtn.textContent = '▶ Start';
+            toggleBtn.className = 'fleet-btn fleet-btn-primary';
+            toggleBtn.onclick = function() { apiPost('/api/v2/instances/' + d.slug + '/start'); closeFocusModal(); };
+        }
+        var backtestBtn = document.getElementById('focus-modal-backtest');
+        backtestBtn.onclick = function() { location.href = '/app/testing/paper'; };
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closeFocusModal() {
+        document.getElementById('engine-focus-modal').style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeFocusModal(); });
+
+    function apiPost(path) {
+        fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(j => { addConsole('cmd', (j.message || path) + (j.ok !== undefined ? ' [ok=' + j.ok + ']' : '')); refresh(); })
+            .catch(e => addConsole('err', 'POST ' + path + ' failed: ' + e));
+    }
+
+    function refresh() {
+        fetch(API_BASE + '/api/v2/summary?hours=' + (typeof pulseRangeHours !== 'undefined' ? pulseRangeHours : 24) + '&mode=' + currentMode, { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) return;
+                updateTicker(d);
+                // Full account value = margin value + unrealized PnL (matches HL DEX dashboard)
+                var totalVal = (d.account_value || 0);  // get_account_value returns full portfolio value incl available spot USDC
+                document.getElementById('kpi-account').textContent = fmtUsd(totalVal);
+                // Mobile KPI hero mirror
+                var elAccountM = document.getElementById('kpi-account-m');
+                if (elAccountM) elAccountM.textContent = fmtUsd(totalVal);
+                // ponytail: guard old IDs removed in redesign — map to new KPI rail
+                var elEngines = document.getElementById('kpi-engines');
+                if (elEngines) elEngines.innerHTML = d.active_engines + '<span style="font-size:var(--text-sm);color:var(--text-muted);"> / ' + d.total_engines + '</span>';
+                var elEnginesM = document.getElementById('kpi-engines-m');
+                if (elEnginesM) elEnginesM.innerHTML = d.active_engines + '<span style="font-size:var(--text-sm);color:var(--text-muted);"> / ' + d.total_engines + '</span>';
+                var elReal = document.getElementById('kpi-realized');
+                if (elReal) { elReal.textContent = fmtUsd(d.realized_pnl || 0); elReal.className = 'kpi-value ' + ((d.realized_pnl || 0) >= 0 ? 'pos' : 'neg'); }
+                var elRealM = document.getElementById('kpi-realized-m');
+                if (elRealM) { elRealM.textContent = fmtUsd(d.realized_pnl || 0); elRealM.className = 'kpi-value ' + ((d.realized_pnl || 0) >= 0 ? 'pos' : 'neg'); }
+                var elPos = document.getElementById('kpi-positions');
+                if (elPos) { var openCount = (d.instances || []).filter(function(i){ return i.position_side && i.position_side !== 'FLAT'; }).length; elPos.textContent = openCount; }
+                var elMode = document.getElementById('kpi-mode');
+                if (elMode) { elMode.textContent = currentMode === 'paper' ? 'PAPER' : currentMode === 'all' ? 'ALL' : (d.instances || []).some(function(i){ return !i.dry_run; }) ? 'LIVE' : 'PAPER'; }
+                renderFleet(d.instances);
+                renderPositions(d.instances);
+                renderTradesCompact(d.trades || []);
+                if (d.equity_series && d.equity_series.length) {
+                    equityData.length = 0;
+                    d.equity_series.forEach(p => equityData.push(p));
+                    buildPulse();
+                    mirrorPulseToMobile();
+                }
+                // ── Show connect prompt if no HL credentials and zero balance ──
+                var connectPrompt = document.getElementById('connect-prompt');
+                if (connectPrompt) {
+                    if (!d.has_hl_credentials && d.account_value === 0 && d.active_engines === 0) {
+                        connectPrompt.style.display = 'flex';
+                    } else {
+                        connectPrompt.style.display = 'none';
+                    }
+                }
+            })
+            .catch(e => addConsole('err', 'summary fetch failed: ' + e));
+    }
+
+    // ---- Runner console log (SSE /stream -> prepend) ----
+    function addConsole(kind, msg) {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const line = document.createElement('div');
+        line.className = 'console-line console-' + (kind || 'info');
+        const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+        line.textContent = '[' + t + '] ' + msg;
+        box.insertBefore(line, box.firstChild);
+        while (box.childElementCount > 200) box.removeChild(box.lastChild);
+    }
+
+    if (typeof EventSource !== 'undefined') {
+        const es = new EventSource(API_BASE + '/stream');
+        const sseDot = document.getElementById('sse-dot');
+        es.onopen = () => { if (sseDot) sseDot.className = 'sse-dot live'; };
+        es.onmessage = ev => {
+            if (sseDot) sseDot.className = 'sse-dot live';
+            try {
+                const e = JSON.parse(ev.data);
+                if (e.type === 'log') {
+                    // P14: paper/live separation — filter logs by current mode
+                    if (currentMode === 'live' && e.log.dry_run === true) return;
+                    if (currentMode === 'paper' && e.log.dry_run === false) return;
+                    addConsole(e.log.level || 'info', e.log.message);
+                }
+                else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
+                else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
+                else if (e.type === 'ping') { /* keepalive */ }
+            } catch (_) {}
+        };
+        es.onerror = () => { if (sseDot) sseDot.className = 'sse-dot dead'; addConsole('err', 'SSE stream disconnected'); };
+    }
+
+    // Initial paint + poll every 3s (backend -> frontend, near-live)
+    refresh();
+    setInterval(refresh, 3000);
+
+    // ── Pulse range selector (default 1H) ──
+    var pulseRangeHours = 1;
+    function setPulseRange(hours) {
+        pulseRangeHours = hours;
+        document.querySelectorAll('.pulse-range').forEach(function(btn) {
+            btn.classList.toggle('active', parseInt(btn.dataset.range) === hours);
+        });
+        // Re-trigger refresh to apply new range
+        refresh();
+    }
+
+    // P14: Paper/Live mode toggle — cycles LIVE → PAPER → ALL
+    function cycleMode() {
+        var modes = ['live', 'paper', 'all'];
+        var idx = modes.indexOf(currentMode);
+        currentMode = modes[(idx + 1) % modes.length];
+        var btn = document.getElementById('mode-toggle');
+        if (btn) {
+            btn.textContent = currentMode.toUpperCase();
+            btn.style.borderColor = currentMode === 'live' ? 'var(--positive)' : currentMode === 'paper' ? 'var(--text-muted)' : 'var(--text-muted)';
+            btn.style.color = currentMode === 'live' ? 'var(--positive)' : currentMode === 'paper' ? 'var(--text-muted)' : 'var(--text-muted)';
+        }
+        // Update KPI mode display
+        var elMode = document.getElementById('kpi-mode');
+        if (elMode) {
+            if (currentMode === 'live') elMode.textContent = 'LIVE';
+            else if (currentMode === 'paper') elMode.textContent = 'PAPER';
+            else elMode.textContent = 'ALL';
+        }
+        refresh();
+    }
+
+    // ── Time-based greeting ──
+    (function() {
+        const h = new Date().getHours();
+        let g = 'Good evening';
+        if (h >= 5 && h < 12) g = 'Good morning';
+        else if (h >= 12 && h < 18) g = 'Good afternoon';
+        const el = document.getElementById('welcome-greeting');
+        if (el) el.textContent = g + ', welcome back';
+    })();
+
+    // ── KPI Info Modal ──
+    function showKpiInfo(type) {
+        const info = {
+            account: { title: 'Account Value', desc: 'Total portfolio value from HyperLiquid (live). Includes all assets and positions.', links: [{ label: 'Account Settings →', href: '/app/account' }] },
+            pnl: { title: 'Realized PnL', desc: 'Total profit/loss from all closed live trades.', links: [{ label: 'View All Trades →', href: '/app/trades' }] },
+            engines: { title: 'Active Engines', desc: 'Number of running engines out of total. Click to manage engines.', links: [{ label: 'Manage Engines →', href: '/app/engines' }] },
+            positions: { title: 'Open Positions', desc: 'Current open positions across all live engines.', links: [{ label: 'View Positions →', href: '/app/trades' }] },
+            winrate: { title: 'Win Rate', desc: 'Percentage of closed trades that were profitable.', links: [{ label: 'View Trades →', href: '/app/trades' }] },
+            mode: { title: 'Mode', desc: 'LIVE = real orders on HyperLiquid. PAPER = simulated orders, no real money at risk.', links: [{ label: 'Engine Settings →', href: '/app/engines' }] },
+        };
+        const i = info[type];
+        if (!i) return;
+        const messages = document.getElementById('dash-chat-messages');
+        const welcome = document.getElementById('dash-chat-welcome');
+        if (welcome) welcome.style.display = 'none';
+        if (!messages) return;
+        const msg = document.createElement('div');
+        msg.className = 'chat-msg ai';
+        msg.innerHTML = '<strong>' + i.title + '</strong><br>' + i.desc + (i.links.length ? '<br>' + i.links.map(l => '<a href="' + l.href + '" style="color:var(--brand);text-decoration:none;">' + l.label + '</a>').join(' ') : '');
+        messages.appendChild(msg);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    // ── Dashboard Chat ──
+    function sendDashChat() {
+        const input = document.getElementById('dash-chat-input-field');
+        const text = input.value.trim();
+        if (!text) return;
+        const welcome = document.getElementById('dash-chat-welcome');
+        if (welcome) welcome.style.display = 'none';
+        const messages = document.getElementById('dash-chat-messages');
+        if (!messages) return;
+        const userMsg = document.createElement('div');
+        userMsg.className = 'chat-msg user';
+        userMsg.textContent = text;
+        messages.appendChild(userMsg);
+        input.value = '';
+        messages.scrollTop = messages.scrollHeight;
+        // Send to chat API
+        const base = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+        fetch(base + '/api/v2/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, context: 'dashboard' })
+        })
+        .then(r => r.json())
+        .then(j => {
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'chat-msg ai';
+            if (j && j.ok && j.reply) {
+                aiMsg.textContent = j.reply;
+            } else if (j && j.ok === false) {
+                // ponytail: error → inline link to settings, not a dead-end message
+                aiMsg.innerHTML = '⚠ ' + (j.message || 'Assistant unavailable.') +
+                    '<br><a href="/app/settings" style="color:var(--brand);text-decoration:none;font-size:var(--text-xs);">Configure model provider →</a>';
+            } else {
+                aiMsg.textContent = 'Unexpected response. Please try again.';
+            }
+            messages.appendChild(aiMsg);
+            messages.scrollTop = messages.scrollHeight;
+        })
+        .catch(e => {
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'chat-msg ai';
+            aiMsg.innerHTML = '⚠ Connection error.<br><a href="/app/settings" style="color:var(--brand);text-decoration:none;font-size:var(--text-xs);">Check API settings →</a>';
+            messages.appendChild(aiMsg);
+            messages.scrollTop = messages.scrollHeight;
+        });
+    }
+
+    function askQuick(q) {
+        const input = document.getElementById('dash-chat-input-field');
+        if (input) { input.value = q; sendDashChat(); }
+    }
+
+    // ── Engine Carousel ──
+    var carouselOffset = 0;
+    function carouselScroll(dir) {
+        var track = document.getElementById('carousel-track');
+        var viewport = track.parentElement;
+        var cardW = track.querySelector('.carousel-item') ? track.querySelector('.carousel-item').offsetWidth + 16 : 250;
+        var visibleW = viewport.offsetWidth;
+        var totalW = track.scrollWidth;
+        var maxOffset = Math.max(0, totalW - visibleW);
+        carouselOffset = Math.max(0, Math.min(maxOffset, carouselOffset + dir * cardW * 1));
+        track.style.transform = 'translateX(-' + carouselOffset + 'px)';
+        updateCarouselButtons();
+    }
+    function updateCarouselButtons() {
+        var track = document.getElementById('carousel-track');
+        if (!track) return;
+        var viewport = track.parentElement;
+        var totalW = track.scrollWidth;
+        var visibleW = viewport.offsetWidth;
+        var prev = document.getElementById('carousel-prev');
+        var next = document.getElementById('carousel-next');
+        if (prev) prev.disabled = carouselOffset <= 0;
+        if (next) next.disabled = carouselOffset >= totalW - visibleW - 2;
+    }
+    function filterCarousel() {
+        var q = (document.getElementById('engine-search') || {}).value || '';
+        q = q.toLowerCase();
+        document.querySelectorAll('.carousel-item').forEach(function(card) {
+            var name = card.getAttribute('data-name') || '';
+            var token = card.getAttribute('data-token') || '';
+            var match = !q || name.indexOf(q) >= 0 || token.indexOf(q) >= 0;
+            card.style.display = match ? '' : 'none';
+        });
+        carouselOffset = 0;
+        document.getElementById('carousel-track').style.transform = 'translateX(0)';
+        updateCarouselButtons();
+    }
+    // Init buttons on load
+    setTimeout(updateCarouselButtons, 100);
+    window.addEventListener('resize', updateCarouselButtons);
+
+    // ── News Ticker Updates ──
+    function updateTicker(d) {
+        if (!d || !d.ok) return;
+        var totalVal = (d.account_value || 0);  // backend now returns full portfolio value (perps + available spot USDC)
+        var updates = [
+            { id: 'ticker-account', val: fmtUsd(totalVal) },
+            { id: 'ticker-pnl', val: fmtUsd(d.realized_pnl || 0) },
+            { id: 'ticker-engines', val: d.active_engines + '/' + d.total_engines },
+        ];
+        updates.forEach(function(u) {
+            var el = document.getElementById(u.id);
+            if (el && el.textContent !== u.val) {
+                el.textContent = u.val;
+                el.classList.remove('ticker-flash');
+                void el.offsetWidth;
+                el.classList.add('ticker-flash');
+            }
+        });
+        // Token prices from instances
+        if (d.instances) {
+            d.instances.forEach(function(inst) {
+                var el = document.getElementById('ticker-' + inst.token.toLowerCase());
+                if (!el) return;
+                var price = parseFloat(inst.mark_price || 0);
+                var entry = parseFloat(inst.entry_price || 0);
+                var val = '$' + price.toFixed(4);
+                if (el.textContent !== val) {
+                    el.textContent = val;
+                    el.classList.remove('ticker-flash');
+                    void el.offsetWidth;
+                    el.classList.add('ticker-flash');
+                }
+                // Color: emerald if price >= entry, coral if below
+                if (entry > 0) {
+                    el.style.color = price >= entry ? 'var(--profit)' : 'var(--loss)';
+                }
+            });
+        }
+        var now = new Date();
+        var timeEl = document.getElementById('ticker-time');
+        if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', { hour12: false });
+    }
+    
+    // === Position Data ===
+    window.POSITIONS_DATA = window.POSITIONS_DATA || {{ instances | tojson }};
+</script>
+<script src="/static/chat_widget.js"></script>
+<script src="/static/position-card.js"></script>
+{% endblock %}

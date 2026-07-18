@@ -1,0 +1,158 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Add Engine{% endblock %}
+{% block heading %}Add Engine{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto;">
+
+    <form id="instance-form" style="display:flex;flex-direction:column;gap:var(--space-4);">
+
+        {# ── Section: Preset ── #}
+        <div class="chart-card">
+            <div class="card-head">
+                <h2>Preset</h2>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr;gap:var(--space-3);">
+                <div>
+                    <label class="kpi-label" for="preset-select" style="display:block;margin-bottom:4px;">Fleet Preset</label>
+                    <select id="preset-select" name="preset" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);">
+                        <option value="" selected>Custom / Manual</option>
+                        <optgroup label="6-Engine Default Fleet" id="fleet-optgroup"></optgroup>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {# ── Section: Identity ── #}
+        <div class="chart-card">
+            <div class="card-head">
+                <h2>Identity</h2>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);">
+                <div>
+                    <label class="kpi-label" for="name" style="display:block;margin-bottom:4px;">Name *</label>
+                    <input type="text" id="name" name="name" value="FARTCOIN Scalp v1.3" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="slug" style="display:block;margin-bottom:4px;">Slug</label>
+                    <input type="text" id="slug" name="slug" value="" placeholder="auto"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="token" style="display:block;margin-bottom:4px;">Token *</label>
+                    <input type="text" id="token" name="token" value="FARTCOIN" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="strategy_id" style="display:block;margin-bottom:4px;">Strategy *</label>
+                    <select id="strategy_id" name="strategy_id" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                        <option value="engine_v1_3">Engine v1.3 (Scalp)</option>
+                        <option value="engine_v1">Engine v1 (Swing)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {# ── Section: Strategy Parameters ── #}
+        <div class="chart-card">
+            <div class="card-head">
+                <h2>Strategy Parameters</h2>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);">
+                <div>
+                    <label class="kpi-label" for="mode" style="display:block;margin-bottom:4px;">Mode</label>
+                    <select id="mode" name="mode"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                        <option value="Scalp">Scalp</option>
+                        <option value="Swing">Swing</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="kpi-label" for="profile" style="display:block;margin-bottom:4px;">Profile</label>
+                    <input type="text" id="profile" name="profile" value="aggressive_8_3"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="timeframe" style="display:block;margin-bottom:4px;">Timeframe</label>
+                    <select id="timeframe" name="timeframe"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                        <option value="5m">5m</option>
+                        <option value="15m" selected>15m</option>
+                        <option value="30m">30m</option>
+                        <option value="1h">1h</option>
+                        <option value="4h">4h</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="kpi-label" for="leverage" style="display:block;margin-bottom:4px;">Leverage (x)</label>
+                    <input type="number" id="leverage" name="leverage" value="10" min="1" max="50" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="max_position_pct" style="display:block;margin-bottom:4px;">Max Position %</label>
+                    <input type="number" id="max_position_pct" name="max_position_pct" value="0.97" step="0.01" min="0.01" max="1" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="poll_interval_seconds" style="display:block;margin-bottom:4px;">Poll Interval (s)</label>
+                    <input type="number" id="poll_interval_seconds" name="poll_interval_seconds" value="30" min="5" required
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="activation" style="display:block;margin-bottom:4px;">Activation (ticks)</label>
+                    <input type="number" id="activation" name="activation" value="8" min="1"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="offset" style="display:block;margin-bottom:4px;">Offset (ticks)</label>
+                    <input type="number" id="offset" name="offset" value="3" min="1"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+            </div>
+        </div>
+
+        {# ── Section: Credentials (optional) ── #}
+        <div class="chart-card">
+            <div class="card-head">
+                <h2>Credentials <span style="font-size:var(--text-xs);color:var(--text-muted);font-weight:400;">optional — falls back to global env</span></h2>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);">
+                <div>
+                    <label class="kpi-label" for="hyperliquid_private_key" style="display:block;margin-bottom:4px;">HL Private Key</label>
+                    <input type="password" id="hyperliquid_private_key" name="hyperliquid_private_key" value="" placeholder="use global env"
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="account_address" style="display:block;margin-bottom:4px;">Account Address</label>
+                    <input type="text" id="account_address" name="account_address" value="" placeholder="0x..."
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div>
+                    <label class="kpi-label" for="withdrawal_address" style="display:block;margin-bottom:4px;">Withdrawal Address</label>
+                    <input type="text" id="withdrawal_address" name="withdrawal_address" value="" placeholder="0x..."
+                        style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);box-sizing:border-box;">
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:var(--space-2);">
+                    <label class="kpi-label" for="dry_run" style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;font-size:var(--text-sm);color:var(--text-primary);">
+                        <input type="checkbox" id="dry_run" name="dry_run" checked style="width:16px;height:16px;accent-color:var(--brand);">
+                        Dry Run (paper)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {# ── Actions ── #}
+        <div style="display:flex;gap:var(--space-3);justify-content:flex-end;">
+            <a href="/app/engines" class="btn-sm" style="text-decoration:none;padding:var(--space-2) var(--space-4);">Cancel</a>
+            <button type="submit" class="btn-primary" style="padding:var(--space-2) var(--space-5);border:none;border-radius:var(--radius-md);background:var(--btn-primary-bg);color:var(--btn-primary-text);font-size:var(--text-sm);font-weight:var(--weight-semibold);cursor:pointer;">
+                Create Engine
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/instance_form.js"></script>
+{% endblock %}

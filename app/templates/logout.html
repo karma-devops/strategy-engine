@@ -1,0 +1,274 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Logged Out{% endblock %}
+{% block head %}
+<style>
+  /* Full-screen logout — hide chrome */
+  .sidebar, .mobile-nav, .topbar, .burger-btn { display: none !important; }
+  .shell { grid-template-columns: 1fr !important; padding: 0 !important; }
+  .main-content { padding: 0 !important; }
+
+  .logout-veil {
+    position: fixed;
+    inset: 0;
+    background: var(--surface-page);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .logout-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-12) var(--space-10);
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 80px rgba(0,0,0,.35);
+  }
+
+  /* ── Phase 1: Progress ── */
+  #logout-progress { animation: fadeIn 0.3s ease; }
+  .logout-card h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
+  }
+  .logout-card .subtitle {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-8);
+  }
+
+  /* Pulsing ring animation */
+  .progress-ring-container {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--space-6);
+  }
+  .progress-ring {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid var(--surface-inset);
+    border-top-color: var(--brand);
+    animation: spin 1s linear infinite;
+  }
+  .progress-ring-icon {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--brand);
+    font-size: 24px;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 4px;
+    background: var(--surface-inset);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin-bottom: var(--space-3);
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--brand);
+    border-radius: var(--radius-full);
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .progress-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Phase 2: Splash ── */
+  .splash-screen { display: none; }
+  .splash-screen.visible {
+    display: block;
+    animation: splashIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .splash-check {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto var(--space-5);
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-hover));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 32px rgba(0,200,200,0.2);
+  }
+  .splash-check svg { width: 36px; height: 36px; color: #fff; stroke-width: 2.5; }
+  .splash-screen h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-bold);
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
+  }
+  .splash-screen .subtitle {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-6);
+  }
+  .splash-stats {
+    background: var(--surface-inset);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-8);
+    text-align: left;
+  }
+  .splash-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--text-sm);
+  }
+  .splash-stat:last-child { border-bottom: none; }
+  .splash-stat .label { color: var(--text-muted); }
+  .splash-stat .value { color: var(--text-primary); font-family: var(--font-mono); font-weight: var(--weight-semibold); }
+  .splash-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+  }
+  .btn-login {
+    padding: 12px 28px;
+    border-radius: var(--radius-md);
+    background: var(--brand);
+    color: #fff;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: all var(--dur-fast) var(--ease-out);
+    box-shadow: 0 2px 8px rgba(0,200,200,0.25);
+  }
+  .btn-login:hover { background: var(--brand-hover); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,200,200,0.35); }
+  .btn-home {
+    padding: 12px 28px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    text-decoration: none;
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all var(--dur-fast) var(--ease-out);
+  }
+  .btn-home:hover { background: var(--surface-hover); border-color: var(--brand); color: var(--text-primary); }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes splashIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @media (max-width: 480px) {
+    .logout-card { padding: var(--space-8) var(--space-6); margin: var(--space-4); }
+    .splash-actions { flex-direction: column; }
+    .btn-login, .btn-home { width: 100%; text-align: center; }
+  }
+</style>
+{% endblock %}
+
+{% block heading %}Logging Out{% endblock %}
+{% block content %}
+<div class="logout-veil">
+  <div class="logout-card">
+    <!-- Phase 1: Progress -->
+    <div id="logout-progress">
+      <div class="progress-ring-container">
+        <div class="progress-ring"></div>
+        <div class="progress-ring-icon">⚡</div>
+      </div>
+      <h1>Logging out safely…</h1>
+      <p class="subtitle">Clearing session and securing your account.</p>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-label" id="progress-label">Clearing session data…</div>
+    </div>
+
+    <!-- Phase 2: Splash -->
+    <div id="splash-screen" class="splash-screen">
+      <div class="splash-check">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h1>Logged Out</h1>
+      <p class="subtitle">Your session has been securely ended.</p>
+      <div class="splash-stats">
+        <div class="splash-stat">
+          <span class="label">Last Balance</span>
+          <span class="value" id="splash-balance">—</span>
+        </div>
+        <div class="splash-stat">
+          <span class="label">Engines Running</span>
+          <span class="value" id="splash-engines">—</span>
+        </div>
+        <div class="splash-stat">
+          <span class="label">Mode</span>
+          <span class="value" id="splash-mode">—</span>
+        </div>
+      </div>
+      <div class="splash-actions">
+        <a href="/app/dashboard" class="btn-login" id="btn-login">Log In Again</a>
+        <a href="/" class="btn-home">Go to Homepage</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Clear session storage
+  try { sessionStorage.removeItem('pulsr_auth'); sessionStorage.removeItem('sidebar-collapsed'); } catch(_) {}
+
+  // Server-side data already rendered — no need for client-side fetch
+  var balance = '{{ balance }}';
+  var engines = '{{ engines }}';
+  var mode = '{{ mode }}';
+
+  runProgressBar();
+
+  function runProgressBar() {
+    var fill = document.getElementById('progress-fill');
+    var label = document.getElementById('progress-label');
+    var steps = [
+      { pct: 20, text: 'Clearing session data…' },
+      { pct: 45, text: 'Saving preferences…' },
+      { pct: 70, text: 'Disconnecting engines…' },
+      { pct: 90, text: 'Securing connection…' },
+      { pct: 100, text: 'Done.' }
+    ];
+    var i = 0;
+    function next() {
+      if (i >= steps.length) {
+        // Show splash
+        document.getElementById('splash-balance').textContent = balance;
+        document.getElementById('splash-engines').textContent = engines;
+        document.getElementById('splash-mode').textContent = mode;
+        document.getElementById('logout-progress').style.display = 'none';
+        document.getElementById('splash-screen').classList.add('visible');
+        return;
+      }
+      fill.style.width = steps[i].pct + '%';
+      label.textContent = steps[i].text;
+      i++;
+      setTimeout(next, 1800);
+    }
+    next();
+  }
+})();
+</script>
+{% endblock %}

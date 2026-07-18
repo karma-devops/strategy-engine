@@ -1,0 +1,378 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Engines{% endblock %}
+{% block heading %}Engines{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Active Engines</div>
+        <div class="kpi-value" id="kpi-active">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Open PnL</div>
+        <div class="kpi-value {% if open_pnl >= 0 %}positive{% else %}negative{% endif %}" id="kpi-pnl">{{ open_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Win Rate</div>
+        <div class="kpi-value">{{ win_rate }}%</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Closed Trades</div>
+        <div class="kpi-value">{{ total_trades }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Mode</div>
+        <div class="kpi-value {% if dry_run_global %}positive{% else %}negative{% endif %}" id="kpi-dry">{% if dry_run_global %}DRY RUN{% else %}LIVE{% endif %}</div>
+    </div>
+</div>
+
+{# ── Fleet Status Grid ── #}
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Engine Fleet</h2>
+        <div class="card-actions">
+            <a href="/instances/new" class="btn-sm" style="text-decoration:none;color:var(--brand);">+ Add Engine</a>
+        </div>
+    </div>
+    {# ── Sort & Filter Controls ── #}
+    <div class="fleet-controls" style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3);flex-wrap:wrap;">
+        <div class="filter-chips" id="filter-chips" style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="chip active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="chip" data-filter="running" onclick="setFilter('running')">Running</button>
+            <button class="chip" data-filter="stopped" onclick="setFilter('stopped')">Stopped</button>
+            <button class="chip" data-filter="paper" onclick="setFilter('paper')">Paper</button>
+            <button class="chip" data-filter="live" onclick="setFilter('live')">Live</button>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:var(--space-2);">
+            <label for="sort-select" style="font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide);font-weight:var(--weight-semibold);">Sort</label>
+            <select id="sort-select" onchange="setSort(this.value)" style="background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:4px 8px;font-size:var(--text-xs);font-family:var(--font-body);height:28px;">
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="status">Status</option>
+                <option value="pnl-desc">PnL (high→low)</option>
+                <option value="pnl-asc">PnL (low→high)</option>
+                <option value="token">Token</option>
+            </select>
+        </div>
+    </div>
+    <div class="fleet-grid" id="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="window.location='/app/engines/{{ inst.slug }}'" style="cursor:pointer;" data-name="{{ inst.name }}" data-token="{{ inst.token }}" data-pnl="{{ inst.unrealized_pnl }}" data-mode="{% if inst.dry_run %}paper{% else %}live{% endif %}">
+            <div class="fleet-head">
+                <h3>{{ inst.name }}</h3>
+                <span class="tag tag-{{ inst.status }}">{{ inst.status }}</span>
+            </div>
+            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            {# Sparkline #}
+            <div id="spark-{{ inst.slug }}" data-equity="{{ per_inst_equity.get(inst.slug, []) | tojson | safe }}"></div>
+            <div class="fleet-row"><span class="label">Unreal. PnL</span><span class="mono {% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" id="pnl-{{ inst.slug }}">{{ inst.unrealized_pnl | format_usd }}</span></div>
+            <div class="fleet-row"><span class="label">Side</span><span class="tag tag-{{ (inst.position_side or 'flat') | lower }}">{{ inst.position_side or 'FLAT' }}</span></div>
+            <div class="fleet-row"><span class="label">Size</span><span class="mono" id="size-{{ inst.slug }}">{{ '%.4f' | format(inst.position_size) }}</span></div>
+            <div class="fleet-row"><span class="label">Mark</span><span class="mono" id="mark-{{ inst.slug }}">{{ '%.4f' | format(inst.mark_price) }}</span></div>
+            <div class="fleet-row"><span class="label">Lev</span><span class="mono">{{ inst.leverage }}x</span></div>
+            <div class="fleet-row"><span class="label">Mode</span><span class="mono {% if inst.dry_run %}positive{% else %}negative{% endif %}">{% if inst.dry_run %}PAPER{% else %}LIVE{% endif %}</span></div>
+            <div class="fleet-actions" onclick="event.stopPropagation()">
+                {% if inst.status == 'running' %}
+                <button class="fleet-btn btn-stop" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/stop')">Stop</button>
+                <button class="fleet-btn btn-close" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/close')">Close</button>
+                {% else %}
+                <button class="fleet-btn btn-start" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">Start</button>
+                {% endif %}
+                <button class="fleet-btn btn-restart" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/restart')">Restart</button>
+                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;background:var(--surface-inset);border:1px solid var(--border-default);color:var(--text-secondary);">⚙</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# ── Analytics: Returns Distribution + PnL Donut ── #}
+<div class="analytics-grid">
+    <div class="chart-card" style="margin-bottom:0;">
+        <h2>Returns Distribution</h2>
+        {% if dist_bins %}
+        <svg class="chart-histogram" id="hist-svg" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+            <span><span class="dot loss"></span>Losers · avg {{ avg_loss }}%</span>
+            <span><span class="dot win"></span>Winners · avg +{{ avg_profit }}%</span>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:var(--space-6);">
+            <svg width="64" height="48" viewBox="0 0 90 72" aria-hidden="true" style="opacity:0.3;"><path fill="none" stroke="var(--brand)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg>
+            <div class="empty-title">No trades yet</div>
+            <div class="empty-desc">Start an engine to begin generating signals. Trades populate this chart within ~1 poll cycle (15s default). Historical data loads last 500 candles.</div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="chart-card" style="margin-bottom:0;">
+        <h2>PnL Distribution</h2>
+        {% if total_trades > 0 %}
+        <div style="display:flex;gap:var(--space-4);align-items:center;">
+            <svg class="chart-donut" id="donut-svg" viewBox="0 0 160 160"></svg>
+            <div class="donut-legend">
+                <div class="row"><span class="dot win"></span><span class="label">Winners</span><span class="val">{{ wins }} ({{ '%.1f' | format(wins / total_trades * 100 if total_trades else 0) }}%)</span></div>
+                <div class="row"><span class="dot loss"></span><span class="label">Losers</span><span class="val">{{ losses }} ({{ '%.1f' | format(losses / total_trades * 100 if total_trades else 0) }}%)</span></div>
+                <div class="row"><span class="dot be"></span><span class="label">Breakeven</span><span class="val">{{ breakevens }} ({{ '%.1f' | format(breakevens / total_trades * 100 if total_trades else 0) }}%)</span></div>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:var(--space-6);">
+            <svg width="64" height="48" viewBox="0 0 90 72" aria-hidden="true" style="opacity:0.3;"><path fill="none" stroke="var(--brand)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg>
+            <div class="empty-title">No trades yet</div>
+            <div class="empty-desc">Start an engine to begin generating signals. Trades populate this chart within ~1 poll cycle.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Runner Console ── #}
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Runner Console <span class="sse-dot" id="sse-dot" title="Live stream status"></span></h2>
+        <div class="card-actions">
+            <button class="btn-sm" onclick="copyConsole()" title="Copy log">Copy</button>
+            <button class="btn-sm" onclick="clearConsole()" title="Clear log">Clear</button>
+        </div>
+    </div>
+    <div id="console-log" class="console-log"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const distBins = {{ dist_bins | tojson | safe }};
+    const wins = {{ wins }};
+    const losses = {{ losses }};
+    const breakevens = {{ breakevens }};
+    const totalTrades = {{ total_trades }};
+
+    // ── Sparklines ──
+    function buildSparkline(containerId, data) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (!data || data.length < 2) { el.innerHTML = ''; return; }
+        const W = 100, H = 24, PAD = 2;
+        const vals = data.map(Number);
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = (max - min) || 1;
+        const n = vals.length;
+        const pts = vals.map((v, i) => [PAD + (i / (n - 1)) * (W - 2 * PAD), H - PAD - ((v - min) / span) * (H - 2 * PAD)]);
+        let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+        for (let i = 1; i < pts.length; i++) d += ' L' + pts[i][0].toFixed(1) + ',' + pts[i][1].toFixed(1);
+        const last = pts[pts.length - 1];
+        const sign = vals[vals.length - 1] >= vals[0] ? 'positive' : 'negative';
+        el.innerHTML = '<svg class="sparkline" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><path class="' + sign + '" d="' + d + '"/><circle class="' + sign + '" cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '"/></svg>';
+    }
+
+    // Build all sparklines from server data
+    {% for inst in instances %}
+    (function() {
+        const el = document.getElementById('spark-{{ inst.slug }}');
+        if (el) {
+            try { buildSparkline('spark-{{ inst.slug }}', JSON.parse(el.dataset.equity || '[]')); } catch(_) {}
+        }
+    })();
+    {% endfor %}
+
+    // ── Histogram ──
+    function buildHistogram() {
+        const svg = document.getElementById('hist-svg');
+        if (!svg || !distBins.length) return;
+        const W = 600, H = 180, PAD_L = 30, PAD_R = 10, PAD_T = 10, PAD_B = 30;
+        const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+        const maxCount = Math.max(...distBins.map(b => b.count), 1);
+        const barW = innerW / distBins.length;
+        let svgContent = '';
+        // Zero line
+        const zeroBinIdx = distBins.findIndex(b => b.lo <= 0 && b.hi > 0);
+        if (zeroBinIdx >= 0) {
+            const zx = PAD_L + zeroBinIdx * barW + barW / 2;
+            svgContent += '<line class="zero-line" x1="' + zx + '" y1="' + PAD_T + '" x2="' + zx + '" y2="' + (H - PAD_B) + '"/>';
+        }
+        // Bars
+        distBins.forEach((b, i) => {
+            const x = PAD_L + i * barW + 2;
+            const h = (b.count / maxCount) * innerH;
+            const y = H - PAD_B - h;
+            const cls = b.is_win ? 'win' : 'loss';
+            svgContent += '<rect class="bar fade-up ' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + (barW - 4).toFixed(1) + '" height="' + h.toFixed(1) + '" style="animation-delay:' + (i * 0.03) + 's"/>';
+        });
+        // Avg lines
+        const allLos = distBins[0].lo, allHi = distBins[distBins.length - 1].hi;
+        const span = allHi - allLos || 1;
+        const xForPct = p => PAD_L + ((p - allLos) / span) * innerW;
+        const avgProfitX = xForPct({{ avg_profit }});
+        const avgLossX = xForPct({{ avg_loss }});
+        svgContent += '<line class="avg-line win" x1="' + avgProfitX.toFixed(1) + '" y1="' + PAD_T + '" x2="' + avgProfitX.toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+        svgContent += '<line class="avg-line loss" x1="' + avgLossX.toFixed(1) + '" y1="' + PAD_T + '" x2="' + avgLossX.toFixed(1) + '" y2="' + (H - PAD_B) + '"/>';
+        // X-axis labels
+        svgContent += '<text class="axis-label" x="' + PAD_L + '" y="' + (H - 8) + '">' + allLos.toFixed(1) + '%</text>';
+        svgContent += '<text class="axis-label" x="' + (W / 2) + '" y="' + (H - 8) + '" text-anchor="middle">0%</text>';
+        svgContent += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (H - 8) + '" text-anchor="end">' + allHi.toFixed(1) + '%</text>';
+        svg.innerHTML = svgContent;
+    }
+    buildHistogram();
+
+    // ── Donut ──
+    function buildDonut() {
+        const svg = document.getElementById('donut-svg');
+        if (!svg) return;
+        const total = wins + losses + breakevens;
+        if (total === 0) return;
+        const cx = 80, cy = 80, r = 55;
+        const C = 2 * Math.PI * r;
+        let offset = 0;
+        let content = '';
+        const segments = [
+            { count: wins, cls: 'win' },
+            { count: losses, cls: 'loss' },
+            { count: breakevens, cls: 'be' }
+        ];
+        segments.forEach(s => {
+            if (s.count === 0) return;
+            const frac = s.count / total;
+            const dash = frac * C;
+            content += '<circle class="arc ' + s.cls + '" cx="' + cx + '" cy="' + cy + '" r="' + r + '" stroke-dasharray="' + dash.toFixed(1) + ' ' + (C - dash).toFixed(1) + '" stroke-dashoffset="' + (-offset).toFixed(1) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+            offset += dash;
+        });
+        content += '<text class="center-val" x="' + cx + '" y="' + (cy - 6) + '">' + total + '</text>';
+        content += '<text class="center-label" x="' + cx + '" y="' + (cy + 12) + '">Trades</text>';
+        svg.innerHTML = content;
+    }
+    buildDonut();
+
+    // ── Sort & Filter ──
+    let currentFilter = 'all';
+    let currentSort = 'name-asc';
+
+    function setFilter(filter) {
+        currentFilter = filter;
+        document.querySelectorAll('#filter-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.filter === filter));
+        applySortFilter();
+    }
+
+    function setSort(sort) {
+        currentSort = sort;
+        applySortFilter();
+    }
+
+    function applySortFilter() {
+        const grid = document.getElementById('fleet-grid');
+        if (!grid) return;
+        const cards = Array.from(grid.children);
+        // Filter
+        const filtered = cards.filter(card => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'running') return card.classList.contains('running');
+            if (currentFilter === 'stopped') return !card.classList.contains('running');
+            if (currentFilter === 'paper') return card.dataset.mode === 'paper';
+            if (currentFilter === 'live') return card.dataset.mode === 'live';
+            return true;
+        });
+        // Sort
+        filtered.sort((a, b) => {
+            const nameA = (a.dataset.name || '').toLowerCase();
+            const nameB = (b.dataset.name || '').toLowerCase();
+            const pnlA = parseFloat(a.dataset.pnl) || 0;
+            const pnlB = parseFloat(b.dataset.pnl) || 0;
+            const statusA = a.classList.contains('running') ? 0 : 1;
+            const statusB = b.classList.contains('running') ? 0 : 1;
+            const tokenA = (a.dataset.token || '').toLowerCase();
+            const tokenB = (b.dataset.token || '').toLowerCase();
+            switch (currentSort) {
+                case 'name-asc': return nameA.localeCompare(nameB);
+                case 'name-desc': return nameB.localeCompare(nameA);
+                case 'status': return statusA - statusB;
+                case 'pnl-desc': return pnlB - pnlA;
+                case 'pnl-asc': return pnlA - pnlB;
+                case 'token': return tokenA.localeCompare(tokenB);
+                default: return 0;
+            }
+        });
+        // Re-append in sorted order
+        filtered.forEach(card => grid.appendChild(card));
+        // Hide non-filtered
+        cards.forEach(card => {
+            card.style.display = filtered.includes(card) ? '' : 'none';
+        });
+    }
+
+    // ── Live API loop ──
+    const API_KEY = "{{ api_key }}";
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    // ponytail: simplest refresh after button click — reload page to get fresh server-rendered cards
+    function apiPost(path) {
+        fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(j => { addConsole('cmd', (j.message || path) + (j.ok !== undefined ? ' [ok=' + j.ok + ']' : '')); setTimeout(() => location.reload(), 500); })
+            .catch(e => addConsole('err', 'POST ' + path + ' failed: ' + e));
+    }
+
+    function refresh() {
+        fetch(API_BASE + '/api/v2/summary', { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) return;
+                let active = 0;
+                (d.instances || []).forEach(inst => {
+                    const pnlEl = document.getElementById('pnl-' + inst.slug);
+                    if (pnlEl) { pnlEl.textContent = fmtUsd(inst.unrealized_pnl); pnlEl.className = 'mono ' + (inst.unrealized_pnl >= 0 ? 'positive' : 'negative'); }
+                    const sizeEl = document.getElementById('size-' + inst.slug);
+                    if (sizeEl) sizeEl.textContent = (parseFloat(inst.position_size) || 0).toFixed(4);
+                    const markEl = document.getElementById('mark-' + inst.slug);
+                    if (markEl) markEl.textContent = (parseFloat(inst.mark_price) || 0).toFixed(4);
+                    if (inst.status === 'running') active++;
+                });
+                const activeEl = document.getElementById('kpi-active');
+                if (activeEl) activeEl.innerHTML = active + ' <span style="font-size:var(--text-sm);color:var(--text-muted);">/ ' + (d.instances || []).length + '</span>';
+                const pnlEl = document.getElementById('kpi-pnl');
+                if (pnlEl) { const tp = d.open_pnl || 0; pnlEl.textContent = fmtUsd(tp); pnlEl.className = 'kpi-value ' + (tp >= 0 ? 'positive' : 'negative'); }
+            })
+            .catch(e => addConsole('err', 'summary fetch failed: ' + e));
+    }
+
+    // ── Console helpers ──
+    function copyConsole() {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const txt = Array.from(box.children).map(l => l.textContent).join('\n');
+        if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => addConsole('cmd', 'Console copied'));
+    }
+    function clearConsole() {
+        const box = document.getElementById('console-log');
+        if (box) box.innerHTML = '<div class="console-line">Console cleared.</div>';
+    }
+    function addConsole(kind, msg) {
+        const box = document.getElementById('console-log');
+        if (!box) return;
+        const line = document.createElement('div');
+        line.className = 'console-line console-' + (kind || 'info');
+        const t = new Date().toLocaleTimeString('en-US', { hour12: false });
+        line.textContent = '[' + t + '] ' + msg;
+        box.insertBefore(line, box.firstChild);
+        while (box.childElementCount > 200) box.removeChild(box.lastChild);
+    }
+
+    // ── SSE ──
+    if (typeof EventSource !== 'undefined') {
+        const es = new EventSource(API_BASE + '/stream');
+        const sseDot = document.getElementById('sse-dot');
+        es.onopen = () => { if (sseDot) sseDot.className = 'sse-dot live'; };
+        es.onmessage = ev => {
+            if (sseDot) sseDot.className = 'sse-dot live';
+            try {
+                const e = JSON.parse(ev.data);
+                if (e.type === 'log') addConsole(e.log.level || 'info', e.log.message);
+                else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
+                else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
+                else if (e.type === 'ping') {}
+            } catch (_) {}
+        };
+        es.onerror = () => { if (sseDot) sseDot.className = 'sse-dot dead'; addConsole('err', 'SSE stream disconnected'); };
+    }
+
+    refresh();
+    setInterval(refresh, 3000);
+</script>
+{% endblock %}

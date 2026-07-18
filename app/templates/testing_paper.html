@@ -1,0 +1,327 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Paper Trading{% endblock %}
+{% block heading %}Paper Trading{% endblock %}
+{% block content %}
+<style>
+    .equity-svg { width: 100%; height: 100%; display: block; }
+    .equity-svg .eq-path { fill: none; stroke: var(--brand); stroke-width: 2; }
+    .equity-svg .eq-path.negative { stroke: var(--color-loss); }
+    .equity-svg .eq-area { fill: rgba(57,208,216,0.08); }
+    .equity-svg .eq-area.negative { fill: rgba(239,83,80,0.08); }
+    .equity-svg .eq-dot { fill: var(--brand); }
+    .equity-svg .eq-dot.negative { fill: var(--color-loss); }
+    /* Paper page viewport layout */
+    .paper-viewport { display: flex; flex-direction: column; gap: var(--space-3); }
+    .paper-viewport .kpi-grid { flex-shrink: 0; }
+    .paper-charts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); flex: 1; min-height: 0; overflow: hidden; }
+    .paper-charts .chart-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .paper-charts .chart-card .card-head { flex-shrink: 0; }
+    .paper-charts .chart-card > div:last-child { flex: 1; min-height: 0; }
+    .paper-engines { flex-shrink: 0; max-height: 200px; overflow-y: auto; }
+    @media (max-width: 768px) { .paper-charts { grid-template-columns: 1fr; } }
+</style>
+
+<div class="paper-viewport">
+<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Active Engines<span class="tip-i" data-tip="Paper engines currently running (dry_run=True)"></span></div><div class="kpi-value" id="kpi-active-engines">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div></div>
+    <div class="kpi"><div class="kpi-label">Mode<span class="tip-i" data-tip="Paper trading uses simulated orders, no real money at risk"></span></div><div class="kpi-value"><span class="tag tag-flat">Paper Trading</span></div></div>
+</div>
+
+<div class="paper-charts">
+<div class="chart-card">
+    <div class="card-head"><h2>Equity & Trades (Paper)</h2></div>
+    <div id="equityChart-wrap" style="position:relative;width:100%;flex:1;min-height:0;">
+        <div id="equityChart" style="width:100%;height:100%;"></div>
+        <div id="equity-empty" class="empty-state" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+            <div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div>
+            <div class="empty-state" style="margin-top:var(--space-2);">
+                <h3>No equity data yet</h3>
+                <p>Start a paper engine to see your equity curve here.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if instances %}
+<div class="chart-card">
+    <div class="card-head">
+        <h2 id="token-chart-title">Token Price Chart</h2>
+        <div style="display:flex;gap:var(--space-1);flex-wrap:wrap;" id="tf-chips">
+            <button class="chip" onclick="loadPaperTokenChart('5m', this)" style="padding:2px 8px;font-size:11px;">5m</button>
+            <button class="chip active" onclick="loadPaperTokenChart('15m', this)" style="padding:2px 8px;font-size:11px;">15m</button>
+            <button class="chip" onclick="loadPaperTokenChart('1h', this)" style="padding:2px 8px;font-size:11px;">1h</button>
+            <button class="chip" onclick="loadPaperTokenChart('4h', this)" style="padding:2px 8px;font-size:11px;">4h</button>
+        </div>
+    </div>
+    <div id="paperTokenChart-wrap" style="position:relative;width:100%;flex:1;min-height:0;">
+        <div id="paperTokenChart" style="width:100%;height:100%;"></div>
+        <div id="paperToken-empty" class="empty-state" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+            <div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div>
+            <div class="empty-state" style="margin-top:var(--space-2);">
+                <h3>Loading token price data</h3>
+                <p>Fetching candles from HyperLiquid...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+</div><!-- .paper-charts -->
+
+<div class="chart-card paper-engines">
+    <div class="card-head"><h2>Paper Engines</h2></div>
+    {% if instances %}
+    <div class="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}"
+             onclick="window.location='/app/engines/{{ inst.slug }}'"
+             style="cursor:pointer;">
+            <div class="fleet-card-head"><h3>{{ inst.name }}</h3><span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}" id="status-{{ inst.slug }}" data-status="{{ inst.status }}">{{ inst.status }}</span></div>
+            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            {# Per-instance sparkline container — populated by PulsRChart.createSparkline #}
+            <div id="spark-{{ inst.slug }}" data-equity='{{ inst.equity | default([]) | tojson }}' style="width:100%;height:36px;margin:var(--space-1) 0;"></div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+            {# Per-instance action buttons — event.stopPropagation() prevents card-level navigation #}
+            <div class="fleet-actions" onclick="event.stopPropagation()" style="display:flex;gap:var(--space-2);margin-top:var(--space-3);flex-wrap:wrap;">
+                {% if inst.status == 'running' %}
+                <button class="fleet-btn btn-stop" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/stop', '{{ inst.name }}')"
+                        aria-label="Stop engine {{ inst.name }}">⏹ Stop</button>
+                <button class="fleet-btn btn-close" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/close', '{{ inst.name }}')"
+                        aria-label="Close position for {{ inst.name }}">✕ Close</button>
+                {% else %}
+                <button class="fleet-btn btn-start" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/start', '{{ inst.name }}')"
+                        aria-label="Start engine {{ inst.name }}">▶ Start</button>
+                {% endif %}
+                <button class="fleet-btn btn-restart" type="button"
+                        onclick="paperApiPost('/api/v2/instances/{{ inst.slug }}/restart', '{{ inst.name }}')"
+                        aria-label="Restart engine {{ inst.name }}">↻ Restart</button>
+                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn fleet-btn-icon" aria-label="Edit settings for {{ inst.name }}">⚙</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No paper engines. Create one with dry_run=True in <a href="/app/engines" style="color:var(--brand);">Engines →</a></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// API credentials + base — mirrors engines.html pattern.
+const API_KEY = "{{ api_key or '' }}";
+const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+
+// paperApiPost — fire-and-forget action on a paper engine. Reuses the
+// same endpoint as live engines, just with dry_run=true on the instance.
+// Updates the DOM in-place via refreshPaperStatus() — no page reload.
+function paperApiPost(path, label) {
+    fetch(API_BASE + path, { method: 'POST', headers: { 'X-API-Key': API_KEY } })
+        .then(r => r.json())
+        .then(j => {
+            const ok = (j && j.ok);
+            showPaperToast((label || path) + ' → ' + (j.message || (ok ? 'ok' : 'failed')), ok);
+            if (ok) {
+                // Status takes a moment to flip; poll once after 600ms then again at 1.4s
+                setTimeout(refreshPaperStatus, 600);
+                setTimeout(refreshPaperStatus, 1400);
+            }
+        })
+        .catch(e => showPaperToast((label || path) + ' failed: ' + e, false));
+}
+
+// B.5 — Live status refresh. Fetches /api/v2/instances, diffs against the
+// rendered DOM, updates only the elements that changed. No flicker, no
+// full reload. Called after actions + on a 3s background poll.
+function refreshPaperStatus() {
+    if (!API_KEY) return;
+    fetch(API_BASE + '/api/v2/instances', { headers: { 'X-API-Key': API_KEY } })
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok || !j.instances) return;
+            const insts = j.instances.filter(i => i.dry_run);
+            // Update KPI active count
+            const active = insts.filter(i => i.status === 'running').length;
+            const total = insts.length;
+            const kpi = document.getElementById('kpi-active-engines');
+            if (kpi) {
+                const desired = active + ' <span style="font-size:var(--text-sm);color:var(--text-muted);">/ ' + total + '</span>';
+                if (kpi.innerHTML.trim() !== desired.trim()) kpi.innerHTML = desired;
+            }
+            // Update each engine status pill
+            for (const i of insts) {
+                const pill = document.getElementById('status-' + i.slug);
+                if (pill && pill.getAttribute('data-status') !== i.status) {
+                    pill.setAttribute('data-status', i.status);
+                    pill.textContent = i.status;
+                    // Swap color class
+                    pill.classList.remove('tag-running', 'tag-flat');
+                    pill.classList.add(i.status === 'running' ? 'tag-running' : 'tag-flat');
+                    // Also update parent .fleet-card class
+                    const card = pill.closest('.fleet-card');
+                    if (card) card.classList.toggle('running', i.status === 'running');
+                }
+            }
+        })
+        .catch(() => {});
+}
+
+// Background poll every 3s — picks up engine state changes that happen
+// outside the user's actions (e.g., engine stops on its own).
+setInterval(refreshPaperStatus, 3000);
+
+// Minimal toast — uses a single fixed div created on first call.
+let _paperToast = null;
+function showPaperToast(msg, ok) {
+    if (!_paperToast) {
+        _paperToast = document.createElement('div');
+        _paperToast.setAttribute('role', 'status');
+        _paperToast.setAttribute('aria-live', 'polite');
+        Object.assign(_paperToast.style, {
+            position: 'fixed', bottom: '20px', right: '20px', zIndex: '9999',
+            padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+            fontWeight: '500', color: '#fff', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            maxWidth: '320px', opacity: '0', transition: 'opacity .15s ease-out',
+        });
+        document.body.appendChild(_paperToast);
+    }
+    _paperToast.style.background = (ok === false) ? '#dc2626' : '#08798E';
+    _paperToast.textContent = msg;
+    _paperToast.style.opacity = '1';
+    clearTimeout(_paperToast._t);
+    _paperToast._t = setTimeout(() => { _paperToast.style.opacity = '0'; }, 2200);
+}
+
+// P14: Paper equity + trade barchart. Uses hybrid chart showing green/red PnL bars
+// along the equity curve, instead of a plain line chart.
+const equityData = {{ equity_series | tojson | safe }};
+const tradeData = {{ paper_trades | tojson | safe }};
+const _equityEmpty = document.getElementById('equity-empty');
+const paperChart = (typeof PulsRChart !== 'undefined')
+    ? PulsRChart.createEquityBarChart('equityChart', { height: 280 })
+    : null;
+if (paperChart) {
+    // Convert trade timestamps to chart format for bar overlay
+    const tradeBars = tradeData
+        .filter(t => t.time_unix > 0)
+        .map(t => ({ time: t.time_unix, value: t.pnl_usd }));
+    paperChart.setData(equityData, tradeBars);
+    if (equityData && equityData.length > 1 && _equityEmpty) {
+        _equityEmpty.style.display = 'none';
+    }
+}
+
+// ── Token Price Candlestick Chart (primary paper engine token) ──
+const paperTokenEmpty = document.getElementById('paperToken-empty');
+let paperTokenChart = null;
+let paperTokenTF = '15m';
+const PAPER_TOKEN = '{{ instances[0].token if instances else "HYPE" }}';
+
+function loadPaperTokenChart(tf, btn) {
+    paperTokenTF = tf || paperTokenTF;
+    if (btn) {
+        document.querySelectorAll('#tf-chips .chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    if (paperTokenEmpty) paperTokenEmpty.style.display = 'flex';
+    const url = API_BASE + '/api/v2/candles/' + encodeURIComponent(PAPER_TOKEN) + '?timeframe=' + paperTokenTF + '&bars=200';
+    fetch(url)
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok || !j.candles || j.candles.length === 0) return;
+            if (!paperTokenChart) {
+                paperTokenChart = (typeof PulsRChart !== 'undefined')
+                    ? PulsRChart.createCandleChart('paperTokenChart', { height: 300 })
+                    : null;
+            }
+            if (!paperTokenChart) return;
+            paperTokenChart.setData(j.candles);
+            if (paperTokenEmpty) paperTokenEmpty.style.display = 'none';
+            const title = document.getElementById('token-chart-title');
+            if (title) title.textContent = PAPER_TOKEN + ' Price Chart';
+        })
+        .catch(e => { console.error('Paper token chart load failed:', e); });
+}
+
+// Auto-load on page entry
+if (PAPER_TOKEN) loadPaperTokenChart();
+setInterval(() => { if (paperTokenChart) loadPaperTokenChart(); }, 30000);
+
+// B.9 — Per-engine sparklines. Each fleet card has a #spark-{slug} div
+// with data-equity='[...]' (JSON array of {time, value} from the route).
+// PulsRChart.createSparkline renders a tiny LWC line chart (no axes).
+document.querySelectorAll('[id^="spark-"]').forEach(function(el) {
+    var raw = el.getAttribute('data-equity') || '[]';
+    var data;
+    try { data = JSON.parse(raw); } catch (e) { data = []; }
+    if (data && data.length >= 2 && typeof PulsRChart !== 'undefined') {
+        var spark = PulsRChart.createSparkline(el, { height: 36, width: el.clientWidth || 200 });
+        if (spark) spark.setData(data);
+    }
+});
+
+// P14: Live update via /api/v2/summary?mode=paper (3s poll) — paper data only
+let lastEquityValue = (equityData && equityData.length) ? parseFloat(equityData[equityData.length - 1].value) : null;
+setInterval(() => {
+    if (!paperChart) return;
+    fetch(API_BASE + '/api/v2/summary?mode=paper', { headers: { 'X-API-Key': API_KEY } })
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok) return;
+            const v = (j.account_value_equity !== undefined) ? j.account_value_equity : null;
+            if (v == null) return;
+            // Hide empty state on first live data
+            if (_equityEmpty) _equityEmpty.style.display = 'none';
+            // Only update if value changed (avoid jitter)
+            if (lastEquityValue == null || Math.abs(v - lastEquityValue) > 0.0001) {
+                lastEquityValue = v;
+                paperChart.update({ time: Math.floor(Date.now() / 1000), value: v });
+            }
+        })
+        .catch(() => {});
+}, 3000);
+</script>
+
+</div><!-- .paper-viewport -->
+
+<!-- P14e: Paper Trades Table -->
+{% if paper_trades %}
+<div class="card" style="margin-top:24px;">
+    <div class="card-head">
+        <h2>Paper Trade History</h2>
+        <span class="tag tag-flat">{{ paper_trades|length }}</span>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px;">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Time</th>
+            <th>Engine</th>
+            <th>Side</th>
+            <th>Size</th>
+            <th>PnL $</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for t in paper_trades %}
+        <tr>
+            <td>{{ t.time }}</td>
+            <td>{{ t.instance }}</td>
+            <td><span class="badge {% if t.side == 'LONG' %}badge-buy{% else %}badge-sell{% endif %}">{{ t.side }}</span></td>
+            <td>{{ t.size }}</td>
+            <td style="color:{% if t.pnl_usd > 0 %}var(--color-profit){% elif t.pnl_usd < 0 %}var(--color-loss){% else %}var(--text-muted){% endif %};">{{ t.pnl_usd }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% else %}
+<div class="card" style="margin-top:24px;">
+    <div class="empty">No paper trades yet. Start a dry-run engine to generate simulated trades.</div>
+</div>
+{% endif %}
+
+{% endblock %}

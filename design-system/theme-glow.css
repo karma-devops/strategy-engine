@@ -1,0 +1,221 @@
+/*
+ * Theme Glow — Aura Spectrum Extension
+ * Authority: Extends MASTER.md — does NOT override.
+ * Purpose: Broaden MASTER palette with luminous aura effects for pulse graph, status dots, hover halos.
+ * Performance Budget: ≤8 glowing elements mobile, ≤15 desktop.
+ */
+
+:root {
+  /*==========================================================
+   * LAYER 1: Primitive Glow Colors (resolve to MASTER base tokens)
+   ==========================================================================*/
+  --glow-profit-base: var(--color-profit);    /* #34D399 */
+  --glow-loss-base: var(--color-loss);        /* #FB7185 */
+  --glow-brand-base: var(--color-brand);      /* #06D6A0 */
+  --glow-surface-base: var(--surface-card);   /* #15100B */
+
+  /*==========================================================
+   * LAYER 2: Semantic Glow Tokens (opacity + blur applied)
+   ==========================================================================*/
+  /* Profit Glow */
+  --glow-profit-weak:  rgba(52, 211, 153, 0.15);   /* 15% opacity, subtle */
+  --glow-profit-med:   rgba(52, 211, 153, 0.3);    /* 30% opacity, standard */
+  --glow-profit-strong:rgba(52, 211, 153, 0.4);    /* 40% opacity, focused */
+
+  /* Loss Glow */
+  --glow-loss-weak:    rgba(251, 113, 133, 0.15);  /* 15% opacity, subtle */
+  --glow-loss-med:     rgba(251, 113, 133, 0.3);   /* 30% opacity, standard */
+  --glow-loss-strong:  rgba(251, 113, 133, 0.4);   /* 40% opacity, focused */
+
+  /* Brand Glow */
+  --glow-brand-weak:   rgba(6, 214, 160, 0.15);    /* 15% opacity, subtle */
+  --glow-brand-med:    rgba(6, 214, 160, 0.3);     /* 30% opacity, standard */
+  --glow-brand-strong: rgba(6, 214, 160, 0.4);     /* 40% opacity, focused */
+}
+
+/*--- Light Mode Adjustment (50% opacity reduction) ---*/
+@media (prefers-color-scheme: light) {
+  :root {
+    --glow-profit-weak: rgba(52, 211, 153, 0.08);
+    --glow-profit-med:  rgba(52, 211, 153, 0.15);
+    --glow-profit-strong:rgba(52, 211, 153, 0.2);
+
+    --glow-loss-weak:   rgba(251, 113, 133, 0.08);
+    --glow-loss-med:    rgba(251, 113, 133, 0.15);
+    --glow-loss-strong: rgba(251, 113, 133, 0.2);
+
+    --glow-brand-weak:  rgba(6, 214, 160, 0.08);
+    --glow-brand-med:   rgba(6, 214, 160, 0.15);
+    --glow-brand-strong:rgba(6, 214, 160, 0.2);
+  }
+}
+
+/*--- Reduced Motion Support ---*/
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* No motion animations */
+  }
+  
+  .status-dot.running {
+    animation: none;
+  }
+  
+  .pos-card,
+  .btn-cta,
+  .kpi-card {
+    transition: none;
+  }
+}
+
+/*==========================================================
+ * LAYER 3: Component Application Tokens
+ ==========================================================================*/
+
+/*--- Pulse Path Glow (equity curve SVG) ---*/
+.pulse-glow-path {
+  filter: drop-shadow(0 0 8px var(--glow-brand-med));
+}
+
+/*--- Status Dot Glow (engine running indicator) ---*/
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 transparent;
+}
+
+.status-dot.running {
+  background: var(--color-brand);
+  box-shadow: 0 0 12px var(--glow-status-dot);
+  animation: status-dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-dot-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px var(--glow-brand-weak);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 18px var(--glow-brand-weak), 0 0 24px var(--glow-brand-weak);
+  }
+}
+
+/*--- Position Card Hover Halo ---*/
+.pos-card {
+  box-shadow: 0 0 0 transparent;
+  transition: box-shadow 0.2s ease;
+}
+
+.pos-card:hover {
+  box-shadow: 0 0 16px var(--glow-pos-card-hover), inset 0 0 8px var(--glow-profit-weak);
+}
+
+.pos-card[data-side="short"]:hover {
+  box-shadow: 0 0 16px var(--glow-loss-weak), inset 0 0 8px var(--glow-loss-weak);
+}
+
+/*--- KPI Border-Top Glow (Focused State) ---*/
+.kpi-card {
+  border-top: 3px solid transparent;
+}
+
+.kpi-card.focused {
+  border-top: 3px solid var(--color-brand);
+  box-shadow: 0 -4px 12px var(--glow-kpi-focused);
+}
+
+/*--- CTA Button Hover Glow ---*/
+.btn-cta {
+  background: var(--color-brand);
+  color: var(--surface-card);
+  transition: all 0.2s ease;
+  box-shadow: 0 0 0 transparent;
+}
+
+.btn-cta:hover {
+  background: var(--color-brand);
+  box-shadow: 0 0 16px var(--glow-cta-hover);
+  transform: translateY(-1px);
+}
+
+/*--- Pulse Graph SVG Duplicate-Layer Technique
+   (stronger glow, use sparingly — high perf cost)
+   ==========================================================================*/
+#pulse-glow-layer {
+  stroke: var(--glow-brand-med);
+  stroke-width: 6;
+  filter: blur(4px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+#pulse-path {
+  stroke: var(--color-brand);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px var(--glow-pulse-path));
+}
+
+/*==========================================================
+ * Utility Classes (ready to apply inline or via class)
+ ==========================================================================*/
+
+.glow-profit-weak {
+  box-shadow: 0 0 12px var(--glow-profit-weak);
+}
+
+.glow-profit-med {
+  box-shadow: 0 0 16px var(--glow-profit-med);
+}
+
+.glow-profit-strong {
+  box-shadow: 0 0 24px var(--glow-profit-strong);
+}
+
+.glow-loss-weak {
+  box-shadow: 0 0 12px var(--glow-loss-weak);
+}
+
+.glow-loss-med {
+  box-shadow: 0 0 16px var(--glow-loss-med);
+}
+
+.glow-loss-strong {
+  box-shadow: 0 0 24px var(--glow-loss-strong);
+}
+
+.glow-brand-weak {
+  box-shadow: 0 0 12px var(--glow-brand-weak);
+}
+
+.glow-brand-med {
+  box-shadow: 0 0 16px var(--glow-brand-med);
+}
+
+.glow-brand-strong {
+  box-shadow: 0 0 24px var(--glow-brand-strong);
+}
+
+/*--- Glow SVG Path Pattern ---*/
+.glow-svg-path {
+  filter: drop-shadow(0 0 8px currentcolor);
+}
+
+/*--- Glow Status Dot Pattern ---*/
+.glow-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentcolor;
+  box-shadow: 0 0 12px currentcolor;
+}
+
+.glow-status-dot.running {
+  animation: status-dot-pulse 2s ease-in-out infinite;
+}
+
+/*==========================================================
+ * Performance Guard: Max Elements Warning (dev-only)
+ ==========================================================================*/
+/* In development, add a counter to track glowing elements.
+ * If >8 (mobile) or >15 (desktop), consider reducing opacity or removing. */

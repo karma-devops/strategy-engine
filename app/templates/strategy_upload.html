@@ -1,0 +1,144 @@
+{% extends "layout.html" %}
+{% block title %}PULS·R — Upload Strategy{% endblock %}
+{% block heading %}Upload Strategy{% endblock %}
+{% block content %}
+<style>
+    .upload-form { display: flex; flex-direction: column; gap: var(--space-3); max-width: 900px; }
+    .upload-field { display: flex; flex-direction: column; gap: 4px; }
+    .upload-field label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
+    .upload-field input { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-family: var(--font-body); font-size: var(--text-sm); height: 36px; }
+    .upload-field input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+    .upload-field textarea { background: #0d0d0d; color: #c5c5c5; border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 12px; font-family: 'SF Mono', 'Cascadia Code', var(--font-mono); font-size: 12px; line-height: 1.6; min-height: 400px; resize: vertical; width: 100%; }
+    .upload-field textarea:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+    .upload-hint { font-size: var(--text-xs); color: var(--text-muted); }
+    .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+    .upload-actions { display: flex; gap: var(--space-2); align-items: center; }
+    .upload-status { font-size: var(--text-sm); margin-top: var(--space-2); }
+    .upload-status.success { color: var(--color-profit); }
+    .upload-status.error { color: var(--color-loss); }
+    .tab-toggle { display: flex; gap: 0; margin-bottom: var(--space-3); }
+    .tab-toggle button { padding: var(--space-2) var(--space-3); background: var(--surface-inset); border: 1px solid var(--border-subtle); color: var(--text-muted); cursor: pointer; font-size: var(--text-sm); font-weight: 500; transition: all 0.15s; }
+    .tab-toggle button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .tab-toggle button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .tab-toggle button.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .tab-toggle button:hover:not(.active) { background: var(--surface); color: var(--text-primary); }
+</style>
+
+<div class="chart-card">
+    <div class="card-head">
+        <h2>Upload Strategy</h2>
+        <a href="/app/strategies" class="btn-sm" style="text-decoration:none;color:var(--text-muted);">← Back to Strategies</a>
+    </div>
+    <p style="color:var(--text-muted);font-size:var(--text-sm);margin-bottom:var(--space-3);">
+        Upload a PineScript strategy (saved as <strong style="color:var(--text-secondary);">pending</strong> — convert via Studio)
+        or a Python strategy (<strong style="color:var(--text-secondary);">validated & activated immediately</strong>).
+    </p>
+
+    <div class="tab-toggle">
+        <button id="tab-pine" class="active" onclick="switchTab('pine')">PineScript</button>
+        <button id="tab-python" onclick="switchTab('python')">Python</button>
+    </div>
+
+    <form class="upload-form" onsubmit="submitUpload(event)">
+        <input type="hidden" id="source_type" value="pine">
+        <div class="upload-row">
+            <div class="upload-field">
+                <label for="name">Strategy Name</label>
+                <input id="name" type="text" placeholder="e.g. My Scalp v2" required>
+            </div>
+            <div class="upload-field">
+                <label for="slug">Strategy ID (slug)</label>
+                <input id="slug" type="text" placeholder="e.g. my_scalp_v2" required>
+                <span class="upload-hint">Lowercase, underscores only. Must be unique.</span>
+            </div>
+        </div>
+        <div id="pine-section">
+            <div class="upload-field">
+                <label for="pine">PineScript Source</label>
+                <textarea id="pine" placeholder="//@version=6&#10;strategy('My Strategy', ...)&#10;&#10;// Paste your PineScript code here"></textarea>
+            </div>
+        </div>
+        <div id="python-section" style="display:none;">
+            <div class="upload-field">
+                <label for="python">Python Source</label>
+                <textarea id="python" placeholder="from engine.base import BaseStrategy&#10;import pandas as pd&#10;&#10;class MyStrategy(BaseStrategy):&#10;    def __init__(self, name='My Strategy', **kwargs):&#10;        super().__init__(name, **kwargs)&#10;&#10;    @classmethod&#10;    def get_parameters(cls):&#10;        return []&#10;&#10;    def generate_signals(self, df, symbol='', equity_history=None):&#10;        return {'token': symbol, 'signal': 0, 'direction': 'NEUTRAL', 'metadata': {}, 'exit_config': {}}"></textarea>
+            </div>
+            <div class="upload-hint" style="margin-top:var(--space-1);">
+                <strong>Requirements:</strong> Must subclass <code>BaseStrategy</code>, implement <code>generate_signals()</code> and <code>get_parameters()</code>.
+                Validated and activated immediately upon upload.
+            </div>
+        </div>
+        <div class="upload-actions">
+            <button type="submit" class="fleet-btn btn-start" style="padding:8px 24px;" id="submit-btn">Upload Strategy</button>
+            <a href="/app/strategies" class="btn-sm" style="text-decoration:none;color:var(--text-muted);">Cancel</a>
+        </div>
+        <div class="upload-status" id="status" style="display:none;"></div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API_KEY = "{{ api_key }}";
+const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+
+function switchTab(tab) {
+    document.getElementById('tab-pine').classList.toggle('active', tab === 'pine');
+    document.getElementById('tab-python').classList.toggle('active', tab === 'python');
+    document.getElementById('pine-section').style.display = tab === 'pine' ? 'block' : 'none';
+    document.getElementById('python-section').style.display = tab === 'python' ? 'block' : 'none';
+    document.getElementById('source_type').value = tab;
+    document.getElementById('submit-btn').textContent = tab === 'python' ? 'Validate & Activate' : 'Upload Strategy';
+}
+
+async function submitUpload(e) {
+    e.preventDefault();
+    const status = document.getElementById('status');
+    const name = document.getElementById('name').value.trim();
+    const slug = document.getElementById('slug').value.trim().toLowerCase().replace(/ /g, '_');
+    const sourceType = document.getElementById('source_type').value;
+    const pine = document.getElementById('pine').value.trim();
+    const python = document.getElementById('python').value.trim();
+
+    if (!name || !slug) {
+        status.style.display = 'block'; status.className = 'upload-status error';
+        status.textContent = 'Name and Strategy ID are required.'; return;
+    }
+    if (sourceType === 'pine' && !pine) {
+        status.style.display = 'block'; status.className = 'upload-status error';
+        status.textContent = 'PineScript source is required.'; return;
+    }
+    if (sourceType === 'python' && !python) {
+        status.style.display = 'block'; status.className = 'upload-status error';
+        status.textContent = 'Python source is required.'; return;
+    }
+
+    status.style.display = 'block'; status.className = 'upload-status';
+    status.textContent = sourceType === 'python' ? 'Validating and activating...' : 'Uploading...';
+
+    const body = { name, strategy_id: slug, source_type: sourceType };
+    if (sourceType === 'pine') body.pine_source = pine;
+    if (sourceType === 'python') body.python_source = python;
+
+    try {
+        const r = await fetch(API_BASE + '/api/v2/strategies/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (data.ok) {
+            status.className = 'upload-status success';
+            status.textContent = '✓ ' + data.message + ' — Redirecting...';
+            setTimeout(() => window.location.href = '/app/strategies', 1500);
+        } else {
+            status.className = 'upload-status error';
+            status.textContent = '✕ ' + (data.message || 'Upload failed');
+        }
+    } catch (err) {
+        status.className = 'upload-status error';
+        status.textContent = '✕ Error: ' + err;
+    }
+}
+</script>
+{% endblock %}

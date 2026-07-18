@@ -1,0 +1,641 @@
+/*
+ ════════════════════════════════════════════════════════════════
+ PULS-R DESIGN SYSTEM — TOKEN LAYER
+ Three-tier architecture: Primitive → Semantic → Component
+ ════════════════════════════════════════════════════════════════
+
+ Import this file FIRST in every page. All components reference
+ semantic/component tokens — never raw primitives.
+
+ Usage:
+   <link rel="stylesheet" href="/static/tokens.css">
+   <link rel="stylesheet" href="/static/style.css">
+*/
+
+/* ───────────────────────────────────────────
+   LAYER 1: PRIMITIVE TOKENS (raw values)
+   Never reference these directly in components.
+   ─────────────────────────────────────────── */
+
+:root {
+  /* ── Color Primitives ── */
+  /* Warm dark brown scale (not green-tinted, not pure black) */
+  --brown-950: #0F0A07;
+  --brown-900: #15100B;
+  --brown-850: #1A140F;
+  --brown-800: #221A13;
+  --brown-750: #2A2018;
+  --brown-700: #332A1F;
+  --brown-650: #3D3325;
+  --brown-600: #4A3E2E;
+  --brown-500: #5A4E3D;
+  --brown-400: #6B5E4A;
+  --brown-300: #8A7A64;
+  --brown-200: #A89880;
+  --brown-100: #C4B498;
+  --brown-50:  #E8DCC4;
+  --brown-25:  #F5EDDE;
+
+  /* Accent: Teal-Blue (brand — buttons, logo, UI) */
+  /* Source: color-hex.com/palette/1080876 — darkest tones */
+  --tb-500: #0EA5C7;   /* bright accent — hover, active, glow */
+  --tb-600: #0891B2;   /* primary — buttons, logo, brand — brighter than before */
+  --tb-700: #0C6A7D;   /* brand secondary */
+  --tb-100: rgba(8, 145, 178, 0.12);
+  --tb-800: #0E5B6C;   /* pressed/active */
+  --tb-900: #0F4D5C;   /* deep — borders, subtle accents */
+  --tb-050: rgba(8, 121, 142, 0.06);
+  --tb-100: rgba(8, 121, 142, 0.10);
+  --tb-200: rgba(8, 121, 142, 0.18);
+  --tb-300: rgba(8, 121, 142, 0.28);
+
+  /* Accent: Emerald (profit, wins, LONG — muted green-teal, distinct from brand) */
+  --emerald-500: #34D399;  /* bright — PnL values, profit text */
+  --emerald-600: #10B981;  /* primary — profit signal, LONG badges */
+  --emerald-700: #059669;  /* deep — borders, subtle profit accents */
+  --emerald-050: rgba(52, 211, 153, 0.06);
+  --emerald-100: rgba(52, 211, 153, 0.10);
+  --emerald-200: rgba(52, 211, 153, 0.18);
+  --emerald-300: rgba(52, 211, 153, 0.28);
+
+  /* Accent: Coral (loss, danger, stop) */
+  --coral-600: #DC2626;
+  --coral-500: #F87171;
+  --coral-400: #FCA5A5;
+  --coral-050: rgba(248, 113, 113, 0.06);
+  --coral-100: rgba(248, 113, 113, 0.10);
+  --coral-200: rgba(248, 113, 113, 0.18);
+  --coral-300: rgba(248, 113, 113, 0.28);
+
+  /* Accent: Amber (warning, attention) */
+  --amber-600: #D97706;
+  --amber-500: #FBBF24;
+  --amber-400: #FCD34D;
+  --amber-050: rgba(251, 191, 36, 0.06);
+  --amber-100: rgba(251, 191, 36, 0.10);
+  --amber-200: rgba(251, 191, 36, 0.18);
+
+  /* ── Typography Primitives ── */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+
+  /* Type scale (1.250 ratio — Major Third) */
+  --text-xs:   0.625rem;   /* 10px */
+  --text-sm:   0.75rem;    /* 12px */
+  --text-base: 0.8125rem;  /* 13px */
+  --text-md:   0.875rem;   /* 14px */
+  --text-lg:   1rem;        /* 16px */
+  --text-xl:   1.25rem;     /* 20px */
+  --text-2xl:  1.5625rem;  /* 25px */
+  --text-3xl:  1.953rem;    /* 31px */
+  --text-4xl:  2.441rem;    /* 39px */
+
+  /* Font weights */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Line heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  /* Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+
+  /* ── Spacing Primitives (4pt base scale) ── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── Radii ── */
+  --radius-none:  0px;
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── Brown-tinted (brown-950) for warm, grounded feel per DESIGN-SPEC-V2.md */
+  --shadow-xs:    0 1px 2px rgba(15, 10, 8, 0.05);
+  --shadow-sm:   0 1px 2px rgba(15, 10, 8, 0.05);
+  --shadow-md:   0 4px 8px rgba(15, 10, 8, 0.1);
+  --shadow-lg:   0 8px 16px rgba(15, 10, 8, 0.15);
+  --shadow-xl:   0 16px 32px rgba(15, 10, 8, 0.2);
+  --shadow-glass: 0 4px 16px rgba(6, 214, 160, 0.08);
+  --shadow-glass-hover: 0 8px 24px rgba(6, 214, 160, 0.12);
+
+  /* ── Transitions ── */
+  --duration-fast:   150ms;
+  --duration-normal:  300ms;
+  --duration-slow:    500ms;
+  --ease-out:       cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in:        cubic-bezier(0.4, 0, 1, 1);
+  --ease-bounce:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Legacy aliases (keep for style.css compat) */
+  --dur-fast:   var(--duration-fast);
+  --dur-normal: var(--duration-normal);
+  --dur-slow:   var(--duration-slow);
+
+  /* ── Z-Index Scale ── */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-overlay: 20;
+  --z-modal: 40;
+  --z-toast: 100;
+  --z-dropdown: 1000;
+
+  /* ── Breakpoints (reference only — use in media queries) ── */
+  /* Mobile-first: base styles = mobile, min-width queries scale up */
+  /* sm: 375px, md: 768px, lg: 1024px, xl: 1440px */
+}
+
+/* ───────────────────────────────────────────
+   LAYER 2: SEMANTIC TOKENS (purpose aliases)
+   Components reference these. Theme switching
+   changes these, not primitives.
+   ─────────────────────────────────────────── */
+
+:root,
+[data-mode="dark"] {
+  /* ── Surfaces: blue-black for institutional trading terminal feel ── */
+  --surface-page:    #0C1018;    /* Deep blue-black */
+  --surface-card:    #161B25;    /* Elevated card surface — 1.5:1 separation from page */
+  --surface-raised:  #1E2530;    /* Hover / raised elements */
+  --surface-hover:   #263040;    /* Active hover states */
+  --surface-inset:   #0C1018;    /* Inset / recessed areas */
+
+  /* ── Text ── */
+  --text-primary:    #E8ECF1;    /* Cool off-white for blue-black surfaces */
+  --text-secondary:  #8B95A5;    /* Muted steel */
+  --text-muted:      #6B7785;    /* WCAG 4.2:1 on dark — was 3.2:1 */
+  --text-faint:      #3D4552;    /* Very dim — disabled states */
+
+  /* ── Borders ── Blue-tinted borders for blue-black surfaces */
+  --border-default:  #2A3040;    /* Primary border */
+  --border-subtle:    #1E2530;    /* Subtle separator */
+  --border-strong:   #3D4552;    /* Emphasized border */
+
+  /* ── Semantic Colors ── */
+  --color-profit:    var(--emerald-600);
+  --color-loss:      var(--coral-500);
+  --color-info:      var(--tb-600);
+  --color-warn:      var(--amber-500);
+  --color-profit-bg: var(--emerald-100);
+  --color-loss-bg:   var(--coral-100);
+  --color-info-bg:   var(--tb-100);
+  --color-warn-bg:   var(--amber-100);
+  --color-profit-border: var(--emerald-300);
+  --color-loss-border:   var(--coral-300);
+  --color-info-border:   var(--tb-300);
+
+  /* ── Brand (buttons, logo, links — same family, slightly brighter) ── */
+  --brand:           var(--tb-600);
+  --brand-hover:     var(--tb-500);
+  --brand-bg:        var(--tb-100);
+  --brand-border:   var(--tb-300);
+
+  /* ── Interactive ── */
+  --btn-primary-bg:      var(--brand);
+  --btn-primary-text:    #FFFFFF;
+  --btn-primary-hover:   var(--brand-hover);
+  --btn-secondary-bg:    var(--brown-750);
+  --btn-secondary-text:  var(--text-secondary);
+  --btn-secondary-hover: var(--brown-700);
+  --btn-danger-bg:       var(--coral-100);
+  --btn-danger-text:     var(--coral-500);
+  --btn-danger-hover:    var(--coral-500);
+  --btn-danger-hover-text: #fff;
+
+  /* ── Input ── */
+  --input-bg:        var(--brown-750);
+  --input-border:    var(--border-default);
+  --input-focus:     var(--brand);
+  --input-text:      var(--text-primary);
+  --input-placeholder: var(--text-faint);
+
+  /* ── Layout ── */
+  --content-width:   1280px;
+  --content-narrow:  768px;
+  --grid-gap:        var(--space-4);
+  --card-padding:    var(--space-4);
+}
+
+/* Light mode (PWA landing pages) */
+[data-mode="light"] {
+  --surface-page:    #F5F0EB;
+  --surface-card:    #FFFFFF;
+  --surface-raised:  #EDE6DE;
+  --surface-hover:   #E5DCD2;
+  --surface-inset:   #F0EBE5;
+
+  --text-primary:    #1A1410;
+  --text-secondary:  #4A3E2E;
+  --text-muted:      #8A7A64;
+  --text-faint:      #B5A890;
+
+  --border-default:  rgba(0, 0, 0, 0.08);
+  --border-subtle:   rgba(0, 0, 0, 0.04);
+  --border-strong:   rgba(0, 0, 0, 0.15);
+
+  --color-profit-bg: rgba(52, 211, 153, 0.10);
+  --color-loss-bg:   rgba(220, 38, 38, 0.10);
+  --color-info-bg:   rgba(8, 121, 142, 0.10);
+  --color-warn-bg:   rgba(217, 119, 6, 0.10);
+
+  --btn-primary-bg:      var(--tb-600);
+  --btn-primary-text:    #FFFFFF;
+  --btn-secondary-bg:    var(--brown-100);
+  --btn-secondary-text:  var(--text-secondary);
+  --btn-secondary-hover: var(--brown-200);
+
+  --input-bg:        var(--surface-card);
+  --input-border:    var(--border-default);
+  --input-focus:     var(--brand);
+  --input-text:      var(--text-primary);
+  --input-placeholder: var(--text-faint);
+}
+
+/* ───────────────────────────────────────────
+   HYPERFLUID THEME — Inspired by HyperLiquid DEX
+   Deeper blues, brighter cyan, institutional feel.
+   Activated via data-theme="hyperfluid" on <html>.
+   ─────────────────────────────────────────── */
+
+[data-theme="hyperfluid"][data-mode="dark"] {
+  --surface-page:    #080C14;    /* Ultra-deep navy — OLED-friendly */
+  --surface-card:    #111820;    /* Slightly elevated navy */
+  --surface-raised:  #19222E;    /* Hover panels */
+  --surface-hover:   #1F2A38;    /* Active states */
+  --surface-inset:   #080C14;
+
+  --text-primary:    #F0F4F8;    /* Bright cool white */
+  --text-secondary:  #8899AA;    /* Steel blue-muted */
+  --text-muted:      #556677;    /* Dim labels */
+  --text-faint:      #334455;
+
+  --border-default:  #1F2A38;
+  --border-subtle:   #151C28;
+  --border-strong:   #2A3644;
+
+  /* Brighter cyan for HyperFluid accent */
+  --brand:           #2DD4BF;    /* Bright teal — matches HL */
+  --brand-hover:     #14B8A6;
+  --brand-bg:        rgba(45, 212, 191, 0.10);
+  --brand-border:    rgba(45, 212, 191, 0.25);
+
+  --btn-primary-bg:      #2DD4BF;
+  --btn-primary-text:    #080C14;
+  --btn-primary-hover:    #14B8A6;
+  --btn-secondary-bg:    #1F2A38;
+  --btn-secondary-text:  #8899AA;
+  --btn-secondary-hover: #2A3644;
+
+  --input-bg:        #111820;
+  --input-border:    #1F2A38;
+  --input-focus:     #2DD4BF;
+  --input-text:      #F0F4F8;
+  --input-placeholder: #556677;
+}
+
+[data-theme="hyperfluid"][data-mode="light"] {
+  --surface-page:    #F0F4F8;    /* Cool ice-white */
+  --surface-card:    #FFFFFF;
+  --surface-raised:  #E8EDF2;
+  --surface-hover:   #DDE4EC;
+  --surface-inset:   #F5F8FB;
+
+  --text-primary:    #0C1420;
+  --text-secondary:  #3A4A5C;
+  --text-muted:      #6B7C8E;
+  --text-faint:      #A0ABB8;
+
+  --border-default:  rgba(0, 0, 0, 0.08);
+  --border-subtle:   rgba(0, 0, 0, 0.04);
+  --border-strong:   rgba(0, 0, 0, 0.14);
+
+  --brand:           #0D9488;    /* Teal for light mode */
+  --brand-hover:     #0F766E;
+  --brand-bg:        rgba(13, 148, 136, 0.08);
+  --brand-border:    rgba(13, 148, 136, 0.20);
+
+  --btn-primary-bg:      #0D9488;
+  --btn-primary-text:    #FFFFFF;
+  --btn-primary-hover:    #0F766E;
+  --btn-secondary-bg:    #E8EDF2;
+  --btn-secondary-text:  #3A4A5C;
+  --btn-secondary-hover: #DDE4EC;
+
+  --input-bg:        #FFFFFF;
+  --input-border:    rgba(0, 0, 0, 0.08);
+  --input-focus:     #0D9488;
+  --input-text:      #0C1420;
+  --input-placeholder: #A0ABB8;
+}
+
+/* ───────────────────────────────────────────
+   PORTRAIT THEME — Warm brown + electric teal
+   Per DESIGN-SPEC.md: brown neutrals, #06d6a0 accent
+   Activated via data-theme="portrait" on <html>.
+   ─────────────────────────────────────────── */
+
+[data-theme="portrait"][data-mode="dark"] {
+  --surface-page:    #0f0a08;
+  --surface-card:    #1a1410;
+  --surface-raised:  #2d2520;
+  --surface-hover:   #3a3028;
+  --surface-inset:   #0f0a08;
+
+  --text-primary:    #f5f1ed;
+  --text-secondary:  #bab5b0;
+  --text-muted:      #8a8580;
+  --text-faint:      #5a5550;
+
+  --border-default:  #47403a;
+  --border-subtle:   #3a3028;
+  --border-strong:   #5a5048;
+
+  /* Electric Teal brand */
+  --brand:           #06d6a0;
+  --brand-hover:     #05b388;
+  --brand-bg:        rgba(6, 214, 160, 0.10);
+  --brand-border:   rgba(6, 214, 160, 0.25);
+
+  --btn-primary-bg:      #06d6a0;
+  --btn-primary-text:    #0f0a08;
+  --btn-primary-hover:    #05b388;
+  --btn-secondary-bg:    #3a3028;
+  --btn-secondary-text:  #bab5b0;
+  --btn-secondary-hover: #47403a;
+
+  --input-bg:        #1a1410;
+  --input-border:    #47403a;
+  --input-focus:     #06d6a0;
+  --input-text:      #f5f1ed;
+  --input-placeholder: #8a8580;
+
+  /* Semantic */
+  --color-profit-bg: rgba(16, 185, 129, 0.10);
+  --color-loss-bg:   rgba(239, 68, 68, 0.10);
+  --color-info-bg:   rgba(59, 130, 246, 0.10);
+  --color-warn-bg:   rgba(245, 158, 11, 0.10);
+  --color-profit-border: rgba(16, 185, 129, 0.30);
+  --color-loss-border:   rgba(239, 68, 68, 0.30);
+  --color-info-border:   rgba(59, 130, 246, 0.30);
+
+  --tag-neutral-bg: var(--surface-raised);
+  --tag-neutral-text: var(--text-secondary);
+  --tag-running-bg: rgba(6, 214, 160, 0.10);
+  --tag-running-text: #06d6a0;
+  --tag-running-border: rgba(6, 214, 160, 0.30);
+  --tag-stopped-bg: rgba(239, 68, 68, 0.08);
+  --tag-stopped-text: #ef4444;
+  --tag-stopped-border: rgba(239, 68, 68, 0.30);
+}
+
+[data-theme="portrait"][data-mode="light"] {
+  --surface-page:    #faf8f6;
+  --surface-card:    #fefcfa;
+  --surface-raised:  #f3ede7;
+  --surface-hover:   #e8e0d8;
+  --surface-inset:   #faf8f6;
+
+  --text-primary:    #1a1410;
+  --text-secondary:  #65625d;
+  --text-muted:      #a39f9a;
+  --text-faint:      #c4b498;
+
+  --border-default:  #d5cfc7;
+  --border-subtle:   #e8e0d8;
+  --border-strong:   #bab5b0;
+
+  --brand:           #00a878;
+  --brand-hover:     #008866;
+  --brand-bg:        rgba(0, 168, 120, 0.08);
+  --brand-border:    rgba(0, 168, 120, 0.20);
+
+  --btn-primary-bg:      #00a878;
+  --btn-primary-text:    #FFFFFF;
+  --btn-primary-hover:    #008866;
+  --btn-secondary-bg:    #e8e0d8;
+  --btn-secondary-text:  #65625d;
+  --btn-secondary-hover: #d5cfc7;
+
+  --input-bg:        #fefcfa;
+  --input-border:    #d5cfc7;
+  --input-focus:     #00a878;
+  --input-text:      #1a1410;
+  --input-placeholder: #a39f9a;
+
+  --color-profit-bg: rgba(0, 168, 120, 0.10);
+  --color-loss-bg:   rgba(220, 38, 38, 0.10);
+  --color-info-bg:   rgba(59, 130, 246, 0.10);
+  --color-warn-bg:   rgba(217, 119, 6, 0.10);
+}
+
+/* ───────────────────────────────────────────
+   LAYER 3: COMPONENT TOKENS (specific elements)
+   Override these for fine-grained control.
+   ─────────────────────────────────────────── */
+
+:root,
+[data-mode="dark"] {
+  /* ── Top Bar ── */
+  --topbar-bg: var(--surface-card);
+  --topbar-border: var(--border-subtle);
+  --topbar-height: 56px;
+
+  /* ── Stats Bar ── */
+  --stat-bg: var(--surface-card);
+  --stat-label-color: var(--text-muted);
+  --stat-value-size: var(--text-xl);
+  --stat-value-weight: var(--weight-bold);
+
+  /* ── Card ── */
+  --card-bg: var(--surface-card);
+  --card-border: var(--border-subtle);
+  --card-radius: var(--radius-lg);
+  --card-shadow: var(--shadow-sm);
+  --card-head-border: var(--border-subtle);
+
+  /* ── Tag / Badge ── */
+  --tag-neutral-bg: var(--brown-750);
+  --tag-neutral-text: var(--text-secondary);
+  --tag-running-bg: var(--tb-100);
+  --tag-running-text: var(--tb-600);
+  --tag-running-border: var(--tb-300);
+  --tag-stopped-bg: var(--coral-100);
+  --tag-stopped-text: var(--coral-500);
+  --tag-stopped-border: var(--coral-300);
+
+  /* ── Tab ── */
+  --tab-color: var(--text-muted);
+  --tab-active-color: var(--text-primary);
+  --tab-active-border: var(--brand);
+
+  /* ── Log Area ── */
+  --log-bg: var(--surface-inset);
+  --log-text: var(--text-secondary);
+  --log-border: var(--border-subtle);
+
+  /* ── Trade Row ── */
+  --trade-row-bg: var(--surface-raised);
+  --trade-row-hover: var(--surface-hover);
+  --trade-row-border: var(--border-subtle);
+}
+
+[data-mode="light"] {
+  /* ── Top Bar ── */
+  --topbar-bg: var(--surface-card);
+  --topbar-border: var(--border-default);
+  --topbar-height: 56px;
+
+  /* ── Stats Bar ── */
+  --stat-bg: var(--surface-card);
+  --stat-label-color: var(--text-muted);
+  --stat-value-size: var(--text-xl);
+  --stat-value-weight: var(--weight-bold);
+
+  /* ── Card ── */
+  --card-bg: var(--surface-card);
+  --card-border: var(--border-default);
+  --card-radius: var(--radius-lg);
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --card-head-border: var(--border-subtle);
+
+  /* ── Tag / Badge ── */
+  --tag-neutral-bg: var(--brown-100);
+  --tag-neutral-text: var(--text-secondary);
+  --tag-running-bg: rgba(8, 121, 142, 0.10);
+  --tag-running-text: var(--tb-600);
+  --tag-running-border: var(--tb-300);
+  --tag-stopped-bg: rgba(220, 38, 38, 0.08);
+  --tag-stopped-text: var(--coral-500);
+  --tag-stopped-border: var(--coral-300);
+
+  /* ── Tab ── */
+  --tab-color: var(--text-muted);
+  --tab-active-color: var(--text-primary);
+  --tab-active-border: var(--brand);
+
+  /* ── Log Area ── */
+  --log-bg: var(--surface-inset);
+  --log-text: var(--text-secondary);
+  --log-border: var(--border-subtle);
+
+  /* ── Trade Row ── */
+  --trade-row-bg: var(--surface-raised);
+  --trade-row-hover: var(--surface-hover);
+  --trade-row-border: var(--border-subtle);
+
+  /* ── Modal ── */
+  --modal-overlay: rgba(0, 0, 0, 0.25);
+
+  /* ── Sidebar ── */
+  --sidebar-bg: var(--surface-card);
+  --sidebar-border: var(--border-default);
+  --sidebar-item-active: var(--surface-hover);
+  --sidebar-item-hover: var(--surface-inset);
+
+  /* ── Inputs ── */
+  --surface-input: var(--surface-inset);
+  --surface-elevated: var(--surface-raised);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   LAYER 4: LEGACY-COMPAT ALIASES (DS1 — 2026-07-16)
+   Shim for style.css which still references the pre-refactor token
+   names. Each alias maps an old var to the new semantic equivalent.
+   New code should use the semantic names directly. These aliases
+   are kept so style.css keeps rendering correctly while the rest of
+   the system migrates to tokens.css. Remove once style.css is fully
+   refactored to the three-tier system.
+   ════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-mode="dark"],
+[data-mode="light"] {
+  /* ── Legacy surface (--bg-0..3) ── */
+  --bg-0:    var(--surface-page);
+  --bg-1:    var(--surface-card);
+  --bg-2:    var(--surface-raised);
+  --bg-3:    var(--surface-hover);
+  --bg-inset: var(--surface-inset);
+
+  /* ── Legacy text (--text-0..3) ── */
+  --text-0:  var(--text-primary);
+  --text-1:  var(--text-primary);
+  --text-2:  var(--text-secondary);
+  --text-3:  var(--text-muted);
+  --text-4:  var(--text-faint);
+
+  /* ── Legacy radii (--r-sm/md/lg) ── */
+  --r-sm:    var(--radius-sm);
+  --r-md:    var(--radius-md);
+  --r-lg:    var(--radius-lg);
+
+  /* ── Legacy borders ── */
+  --border:        var(--border-default);
+  --border-soft:   var(--border-subtle);
+
+  /* ── Legacy accent + palette ── */
+  --accent:        var(--brand);
+
+  /* Status: green/emerald ── */
+  --green:         var(--emerald-500);
+  --green-bg:      var(--color-profit-bg);
+  --green-border:  var(--color-profit-border);
+
+  /* Status: red/coral ── */
+  --red:           var(--coral-500);
+  --red-bg:        var(--color-loss-bg);
+  --red-border:    var(--color-loss-border);
+
+  /* Status: blue/info ── */
+  --blue:          var(--tb-600);
+  --blue-bg:       var(--color-info-bg);
+  --blue-border:   var(--color-info-border);
+
+  /* Status: yellow/amber ── */
+  --yellow:        var(--amber-500);
+  --amber:         var(--amber-500);
+  --amber-border:  var(--color-warn-border, var(--amber-300));
+
+  /* ── Legacy chart primitives (used by SVG pulse + sparkline) ── */
+  --arc-len:       125.66;   /* 2πr for r=20 — placeholder for circle math */
+  --spark-len:     0;        /* set inline by JS to dasharray length */
+
+  /* ── Legacy font shorthand ── */
+  --font:          var(--font-body);
+}
+/* ════════════════════════════════════════════════════════════════
+   LAYER 5: GLASS LEGACY ALIASES (DS5 — 2026-07-16)
+   --glass-bg and --glass-border were referenced in layout.html's
+   .chart-card rule but never defined. Aliasing them to proper
+   component tokens so any remaining references resolve cleanly.
+   ════════════════════════════════════════════════════════════════ */
+
+:root,
+[data-mode="dark"],
+[data-mode="light"] {
+  --glass-bg:     var(--card-bg);
+  --glass-border: var(--card-border);
+  --glass-shadow: var(--card-shadow);
+}

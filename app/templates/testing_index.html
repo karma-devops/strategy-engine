@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Testing{% endblock %}
+{% block heading %}Testing{% endblock %}
+{% block content %}
+<div class="analytics-grid">
+    <a href="/app/testing/historical" class="chart-card" style="text-decoration:none;display:block;">
+        <div class="card-head"><h2>Historical Backtests</h2><span class="tag tag-flat">SIM</span></div>
+        <p style="color:var(--text-muted);font-size:var(--text-sm);margin:var(--space-2) 0;">
+            Run bar-by-bar backtests on any token + strategy. No live capital. Equity curve + full metrics.
+        </p>
+        <span style="color:var(--brand);font-size:var(--text-sm);">Open →</span>
+    </a>
+    <a href="/app/testing/paper" class="chart-card" style="text-decoration:none;display:block;">
+        <div class="card-head"><h2>Paper Trading</h2><span class="tag tag-flat">PAPER</span></div>
+        <p style="color:var(--text-muted);font-size:var(--text-sm);margin:var(--space-2) 0;">
+            Forward-test instances with dry_run=True. Live HL data, zero capital risk. Per-instance equity curve.
+        </p>
+        <span style="color:var(--brand);font-size:var(--text-sm);">Open →</span>
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+# Local-only files
+CONTEXT.md
+NOTES.md
+SPECSHEET.md
+PIPE-ARCHITECTURE.md
+DEPLOYMENT.md
+HANDOVER.md
+
+# Backups
+backups/
+
+# Data (DB files ignored, dir structure tracked)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/backups/
+data/logs/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+
+# Env
+.env
+*.env
+
+# Secrets / session cookies
+cookies.txt
+*.cookie
+*.cookies
+
+# Local DBs (any sqlite)
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/HANDOVER-PROMPT.md
+HANDOVER.md

@@ -1,0 +1,316 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — Historical Backtests{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/chat_widget.css">
+{% endblock %}
+{% block heading %}Historical Backtests{% endblock %}
+{% block content %}
+<style>
+    .bt-form { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-end; background: var(--surface-card); border: 1px solid var(--input-border); border-radius: var(--radius-md); padding: var(--space-3); }
+    .bt-form .field { display: flex; flex-direction: column; gap: 4px; }
+    .bt-form label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--weight-semibold); }
+    .bt-form input, .bt-form select { background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-family: var(--font-body); font-size: var(--text-sm); height: 36px; }
+    .bt-form input:focus, .bt-form select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+    .bt-msg { font-size: var(--text-sm); margin-top: var(--space-2); grid-column: 1 / -1; }
+    .bt-msg.ok { color: var(--color-profit); }
+    .bt-msg.err { color: var(--color-loss); }
+    /* 2/3 chart + 1/3 KPI */
+    .bt-split { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-3); margin-top: var(--space-3); align-items: start; }
+    @media (max-width: 900px) { .bt-split { grid-template-columns: 1fr; } }
+    .equity-canvas { width: 100%; height: 280px; display: block; }
+    .kpi-stack { display: flex; flex-direction: column; gap: var(--space-2); }
+    .kpi-mini { background: var(--surface-card); border: 1px solid var(--input-border); border-radius: var(--radius-md); padding: var(--space-3); }
+    .kpi-mini .label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); }
+    .kpi-mini .value { font-size: var(--text-2xl); font-weight: var(--weight-bold); margin-top: 2px; }
+    .kpi-mini .value.profit { color: var(--color-profit); }
+    .kpi-mini .value.loss { color: var(--color-loss); }
+    .kpi-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+    .kpi-cell { background: var(--surface-card); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); }
+    .kpi-cell .label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; }
+    .kpi-cell .val { font-size: var(--text-lg); font-weight: var(--weight-semibold); margin-top: 2px; }
+    /* assistant chat card */
+    .assist-card { background: var(--surface-card); border: 1px solid var(--input-border); border-radius: var(--radius-md); padding: var(--space-3); margin-top: var(--space-3); }
+    .assist-card h3 { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2); }
+    .assist-log { font-size: var(--text-sm); max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-2); }
+    .assist-log .q { color: var(--brand); }
+    .assist-log .a { color: var(--text-secondary); }
+    .assist-row { display: flex; gap: var(--space-2); }
+    .assist-row input { flex: 1; background: var(--input-bg); color: var(--input-text); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
+</style>
+
+<form class="bt-form" id="bt-form" onsubmit="event.preventDefault(); runBacktest();">
+    <div class="field">
+        <label>Token</label>
+        <input type="text" id="bt-token" value="FARTCOIN" placeholder="FARTCOIN">
+        <a href="https://hyperliquid.xyz/trade/" target="_blank" rel="noopener" style="font-size: var(--text-xs); color: var(--brand);">HyperLiquid Token Registry ↗</a>
+    </div>
+    <div class="field">
+        <label>Strategy</label>
+        <select id="bt-strategy">
+            <option value="engine_v1_3">engine_v1_3</option>
+            <option value="engine_v1">engine_v1</option>
+            <option value="engine_v6_1">engine_v6_1</option>
+        </select>
+    </div>
+    <div class="field">
+        <label>Timeframe</label>
+        <select id="bt-tf">
+            <option value="15m" selected>15m</option>
+            <option value="5m">5m</option>
+            <option value="30m">30m</option>
+            <option value="1h">1h</option>
+            <option value="3h">3h</option>
+            <option value="1d">1d</option>
+        </select>
+    </div>
+    <div class="field">
+        <label>Start Balance (USDC)</label>
+        <input type="number" id="bt-balance" value="100" min="1" max="1000000" step="1">
+    </div>
+    <div class="field">
+        <label>Days</label>
+        <input type="number" id="bt-days" value="7" min="1" max="365">
+    </div>
+    <div class="field">
+        <label>Leverage</label>
+        <input type="number" id="bt-lev" value="5" min="1" max="50">
+    </div>
+    <div class="field">
+        <label>&nbsp;</label>
+        <button type="submit" id="bt-submit" class="fleet-btn btn-start" style="padding:8px 20px;height:36px;">Run Backtest</button>
+    </div>
+    <div class="bt-msg" id="bt-msg"></div>
+</form>
+
+{# ── Token Price Chart (2/3 width inside bt-split) ── #}
+<div class="bt-split">
+    <div class="chart-card" id="bt-token-chart-card">
+        <div class="card-head">
+            <h2 id="bt-token-title">Token Price Chart</h2>
+            <div style="display:flex;gap:var(--space-1);flex-wrap:wrap;align-items:center;">
+                <button class="chip" onclick="loadBtTokenChart('5m', this)" style="padding:2px 8px;font-size:11px;">5m</button>
+                <button class="chip active" onclick="loadBtTokenChart('15m', this)" style="padding:2px 8px;font-size:11px;">15m</button>
+                <button class="chip" onclick="loadBtTokenChart('1h', this)" style="padding:2px 8px;font-size:11px;">1h</button>
+                <button class="chip" onclick="loadBtTokenChart('4h', this)" style="padding:2px 8px;font-size:11px;">4h</button>
+                <span id="bt-ohlc-bar" style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);margin-left:var(--space-2);"></span>
+            </div>
+        </div>
+        <div id="btTokenChart-wrap" style="position:relative;width:100%;height:260px;">
+            <div id="btTokenChart" style="width:100%;height:260px;"></div>
+            <div id="btToken-empty" class="empty-state" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+                <div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div>
+                <div class="empty-state" style="margin-top:var(--space-2);">
+                    <h3>Loading token price data</h3>
+                    <p>Fetching candles from HyperLiquid...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="card-head"><h2>Equity & Trades</h2><span id="eq-badge" class="tag tag-flat">latest</span></div>
+        <div id="equity-chart-wrap" style="position:relative;width:100%;flex:1;min-height:0;">
+            <div id="equityChart" style="width:100%;height:100%;"></div>
+            <div id="equity-loading" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+                <div class="chart-loading"><div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div><div class="loading-text">Running backtest...</div></div>
+            </div>
+        </div>
+    </div>
+    <div class="kpi-stack">
+        <div class="kpi-mini">
+            <div class="label">Latest Return</div>
+            <div class="value {% if backtests and backtests[0].total_return_pct >= 0 %}profit{% else %}loss{% endif %}" id="kpi-return">{% if backtests %}{{ backtests[0].total_return_pct | format_pct }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="kpi-grid2">
+            <div class="kpi-cell"><div class="label">Win Rate</div><div class="val" id="kpi-wr">{% if backtests %}{{ backtests[0].win_rate | format_num(1) }}%{% else %}—{% endif %}</div></div>
+            <div class="kpi-cell"><div class="label">Profit Factor</div><div class="val" id="kpi-pf">{% if backtests %}{{ backtests[0].profit_factor | format_num(2) }}{% else %}—{% endif %}</div></div>
+            <div class="kpi-cell"><div class="label">Max DD</div><div class="val" id="kpi-dd">{% if backtests %}{{ backtests[0].max_drawdown_pct | format_pct | replace('+','') }}{% else %}—{% endif %}</div></div>
+            <div class="kpi-cell"><div class="label">Sharpe</div><div class="val" id="kpi-sharpe">{% if backtests %}{{ backtests[0].sharpe_ratio | format_num(2) }}{% else %}—{% endif %}</div></div>
+            <div class="kpi-cell"><div class="label">Trades</div><div class="val" id="kpi-trades">{% if backtests %}{{ backtests[0].total_trades }}{% else %}—{% endif %}</div></div>
+            <div class="kpi-cell"><div class="label">Status</div><div class="val" id="kpi-status">{% if backtests %}{{ backtests[0].status }}{% else %}—{% endif %}</div></div>
+        </div>
+        <div class="assist-card">
+            <h3>Ask Assistant about these results</h3>
+            <div class="assist-log" id="assist-log"></div>
+            <div class="assist-row">
+                <input type="text" id="assist-input" placeholder="e.g. How does this compare to paper?" onkeydown="if(event.key==='Enter')askAssistant()">
+                <button class="fleet-btn btn-start" style="padding:8px 14px;height:36px;" onclick="askAssistant()">Ask</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <div class="card-head"><h2>Backtest Runs</h2></div>
+    <table class="bt-table">
+        <thead>
+            <tr>
+                <th>Token</th><th>Strategy</th><th>TF</th><th>Return</th><th>DD</th>
+                <th>Sharpe</th><th>WR</th><th>PF</th><th>Trades</th><th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if backtests %}
+            {% for b in backtests %}
+            <tr>
+                <td>{{ b.token }}</td>
+                <td>{{ b.strategy_id }}</td>
+                <td>{{ b.timeframe }}</td>
+                <td class="{% if b.total_return_pct >= 0 %}positive{% else %}negative{% endif %}">{{ b.total_return_pct | format_pct }}</td>
+                <td class="negative">{{ b.max_drawdown_pct | format_pct | replace('+','') }}</td>
+                <td>{{ b.sharpe_ratio | format_num(2) }}</td>
+                <td>{{ b.win_rate | format_num(1) }}%</td>
+                <td>{{ b.profit_factor | format_num(2) }}</td>
+                <td>{{ b.total_trades }}</td>
+                <td><span class="tag tag-{{ b.status }}">{{ b.status }}</span></td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="10" class="empty">No backtests yet. Run one above.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% include 'chat_widget.html' %}
+<script>
+const API_KEY = "{{ api_key }}";
+const API_BASE = (location.origin || '').replace(/^https?:\/\/[^@/]+@/, 'http://');
+const latestEquity = {{ latest_equity | tojson | safe }};
+const latestStats = {{ ((backtests[0] | tojson) if backtests else "null") | safe }};
+const latestTrades = latestStats && latestStats.trades_json ? latestStats.trades_json : [];
+
+// P14: Backtest equity + trade barchart using PulsRChart
+const btChart = (typeof PulsRChart !== 'undefined')
+    ? PulsRChart.createEquityBarChart('equityChart', { height: 280 })
+    : null;
+if (btChart) {
+    // Convert equity data to PulsRChart format
+    const eqData = (latestEquity || []).map(d => ({
+        time: typeof d.time === 'number' ? d.time : Math.floor(new Date(d.time).getTime() / 1000),
+        value: parseFloat(d.value || d.equity || d[1] || 0),
+    }));
+    // Convert trade PnL data for bar overlay
+    const tradeBars = (latestTrades || []).filter(t => t.pnl_usd !== undefined && t.time_unix !== undefined).map(t => ({
+        time: t.time_unix,
+        value: t.pnl_usd,
+    }));
+    const _eqLoading = document.getElementById('equity-loading');
+    btChart.setData(eqData, tradeBars);
+    if (eqData.length > 1 && _eqLoading) _eqLoading.style.display = 'none';
+}
+
+async function runBacktest() {
+    const btn = document.getElementById('bt-submit');
+    const msg = document.getElementById('bt-msg');
+    btn.disabled = true; msg.className = 'bt-msg'; msg.textContent = 'Running backtest...';
+    const loadingEl = document.getElementById('equity-loading');
+    if (loadingEl) loadingEl.style.display = 'flex';
+    const payload = {
+        token: document.getElementById('bt-token').value,
+        strategy_id: document.getElementById('bt-strategy').value,
+        timeframe: document.getElementById('bt-tf').value,
+        days: parseInt(document.getElementById('bt-days').value),
+        leverage: parseInt(document.getElementById('bt-lev').value),
+        initial_capital: parseFloat(document.getElementById('bt-balance').value) || 100.0,
+    };
+    try {
+        const r = await fetch(API_BASE + '/api/v2/backtests/run', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Backtest failed');
+        msg.className = 'bt-msg ok';
+        msg.textContent = 'Backtest complete: ' + (data.total_return_pct !== undefined ? data.total_return_pct.toFixed(2) + '% return' : 'done') + ' — refresh to view.';
+        setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+        msg.className = 'bt-msg err'; msg.textContent = 'Error: ' + e.message;
+    } finally { btn.disabled = false; if (loadingEl) loadingEl.style.display = 'none'; }
+}
+
+// Assistant chat (delegates to /api/v2/chat when available; graceful if not)
+async function askAssistant() {
+    const inp = document.getElementById('assist-input');
+    const log = document.getElementById('assist-log');
+    const q = inp.value.trim();
+    if (!q) return;
+    const qEl = document.createElement('div'); qEl.className = 'q'; qEl.textContent = '› ' + q; log.appendChild(qEl);
+    inp.value = '';
+    try {
+        const r = await fetch(API_BASE + '/api/v2/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            credentials: 'same-origin',
+            body: JSON.stringify({ message: q, context: { backtest: latestStats } })
+        });
+        const d = await r.json();
+        const aEl = document.createElement('div'); aEl.className = 'a';
+        aEl.textContent = d.reply || d.message || '(no response)';
+        log.appendChild(aEl);
+    } catch (e) {
+        const aEl = document.createElement('div'); aEl.className = 'a';
+        aEl.textContent = '(Assistant endpoint not connected yet — Phase 10)';
+        log.appendChild(aEl);
+    }
+    log.scrollTop = log.scrollHeight;
+}
+</script>
+<script src="/static/chat_widget.js"></script>
+<script>
+// Phase 9F: inject Backtester context (latest backtest stats) into chat widget hint
+(function(){
+  var w = document.getElementById('chat-widget');
+  if (w && typeof latestStats === 'object' && latestStats) {
+    var hint = 'Latest backtest results:\n'
+      + 'Return: ' + (latestStats.total_return_pct || '—') + '%\n'
+      + 'Win rate: ' + (latestStats.win_rate || '—') + '%\n'
+      + 'Profit factor: ' + (latestStats.profit_factor || '—') + '\n'
+      + 'Max drawdown: ' + (latestStats.max_drawdown_pct || '—') + '%\n'
+      + 'Sharpe: ' + (latestStats.sharpe_ratio || '—') + '\n'
+      + 'Trades: ' + (latestStats.total_trades || '—') + '\n'
+      + 'Status: ' + (latestStats.status || '—');
+    w.dataset.contextHint = hint;
+  }
+})();
+</script>
+<script>
+// ponytail: token chart reads from bt-token input field, updates when user changes it
+const btTokenEmpty = document.getElementById('btToken-empty');
+let btTokenChart = null;
+let btTokenTF = '15m';
+
+function loadBtTokenChart(tf, btn) {
+    btTokenTF = tf || btTokenTF;
+    if (btn) {
+        btn.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    const token = (document.getElementById('bt-token') || {}).value || 'FARTCOIN';
+    if (btTokenEmpty) btTokenEmpty.style.display = 'flex';
+    const base = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    fetch(base + '/api/v2/candles/' + encodeURIComponent(token) + '?timeframe=' + btTokenTF + '&bars=200')
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok || !j.candles || j.candles.length === 0) return;
+            if (!btTokenChart) {
+                btTokenChart = (typeof PulsRChart !== 'undefined')
+                    ? PulsRChart.createCandleChart('btTokenChart', { height: 260 })
+                    : null;
+            }
+            if (!btTokenChart) return;
+            btTokenChart.setData(j.candles);
+            if (btTokenEmpty) btTokenEmpty.style.display = 'none';
+            const title = document.getElementById('bt-token-title');
+            if (title) title.textContent = token + ' Price Chart';
+        })
+        .catch(e => { console.error('BT token chart load failed:', e); });
+}
+
+loadBtTokenChart();
+// Update chart when user changes the token input
+var btTokenInput = document.getElementById('bt-token');
+if (btTokenInput) btTokenInput.addEventListener('change', function() { loadBtTokenChart(); });
+</script>
+{% endblock %}

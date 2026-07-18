@@ -1,0 +1,210 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — {{ name }}{% endblock %}
+{% block heading %}{{ name }}{% endblock %}
+{% block content %}
+<style>
+    .code-viewer { background: #0d0d0d; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; overflow: auto; max-height: 500px; font-family: 'SF Mono', 'Cascadia Code', var(--font-mono); font-size: 12px; line-height: 1.6; white-space: pre; color: #c5c5c5; }
+    .code-viewer .kw { color: #c586c0; }
+    .code-viewer .str { color: #ce9178; }
+    .code-viewer .num { color: #b5cea8; }
+    .code-viewer .cmt { color: #6a9955; font-style: italic; }
+    .code-viewer .fn { color: #dcdcaa; }
+    .params-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-bottom: var(--space-3); }
+    .param-row { display: flex; justify-content: space-between; padding: var(--space-2) var(--space-3); background: var(--surface-inset); border-radius: var(--radius-sm); }
+    .param-row .label { color: var(--text-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+    .param-row .val { font-family: var(--font-mono); color: var(--text-primary); }
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+</style>
+
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Status</div>
+        <div class="kpi-value"><span class="tag tag-running">active</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Win Rate</div>
+        <div class="kpi-value">{{ win_rate }}%</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Total PnL</div>
+        <div class="kpi-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}">{{ total_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Closed Trades</div>
+        <div class="kpi-value">{{ total_trades }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Engines</div>
+        <div class="kpi-value">{{ engines | length }}</div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <div class="card-head">
+        <h2>{{ name }} — {{ strategy_id }}</h2>
+    </div>
+    <p style="color:var(--text-muted);font-size:var(--text-sm);margin-bottom:var(--space-3);">{{ description }}</p>
+</div>
+
+<div class="tab-pills">
+    <button class="tab-pill active" onclick="switchTab('overview', this)">Overview</button>
+    <button class="tab-pill" onclick="switchTab('pine', this)">PineScript</button>
+    <button class="tab-pill" onclick="switchTab('python', this)">Python</button>
+    <button class="tab-pill" onclick="switchTab('docs', this)">Documentation</button>
+</div>
+
+{# ── Overview Tab ── #}
+<div class="tab-section active" id="tab-overview">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:var(--space-3);">
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>Parameters</h2>
+            <div class="params-grid">
+                <div class="param-row"><span class="label">Mode</span><span class="val">{{ preset.mode }}</span></div>
+                <div class="param-row"><span class="label">Profile</span><span class="val">{{ preset.profile }}</span></div>
+                <div class="param-row"><span class="label">Timeframe</span><span class="val">{{ preset.timeframe }}</span></div>
+                <div class="param-row"><span class="label">Activation</span><span class="val">{{ preset.activation }}</span></div>
+                <div class="param-row"><span class="label">Offset</span><span class="val">{{ preset.offset }}</span></div>
+                <div class="param-row"><span class="label">Wins</span><span class="val positive">{{ wins }}</span></div>
+                <div class="param-row"><span class="label">Losses</span><span class="val negative">{{ losses }}</span></div>
+                <div class="param-row"><span class="label">Win Rate</span><span class="val">{{ win_rate }}%</span></div>
+            </div>
+        </div>
+        <div class="chart-card" style="margin-bottom:0;">
+            <h2>Engines Running</h2>
+            {% if engines %}
+            {% for e in engines %}
+            <div class="fleet-row" style="padding:var(--space-2) 0;border-bottom:1px solid var(--border-subtle);">
+                <span class="label">{{ e.name }}</span>
+                <span><span class="tag tag-{{ e.status }}">{{ e.status }}</span> <span class="mono" style="font-size:var(--text-xs);">{{ e.token }} · {{ e.timeframe }} · {{ 'PAPER' if e.dry_run else 'LIVE' }}</span></span>
+            </div>
+            <div style="padding:var(--space-1) 0;">
+                <a href="/app/engines/{{ e.slug }}" style="font-size:var(--text-xs);color:var(--brand);text-decoration:none;">→ View engine</a>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="muted" style="padding:var(--space-3);">No engines running this strategy.</div>
+            {% endif %}
+        </div>
+    </div>
+    {# ── Clone Strategy Button ── #}
+    <div style="display:flex;gap:var(--space-2);margin-top:var(--space-2);flex-wrap:wrap;">
+        <button onclick="cloneStrategy()" style="background:var(--brand);color:#fff;border:none;padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-sm);font-weight:500;">⧉ Clone Strategy</button>
+    </div>
+    <div id="clone-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-4);max-width:420px;width:90%;margin:auto;margin-top:20vh;">
+            <h3 style="margin:0 0 var(--space-3) 0;">Clone {{ name }}</h3>
+            <label style="font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide);">CLONE NAME</label>
+            <input id="clone-name" type="text" value="{{ name }} Copy" style="width:100%;padding:var(--space-2);background:var(--surface-inset);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm);margin-bottom:var(--space-3);">
+            <label style="font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide);">DESCRIPTION (optional)</label>
+            <textarea id="clone-desc" rows="2" style="width:100%;padding:var(--space-2);background:var(--surface-inset);border:1px solid var(--border-subtle);border-radius:var(--radius-sm);color:var(--text-primary);font-size:var(--text-sm);margin-bottom:var(--space-3);resize:vertical;"></textarea>
+            <div style="display:flex;gap:var(--space-2);justify-content:flex-end;">
+                <button onclick="document.getElementById('clone-modal').style.display='none'" style="padding:var(--space-2) var(--space-3);background:transparent;border:1px solid var(--border-subtle);border-radius:var(--radius-sm);color:var(--text-muted);cursor:pointer;">Cancel</button>
+                <button onclick="submitClone()" id="clone-submit-btn" style="padding:var(--space-2) var(--space-3);background:var(--brand);border:none;border-radius:var(--radius-sm);color:#fff;cursor:pointer;font-weight:500;">Clone & Activate</button>
+            </div>
+            <div id="clone-status" style="margin-top:var(--space-2);font-size:var(--text-xs);color:var(--text-muted);"></div>
+        </div>
+    </div>
+</div>
+
+{# ── PineScript Tab ── #}
+<div class="tab-section" id="tab-pine">
+    <div class="chart-card">
+        <div class="card-head">
+            <h2>PineScript Source</h2>
+            <span style="font-size:var(--text-xs);color:var(--text-muted);">{{ strategy_id }}.pine</span>
+        </div>
+        {% if pine_source %}
+        <pre class="code-viewer">{{ pine_source }}</pre>
+        {% else %}
+        <div class="chart-empty">No PineScript source available.</div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Python Tab ── #}
+<div class="tab-section" id="tab-python">
+    <div class="chart-card">
+        <div class="card-head">
+            <h2>Python Source</h2>
+            <span style="font-size:var(--text-xs);color:var(--text-muted);">{{ strategy_id }}.py</span>
+        </div>
+        {% if python_source %}
+        <pre class="code-viewer">{{ python_source }}</pre>
+        {% else %}
+        <div class="chart-empty">No Python source available. <a href="/app/strategies/studio" style="color:var(--brand);">Convert in Strategy Studio →</a></div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Documentation Tab ── #}
+<div class="tab-section" id="tab-docs">
+    <div class="chart-card">
+        <h2>Documentation</h2>
+        <div style="padding:var(--space-3);color:var(--text-secondary);line-height:1.6;">
+            <p><strong>{{ name }}</strong> — {{ description }}</p>
+            <p style="margin-top:var(--space-2);">Mode: <code>{{ preset.mode }}</code> · Profile: <code>{{ preset.profile }}</code> · Timeframe: <code>{{ preset.timeframe }}</code></p>
+            <p style="margin-top:var(--space-2);">Activation: <code>{{ preset.activation }}</code> ticks · Offset: <code>{{ preset.offset }}</code> ticks</p>
+            <p style="margin-top:var(--space-2);color:var(--text-muted);font-size:var(--text-sm);">Full documentation will be generated from the strategy docstring and PineScript comments.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API_KEY = '{{ api_key }}';
+const STRATEGY_ID = '{{ strategy_id }}';
+
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+
+function cloneStrategy() {
+    document.getElementById('clone-modal').style.display = 'flex';
+}
+
+function submitClone() {
+    const name = document.getElementById('clone-name').value;
+    const desc = document.getElementById('clone-desc').value;
+    const btn = document.getElementById('clone-submit-btn');
+    const status = document.getElementById('clone-status');
+    btn.disabled = true;
+    btn.textContent = 'Cloning...';
+    status.textContent = '';
+
+    fetch('/api/v2/strategies/' + encodeURIComponent(STRATEGY_ID) + '/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ name: name, description: desc })
+    })
+    .then(r => r.json())
+    .then(j => {
+        if (!j.ok) { status.textContent = 'Clone failed: ' + (j.error || 'Unknown error'); btn.disabled = false; btn.textContent = 'Clone & Activate'; return; }
+        const newId = j.strategy_id;
+        status.textContent = 'Cloned as ' + newId + '. Activating...';
+        // Activate
+        fetch('/api/v2/strategies/' + encodeURIComponent(newId) + '/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY }
+        })
+        .then(r2 => r2.json())
+        .then(j2 => {
+            if (j2.ok) {
+                status.textContent = '✓ Activated as ' + newId;
+                btn.textContent = '✓ Done';
+                setTimeout(() => { document.getElementById('clone-modal').style.display = 'none'; location.reload(); }, 1500);
+            } else {
+                status.textContent = 'Cloned but activation failed: ' + (j2.error || 'Unknown');
+                btn.disabled = false; btn.textContent = 'Clone & Activate';
+            }
+        })
+        .catch(err => { status.textContent = 'Activation error: ' + err; btn.disabled = false; btn.textContent = 'Clone & Activate'; });
+    })
+    .catch(err => { status.textContent = 'Clone error: ' + err; btn.disabled = false; btn.textContent = 'Clone & Activate'; });
+}
+</script>
+{% endblock %}

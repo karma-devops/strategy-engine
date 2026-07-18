@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% block title %}PULS-R — {{ mode_label }}{% endblock %}
+{% block heading %}{{ mode_label }}{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+    <div class="kpi">
+        <div class="kpi-label">Total PnL</div>
+        <div class="kpi-value {% if total_pnl >= 0 %}positive{% else %}negative{% endif %}">{{ total_pnl | format_usd }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Active Engines</div>
+        <div class="kpi-value">{{ active_engines }} <span style="font-size:var(--text-sm);color:var(--text-muted);">/ {{ total_engines }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Mode</div>
+        <div class="kpi-value"><span class="tag tag-{% if mode == 'paper' %}flat{% else %}long{% endif %}">{% if mode == 'paper' %}Paper Trading{% else %}Live Trading{% endif %}</span></div>
+    </div>
+</div>
+
+{# ── Equity Curve ── #}
+<div class="chart-card">
+    <h2>Equity Curve</h2>
+    <div id="equityChart-wrap" style="position:relative;width:100%;height:280px;">
+        <div id="equityChart" style="width:100%;height:280px;"></div>
+        <div id="equity-empty" class="empty-state" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+            <div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div>
+            <div class="empty-state" style="margin-top:var(--space-2);">
+                <h3>No equity data yet</h3>
+                <p>Start an engine to see your equity curve.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if instances %}
+{# ── Token Price Chart ── #}
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <div class="card-head">
+        <h2 id="token-chart-title">Token Price Chart</h2>
+        <div style="display:flex;gap:var(--space-1);flex-wrap:wrap;" id="tf-chips">
+            <button class="chip" onclick="loadLiveTokenChart('5m', this)" style="padding:2px 8px;font-size:11px;">5m</button>
+            <button class="chip active" onclick="loadLiveTokenChart('15m', this)" style="padding:2px 8px;font-size:11px;">15m</button>
+            <button class="chip" onclick="loadLiveTokenChart('1h', this)" style="padding:2px 8px;font-size:11px;">1h</button>
+            <button class="chip" onclick="loadLiveTokenChart('4h', this)" style="padding:2px 8px;font-size:11px;">4h</button>
+        </div>
+    </div>
+    <div id="liveTokenChart-wrap" style="position:relative;width:100%;height:300px;">
+        <div id="liveTokenChart" style="width:100%;height:300px;"></div>
+        <div id="liveToken-empty" class="empty-state" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface-inset);border-radius:var(--radius-md);">
+            <div class="pulsr-loading-logo"><svg viewBox="0 0 90 72" aria-hidden="true"><path class="pulse-line" d="M3 72 L13 41 L22 64 L31 21 L40 49 L49 33 L58 45 L67 07" /></svg></div>
+            <div class="empty-state" style="margin-top:var(--space-2);">
+                <h3>Loading token price data</h3>
+                <p>Fetching candles from HyperLiquid...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="chart-card" style="margin-top:var(--space-3);">
+    <h2>Engines</h2>
+    {% if instances %}
+    <div class="fleet-grid">
+        {% for inst in instances %}
+        <div class="fleet-card {% if inst.status == 'running' %}running{% endif %}" onclick="location.href='/app/engines/{{ inst.slug }}'" style="cursor:pointer;">
+            <div class="fleet-card-head">
+                <h3>{{ inst.name }}</h3>
+                <span class="tag tag-{% if inst.status == 'running' %}running{% else %}flat{% endif %}">{{ inst.status }}</span>
+            </div>
+            <div class="fleet-sub">{{ inst.token }} · {{ inst.strategy_id }} · {{ inst.timeframe }}</div>
+            <div class="fleet-row"><span class="label">Mode</span><span class="tag tag-{% if inst.dry_run %}flat{% else %}long{% endif %}">{% if inst.dry_run %}Paper Trading{% else %}Live Trading{% endif %}</span></div>
+            <div class="fleet-row"><span class="label">Unrealized PnL</span><span class="{% if inst.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" style="font-family:var(--font-mono);">{{ inst.unrealized_pnl | format_usd }}</span></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No {{ mode_label }} engines. Toggle an engine's mode in <a href="/app/engines" style="color:var(--brand);">Engines →</a></div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+// ponytail: use PulsRChart wrapper (already loaded via layout.html), not CDN
+const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+const equityData = {{ equity_series | tojson }};
+const _equityEmpty = document.getElementById('equity-empty');
+
+const equityChart = (typeof PulsRChart !== 'undefined')
+    ? PulsRChart.createEquityChart('equityChart', { height: 280 })
+    : null;
+if (equityChart) {
+    equityChart.setData(equityData);
+    if (equityData && equityData.length > 1 && _equityEmpty) {
+        _equityEmpty.style.display = 'none';
+    }
+}
+
+// Live equity update every 3s
+let lastEquityValue = (equityData && equityData.length) ? parseFloat(equityData[equityData.length - 1].value) : null;
+setInterval(() => {
+    if (!equityChart) return;
+    fetch(API_BASE + '/api/v2/summary', { headers: { 'X-API-Key': "{{ api_key or '' }}" } })
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok) return;
+            const v = (j.account_value_equity !== undefined) ? j.account_value_equity : null;
+            if (v == null) return;
+            if (_equityEmpty) _equityEmpty.style.display = 'none';
+            if (lastEquityValue == null || Math.abs(v - lastEquityValue) > 0.0001) {
+                lastEquityValue = v;
+                equityChart.update({ time: Math.floor(Date.now() / 1000), value: v });
+            }
+        })
+        .catch(() => {});
+}, 3000);
+
+// ── Token Price Candlestick Chart ──
+const LIVE_TOKEN = '{{ instances[0].token if instances else "" }}';
+const liveTokenEmpty = document.getElementById('liveToken-empty');
+let liveTokenChart = null;
+let liveTokenTF = '15m';
+
+function loadLiveTokenChart(tf, btn) {
+    liveTokenTF = tf || liveTokenTF;
+    if (btn) {
+        document.querySelectorAll('#tf-chips .chip').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    if (!LIVE_TOKEN) return;
+    if (liveTokenEmpty) liveTokenEmpty.style.display = 'flex';
+    fetch(API_BASE + '/api/v2/candles/' + encodeURIComponent(LIVE_TOKEN) + '?timeframe=' + liveTokenTF + '&bars=200')
+        .then(r => r.json())
+        .then(j => {
+            if (!j || !j.ok || !j.candles || j.candles.length === 0) return;
+            if (!liveTokenChart) {
+                liveTokenChart = (typeof PulsRChart !== 'undefined')
+                    ? PulsRChart.createCandleChart('liveTokenChart', { height: 300 })
+                    : null;
+            }
+            if (!liveTokenChart) return;
+            liveTokenChart.setData(j.candles);
+            if (liveTokenEmpty) liveTokenEmpty.style.display = 'none';
+            const title = document.getElementById('token-chart-title');
+            if (title) title.textContent = LIVE_TOKEN + ' Price Chart';
+        })
+        .catch(e => { console.error('Live token chart load failed:', e); });
+}
+
+if (LIVE_TOKEN) loadLiveTokenChart();
+setInterval(() => { if (liveTokenChart) loadLiveTokenChart(); }, 30000);
+</script>
+{% endblock %}
+{% endblock %}
