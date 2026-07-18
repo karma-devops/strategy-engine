@@ -1,0 +1,326 @@
+# CONTEXT.md — strategy-engine (PULS·R) — THE MAP
+
+> **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
+> Companion docs (consolidated 2026-07-18): **NOTES.md** (session log + audits + ROAST), **TASK-LIST.md** (open work), **BETA-ROADMAP.md** (forward plan).
+> Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
+> Do not commit to GitHub (local-only). Version: **v1.98**.
+
+---
+
+## 1. Project Identity
+
+`strategy-engine` (PULS·R) is the canonical strategy-only trading executor for HyperLiquid perpetuals.
+
+- **Runtime:** Python FastAPI + SSE.
+- **Exchange:** HyperLiquid perpetuals.
+- **Decision maker:** Engine strategy only. No LLM for execution.
+- **Scope:** Up to 6 engine instances (`engine-1`..`engine-6`), each with its own token, strategy, credentials, risk settings.
+- **Goal:** Instant execution on engine signals, full per-engine monitoring, backtest-first validation, PWA UI with public landing + authenticated dashboard.
+
+---
+
+## 2. Directory Map
+
+```
+strategy-engine/
+├── main.py                 # FastAPI app, route registration, lifespan (REPORTS version 0.095 — STALE, see §10)
+├── config.py              # Env config: port, DB, global creds, LLM defaults
+├── requirements.txt
+├── Dockerfile / docker-compose.yml
+├── CONTEXT.md             # This file — THE MAP
+├── NOTES.md               # Session log + audits + ROAST findings
+├── TASK-LIST.md           # Open work inventory (reconciled 2026-07-18)
+├── BETA-ROADMAP.md        # Beta readiness action plan
+├── api/                   # REST routes (11 modules, /api/v2)
+│   ├── instances.py       # CRUD + start/stop/close/leverage + delete cascade
+│   ├── signals.py positions.py metrics.py withdrawals.py
+│   ├── stream.py          # SSE event stream (emits `trade`, not `position`)
+│   ├── strategies.py backtests.py monitoring.py killswitch.py metadata.py
+├── app/                   # Jinja2 UI (Option B: per-route server-rendered, NO SPA)
+│   ├── routes.py          # UI routes (Basic Auth) — per-page
+│   ├── templates/
+│   │   ├── layout.html    # Shared shell (sidebar, topbar, PWA, toast, tooltip JS)
+│   │   ├── engine_detail.html  # ★ ENGINE DETAIL SURFACE — the per-instance "map":
+│   │   │                     KPI row, performance hero, live position card + strategy card,
+│   │   │                     trade/signal tables, runner console, controls bar. Served at
+│   │   │                     /app/engines/{slug}. This template is the canonical reference
+│   │   │                     for what a single engine instance exposes to the operator.
+│   │   ├── dashboard.html engines.html trades.html strategies.html strategy_detail.html
+│   │   ├── strategy_studio.html testing_historical.html assistant.html chat_widget.html
+│   │   ├── instance_form.html error.html (404 splash)
+│   │   └── backtests.html withdrawals.html settings.html  # legacy redirects
+│   ├── static/  tokens.css (design tokens) style.css chat_widget.* manifest.json sw.js
+│   └── charts.js          # LEGACY lightweight-charts — RETIRED (charts now pure SVG+JS)
+├── core/                  # HyperLiquid layer: exchange.py, llm.py, market_data.py, position_sizer.py
+├── instances/             # models.py, manager.py, runner.py, events.py
+├── withdrawal/            # calculator.py, scheduler.py, manual.py
+├── monitoring/            # tracker.py, rotator.py, testing_pool.py, alerts.py
+├── backtests/             # runner.py (bar-by-bar sim, trailing stop, tick simulation)
+├── scripts/worker.py      # Live strategy worker — port 9999, STANDALONE tester, no DB.
+│                          #   Operator directive: KEEP as standalone testing wrapper, NOT integrated.
+├── pinescript-tv/         # Original PineScript source-of-truth
+├── strategies/            # engine_v1, engine_v1_3, engine_v6_1
+└── data/                  # SQLite DBs + backups (template_empty_STABLE.db, dev_test.db, backups/)
+```
+
+---
+
+## 3. URL Structure
+
+### Public (no auth)
+| URL | Serves |
+|-----|--------|
+| `/` | Landing page | 
+| `/faq` `/about` | Info pages |
+| `/login` `/signup` | Auth forms (signup = placeholder) |
+| `/health` | Health check (`{"status":"ok","dry_run":...}`) |
+| `/stream` | SSE event stream |
+
+### Authenticated (Basic Auth)
+| URL | Serves |
+|-----|--------|
+| `/app` → `/app/dashboard` | Fleet overview, pulse graph, console |
+| `/app/engines` | Fleet grid |
+| `/app/engines/{slug}` | **Engine detail** (see engine_detail.html note in §2) |
+| `/app/trades` | All trades + Active Positions section |
+| `/app/strategies` `/app/strategies/{id}` `/app/strategies/upload` | Strategy registry + detail (4 tabs) + upload |
+| `/app/testing/historical` | Backtest form + results (replaces `/app/backtests`) |
+| `/app/monitoring` | Scores + alerts |
+| `/app/account/*` | Overview, Settings, Secrets, Wallet, API Keys |
+| `/app/assistant` | AI chat (full page + shared widget) |
+| `/app/*` (unknown) | `error.html` 404 splash |
+
+### Live Worker (port 9999, Basic Auth operator:operator) — standalone tester
+`/` worker UI · `/api/state` · `/api/config` POST · `/api/start` `/api/stop` POST · `/stream` SSE
+
+### API (X-API-Key header, `/api/v2/*`)
+
+---
+
+## 4. Configuration (env vars)
+
+| Var | Default | Description |
+|-----|---------|-------------|
+| `STRATEGY_ENGINE_PORT` | `8888` (running on `8792` dev / `9999` worker) | HTTP port |
+| `DATABASE_URL` | `sqlite:///data/strategy_engine.db` | SQLite local |
+| `DRY_RUN` | `false` | Global default; per-instance override via DB |
+| `HYPER_LIQUID_ETH_PRIVATE_KEY` | required | Global HL signing key |
+| `ACCOUNT_ADDRESS` | required | Global wallet |
+| `INSTANCE_SECRET_KEY` | required | Fernet key for per-instance private keys |
+| `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` | required | UI login |
+| `FLASK_SECRET_KEY` | required | UI session |
+| `AGENT_API_KEY` | optional | API route protection |
+| `AI_PROVIDER` | `ollama` | Chat provider |
+| `AI_MODEL` | `glm-5.1` | Chat model |
+| `AI_API_KEY` | optional | Chat auth |
+
+Per-engine overrides in DB: `hyperliquid_private_key` (encrypted), `account_address`, `withdrawal_address`, `hl_credential_id`.
+Per-user model prefs: `User.assistant_model`, `User.coder_model` (default `glm-5.1`).
+
+---
+
+## 5. API Surface (`/api/v2/*`, X-API-Key unless noted)
+
+**Instances:** `GET/POST /instances` · `PUT/DELETE /instances/{slug}` (cascade) · `POST /instances/{slug}/{start|stop|restart|close}` · `GET /instances/{slug}/{signals|trades|position|balance}`.
+**Metadata:** `GET /metadata` (232 tokens) · `?query=` · `?token=` · `GET /stats`.
+**Backtests:** `POST /backtests/run` · `GET /backtests` · `POST /backtests/replay` (tick sim).
+**Metrics/Account:** `GET /metrics` · `GET /metrics/account` · `GET /account`.
+**Withdrawals:** `GET/PUT /withdrawals/config` · `GET /withdrawals/history` · `GET /withdrawals/projection`.
+**Kill:** `GET /kill/status` · `POST /kill/global` · `POST /kill/withdrawals`.
+**Monitoring:** `GET /monitoring/scores` · `GET /alerts`.
+**Chat:** `POST /chat` (Basic Auth) · `GET /chat/sessions` (Basic Auth).
+**Strategies:** `GET /strategies`. **Stream:** `GET /stream` (SSE, no prefix).
+
+---
+
+## 6. UI & Design System
+
+- **Palette:** brown neutrals (`#0f0a08` bg → `#f5f1ed` text) + electric teal brand `#06d6a0` + semantic positive `#10b981` / negative `#ef4444` / warning `#f59e0b`. Light mode inverted (localStorage).
+- **Type:** Space Grotesk (display) / Inter (body) / JetBrains Mono (code). 8-step scale, 1.15x ratio.
+- **Anti-slop (DESIGN-SPEC-V2 dials):** variance 6.5, motion 5.5, density 7.5. Asymmetric 2fr/1fr grids, border-top KPI dividers (not boxes), brown-tinted shadows, teal-tinted glass, skeleton/empty/success states, status-dot pulse 2s.
+- **Breakpoints:** asymmetric grid → 1fr @1024px; sidebar 220→56px; KPI 4→2→1 col.
+- **PWA:** manifest.json + sw.js. Path-based routing (no hash).
+- **Mobile:** bottom nav, burger ≤768px, 44px touch targets, stacked grids.
+
+### 📁 `design-system/MASTER.md` — AUTHORITATIVE DESIGN SYSTEM SPEC (pointer)
+**Do NOT absorb — kept as a live subdirectory doc.** This is the canonical source for:
+- **Token architecture** (3-layer: Primitive → Semantic → Component) in `app/static/tokens.css`
+- **Typography scale**, **spacing scale (4pt)**, **component specs** (button/card/tag/input/tab/trade-row/chat-widget)
+- **Layout system** (breakpoints, grid, content width), **navigation patterns**
+- **Animation guidelines**, **accessibility checklist (WCAG AA)**, **Gestalt audit protocol** (blur isolation / color erasure / boundary strike)
+- **PWA config** (manifest, service worker, routes)
+
+The legacy `DESIGN-SPEC.md` / `DESIGN-SPEC-V2.md` content was folded into §6 above for the MAP, but `design-system/MASTER.md` remains the maintained reference for any token/component change. When editing UI, read it first. If it drifts from `tokens.css`, flag in NOTES.md (see "Spec Drift" entries).
+
+### `design-system/` file map (authoritative, internal docs)
+| File | Role | Status |
+|------|------|--------|
+| `MASTER.md` | Authoritative token/component/layout/a11y/PWA spec. **Palette wins.** | maintained |
+| `theme-glow.md` + `theme-glow.css` | Glow/aura spectrum extension (broadens MASTER palette for effects — does NOT override MASTER base tokens). | NEW (Z4) |
+| `components.md` | Component specs (card/tag/button/input/tab/trade-row/**position-side-spine**/pulse) reconciled to MASTER. | NEW (Z4) |
+| `position-card-spec.md` | HL open-position replication: left-edge spine overlay + field set + token mapping (long=`--color-profit` `#34D399`, short=`--color-loss` `#FB7185`). | NEW (Z4) |
+
+**Palette authority:** `MASTER.md` wins (`#34D399` profit / `#FB7185` loss / `#15100B` surface-card). `tokens.css` + this §6's old `#10b981`/`#ef4444` are OUTDATED — reconcile via Z4. Position side-color uses MASTER tokens (not HL's `#00C08B`/`#FF4D4D`); **layout style follows HL** (left-edge spine, no row fill, symbol+size colored).
+
+---
+
+## 7. Backtest Runner (`backtests/runner.py`)
+
+- Bar-by-bar inline signal gen; `equity_history` feeds back to strategy.
+- Risk sizing: `qty = min(riskAmount/riskPerShare, equity*0.97/close)`.
+- SL via candle high/low; trailing stop (HL mintick); trend-reversal close (EMA cross); signal-reversal close.
+- HL taker fee 0.045%; default 1x lev, $100 capital.
+- Standalone mode (token+strategy+timeframe+days, no instance). Activation = float.
+- Tick modes: 1=OHLC, 4=basic O/H/L/C, 28=Brownian bridge. **No HL orders sent.**
+
+---
+
+## 8. Strategy Contract (`STRATEGY_CONVERTER.md` absorbed)
+
+**Golden rule:** Strategy declares, receiver consumes. Receivers (worker/runner/backtests) are universal — they never import strategy classes or hardcode activation/offset/mode.
+
+`generate_signals()` returns: `{token, signal (±1|0), direction (BUY|SELL|NEUTRAL), metadata{}, exit_config{}}`.
+Receiver exit order: 1) Stop Loss → 2) Trailing (with `trail_exit_grace_seconds`) → 3) Take Profit → 4) Trend Change (EMA cross) → 5) Time Exit.
+Removed fabricated exits: Reversal Signal, Full Fan Alignment, Signal Reverses.
+Three-port architecture: `strategy_config` (DB params, UI-editable) · `entry_config` (per-signal) · `exit_config` (per-signal, receiver-neutral).
+
+---
+
+## 9. Pipe Architecture & Information Architecture
+
+**Pipe (data flow):** `main.py` scheduler (30s) → `signal_monitor.run_once()` → `data_fetcher` → `engine.generate_signals()` → position/account update → `exchange_client` open/close → SSE/REST to dashboard. Position sizing: `notional = free_balance * MAX_POSITION_PCT * LEVERAGE`.
+**IA (navigation) — TARGET STATE (Z2, beta-blocker):** Sidebar = Dashboard / Engines (dynamic children) / Strategies (incl. Studio) / **Paper** / **Backtesting** / Trades / Account (Overview/Settings/Secrets/Wallet/API Keys) / Assistant. The legacy "Testing" collapsible is **removed**; Historical→Backtesting, Paper Trading→**Paper**. 
+- **Paper** = live forward-testing simulation (dry-run only, no executions — evaluate your strategy scripts). Top-level.
+- **Backtesting** = historical tick/replay simulation, isolated store. Top-level.
+- **Trades** = LIVE trades ONLY (`dry_run=False`). Paper trade history lives only on the Paper results page.
+
+**Naming:** routes `/app/{section}/{id}/{subsection}` (kebab); APIs `/api/v2/{resource}/{id}/{action}` (snake in practice); templates `{section}.html`/`{section}_detail.html` (snake_case); models PascalCase class / snake_case plural table / UUID or slug PK.
+
+---
+
+## 10. Version & Audit State (reconciled 2026-07-18, end-of-day)
+
+### Version
+- **Actual: v1.98** (VERSION file, git tags v1.94→v1.98).
+- **✅ FIXED (D1):** `main.py` now reads `version=VERSION` (was hardcoded `"0.095"`). `/openapi.json` correctly reports `"version":"v1.98"`. Resolved 2026-07-18.
+- Session 2026-07-18: full refactor execution — Z1–Z7 (route split, menu, engine detail, design-system, position card, backtest store, unified runner) + X1–X4 (bugreport fixes) + D2 (auto-restart) + A4 (liq enrichment) + B7 (kill-switch close). **NOT yet stable/beta** — see §13.
+
+### Live State (confirmed 2026-07-18, end-of-day)
+- Server 8792 UP, `dry_run=false`.
+- engine-1: FARTCOIN Scalp v1.3, RUNNING LIVE, LONG ~390 @ ~$0.1296 (re-adopted from HL), liq=0.1228 (A4 live-enriched), account ~$5.1.
+- engine-2: HYPE Paper v1.3, STOPPED, FLAT, dry_run=true.
+- Worker 9999 DOWN (kept as standalone tester).
+
+### Audit — Fixed (verified in code + live)
+| ID | Finding | Fix | Verified |
+|----|---------|-----|----------|
+| B1 | Stale HL client (position=None) | `f66dffe` `_refresh_hl_client()` + retry | code |
+| B2 | Password hash missing on fresh DB | seed `hash_password('operator')` | code |
+| B8 / #2 | Plaintext API keys | P12 `60f039a` Fernet | code |
+| #1 | Trade not persisted | P9 `9350609` | code |
+| #3/#4/#7 | Auth info leak / min-order / LOG_BUFFER O(n) | P11 `21da5e5` | code |
+| #10 / P14 | Dry-run/live trade separation | `e6ac56d`→`14f21e5` | code |
+| D1 | `main.py` version hardcoded 0.095 | reads `VERSION` now | **live** (`/openapi.json` → v1.98) |
+| D3 | equity_history to strategy | verified in `runner._tick()` | code |
+| A1/A4 | Position card + API enrichment | `f0bbf90`; **A4 extended** — summary now pulls live `liquidationPx` from HL for running positions (liq no longer 0.0) | **live** (liq=0.1228) |
+| B7 | Kill switch stops thread but doesn't `market_close()` | `stop_instance()` + `stop_instance_by_slug()` now call `market_close()` before halt; kill-switch already closed all | **live** (FARTCOIN position closed on HL) |
+| D2 | No auto-restart (engine dies on host reboot) | runner `_loop` auto-restarts on crash (5× exp backoff); manager `load_instances(auto_resume=True)` resumes running instances on boot | **live** (engine-1 auto-resumed after server restart) |
+| X1 | Duplicate entry on short poll interval | `PENDING` sentinel set synchronously before `_execute_open`; blocks re-entry on next poll | code + lint |
+| X2 | Entry without pin-bar condition | entry requires `valid_trigger_bull/bear` flag from strategy result; skips otherwise | code + lint |
+| X3 | Backtest form: start-balance + timeframes | form now has 30m/3h/1d options, start-balance field (default 100), HL token registry link; payload wired | live (form renders) |
+| X4 | ExecutionCostModel (slippage/maker/taker) | `backtests/cost_model.py` + wired into `backtests/runner.py` (replaces hardcoded TAKER_FEE) | **live** (entry $0.13/exit $0.10 per $100) |
+| Z1–Z7 | 3-way separation + unified runner | `app/_common.py`, `paper_routes.py`, `backtest_routes.py`, `testing/runner.py`, `testing/backtest_store.py`, design-system/* , `position-card.js` | **live** (all routes 200, Z7 backtest executed) |
+
+### Audit — OPEN (pre-beta, not live-safety blockers)
+| ID | Severity | Finding | Plan |
+|----|----------|---------|------|
+| B9 | MED | Anomalous drawdown spikes (>50% filter exists, verify on live) | H2 |
+| B3 | MED | Per-user log persistence (LOG_BUFFER in-memory only) | H3 |
+| B5/B6 | LOW | NOT NULL defaults + cascade deletes | H5 |
+| D0 | DEPLOY | Deferred `app/routes.py` `_safe_tojson` fix — now absorbed into `_common.py` + live; verify no 500s remain | D0 |
+| D4/D5 | OPEN | Trade PAPER/LIVE badge; dry_run toggle end-to-end verify | V3/D4 |
+
+### Dry-Run Architecture (verified)
+Global `.env` DRY_RUN=false → live-connected. Per-instance `dry_run=true` → paper (signals, no orders). `get_hyperliquid_client()` always passes `instance.dry_run`. UI toggle reflects instantly.
+
+### Auth Architecture (verified P6)
+`require_ui_or_api` accepts Basic Auth / global X-API-Key / PULS-R per-user key. Router-level `verify_ui_credentials` no longer blocks API-key-only requests.
+
+---
+
+## 13. Stability Status (2026-07-18 end-of-day)
+
+**⚠️ NOT STABLE. NOT BETA.** All refactor tasks (Z1–Z7, X1–X4, A4, B7, D1, D2) are code-complete and live-verified at the route/import level, but:
+- **No test suite executed** — correctness is asserted via live probes + import checks, not unit/integration tests.
+- **UI wiring only partially verified** — `position-card.js` is wired to dashboard but `#pos-grid` population not visually confirmed with a live position render; `engine_detail.html` mode tag added but not visually checked.
+- **Bug surface unknown** — next phase is systematic bughunting (UI + wiring + data flow) before any stability claim.
+- **manager.py D2 patch** required a restore+re-apply cycle (class-structure corruption) — indicates edit discipline needs tighter verification before beta.
+
+**Next phase:** bughunting + UI frontend improvement + wiring verification. See TASK-LIST.md (new BUGHUNT group) and BETA-ROADMAP.md.
+
+---
+
+## 11. Three-Way Strict Separation (SOLID / DDD) — beta-blocker (Z1–Z7)
+
+**Goal:** theoretical tools (paper/backtest) can NEVER bleed into the Live Dashboard or Live Engine Stats. Isolation is enforced at the **repository layer**, not just routing.
+
+### Bounded contexts (inviolable)
+| Domain | Data scope | Menu | Router file | Store |
+|--------|-----------|------|-------------|-------|
+| **LIVE** | `dry_run=False` only | Dashboard · Engines · Trades(live) | `app/routes.py` | `strategy_engine.db` |
+| **PAPER** | `dry_run=True` only (no executions) | **Paper** (top-level) | `app/paper_routes.py` | `strategy_engine.db` (filtered) |
+| **BACKTEST** | isolated, zero live access | **Backtesting** (top-level) | `app/backtest_routes.py` | **`backtest.db` (separate file)** |
+| **STRATEGY** | code + params (shared kernel) | Strategies · Studio | `app/routes.py` | `strategy_engine.db` |
+
+### No-bleed guarantees
+- Each repository **appends its filter unconditionally** — router never passes a mode flag down. `LiveRepository` physically cannot return `dry_run=True` rows.
+- `BacktestRepository` points at a **different SQLite file** with different models → impossible to read/write live data.
+- **Shared kernel:** only the strategy contract (`generate_signals()`) + receiver exit order are reused by both `instances/runner.py` (live daemon) and `testing/runner.py` (`--mode paper|backtest`). That reuse is intended, not a bleed.
+- Withdrawals stay in `routes.py` (live-only). Strategies (Studio/upload) stay in `routes.py` as a shared kernel, NOT a 4th router.
+
+### SOLID mapping
+- **S**ingle: one router per domain; `testing/runner.py` handles one mode per invocation.
+- **O**pen/Closed: receivers consume the strategy contract without importing strategy classes.
+- **L**iskov: paper/backtest runners satisfy the same `Runner` port.
+- **I**nterface Segregation: `LiveReadService` / `PaperReadService` / `BacktestReadService` ports; Dashboard depends on `LiveReadService` only (DIP).
+- **D**ependency Inversion: routes depend on repository ports, not live SQLAlchemy sessions.
+
+### File tree (target)
+```
+strategy-engine/
+├── main.py                      # include_router(live_) + paper_ + backtest_ ; injects correct repo per router
+├── app/
+│   ├── routes.py                # LIVE: dashboard, engines, trades(LIVE), account, settings, strategies, assistant, live, withdrawals
+│   ├── paper_routes.py          # Paper page + paper results/trades history
+│   ├── backtest_routes.py       # Backtesting page + backtest runs/results
+│   ├── _common.py               # pure helpers (_safe_tojson, auth deps, theme inject) — ZERO DB access
+│   ├── templates/  layout.html (menu: Dashboard|Engines|Strategies|Paper|Backtesting|Trades|Account|Assistant)
+│   │              paper.html · backtesting.html · trades.html (LIVE-only) · engine_detail.html (dynamic LIVE/PAPER title)
+│   └── static/    position-card.js (HL spine, populates #pos-grid) · design tokens
+├── instances/
+│   ├── models.py                # shared schema (dry_run column)
+│   ├── runner.py                # LIVE daemon (engine-1)
+│   └── repositories.py          # LiveRepository / PaperRepository (DIP ports + filters)
+├── testing/
+│   ├── runner.py                # UNIFIED: --mode paper|backtest  (absorbs backtests/runner.py)
+│   └── backtest_store.py        # isolated SQLite models + store
+├── design-system/  MASTER.md · theme-glow.md/.css · components.md · position-card-spec.md
+└── backtests/runner.py          # → backups/deprecated (absorbed by testing/runner.py)
+```
+**Note:** `scripts/worker.py` (port 9999) stays standalone per operator directive — not absorbed into `testing/runner.py`.
+
+---
+
+## 12. Rules of Engagement
+- No code execution without operator approval.
+- Backup before structural changes (ADIX phase-backup; tar.gz STABLE form).
+- One change per cycle; verify before next.
+- Secrets in env vars only; never committed.
+- ADIX: filesystem is the state machine; every directory is a processing node.
+- Keep worker (9999) standalone — do not integrate into main app.
+
+## Doc pointer (2026-07-18)
+- `TASK-LIST.md` now lives in `docs/TASK-LIST.md` (work/status tracker).
+- `docs/` holds the architecture contract: README, VOCABULARY, ARCHITECTURE,
+  DECISIONS, ROADMAP, CONTRIBUTING, STYLEGUIDE, AI_RULES, REFACTOR_PLAN.
+- `BACKLOG.md` (root) = bugreport tracking ledger.

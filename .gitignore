@@ -1,12 +1,11 @@
-# Local-only files
-CONTEXT.md
-NOTES.md
+# Local-only files (legacy doc names, no longer present)
 SPECSHEET.md
 PIPE-ARCHITECTURE.md
 DEPLOYMENT.md
 HANDOVER.md
+HANDOVER-PROMPT.md
 
-# Backups
+# Backups (kept outside main/ anyway)
 backups/
 
 # Data (DB files ignored, dir structure tracked)
@@ -22,9 +21,10 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Env
+# Env / secrets
 .env
 *.env
+.env.bak
 
 # Secrets / session cookies
 cookies.txt
@@ -41,5 +41,4 @@ cookies.txt
 
 # IDE
 .vscode/
-.idea/HANDOVER-PROMPT.md
-HANDOVER.md
+.idea/
