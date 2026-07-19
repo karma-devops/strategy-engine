@@ -229,7 +229,8 @@
     
     const cardEl = buildPositionCard(instanceData);
     if (cardEl) {
-      card.replaceWith(cardEl);
+      card.innerHTML = '';
+      card.appendChild(cardEl);
     }
   }
   
@@ -264,7 +265,8 @@
   function hydratePositions() {
     const key = window.API_KEY;
     if (!key) return;
-    fetch('/api/v2/positions', { headers: { 'X-API-Key': key } })
+    const base = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@\/]+@/, 'http://');
+    fetch(base + '/api/v2/positions', { headers: { 'X-API-Key': key } })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d || !d.ok || !d.positions) return;
