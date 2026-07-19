@@ -1922,3 +1922,23 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - Test cred soft-deleted after verify
 
 **Backup:** `backups/v208_t26-pre_2026-07-19_1526.tar.gz`.
+
+## ADR-008 — Operator UI Authentication (Option A) — CLOSED 2026-07-19
+
+**Decision (operator):** Inject operator's per-user `puls_` key into dashboard templates instead of the global `AGENT_API_KEY`. No operator fallback in `_current_user_id` (isolation preserved).
+
+**What shipped (commit `09f268a`, pushed, local=remote=41):**
+- `docs/DECISIONS.md`: ADR-008 (Operator = tenant with privileges, not global special-case).
+- `app/routes.py`:
+  - `get_dashboard_api_key()` — loads operator, Fernet-decrypts their `puls_` key, **cached in-memory only** (never written to disk/logs; no circular dep: uses `get_or_seed_operator` + `decrypt_api_key`, neither calls `_current_user_id`).
+  - Swapped `config.AGENT_API_KEY or ""` → `get_dashboard_api_key()` in all 19 tenant-API template render sites (dashboard, account_secrets, engines, engine_detail, trades, withdrawals, strategies, strategy_upload/studio/detail, settings, testing_*, live_paper, assistant, etc.).
+
+**Live verification (fresh DB, pycache cleared):**
+- `GET /api/v2/credentials` with operator `puls_` key → **200** (operator authenticates as operator-tenant).
+- Same endpoint with global `AGENT_API_KEY` → **403** (isolation intact).
+- Served `account_secrets.html` source now injects `puls_26d1…` (operator key), NOT the global `goodgirl999`.
+- Root-cause note: earlier "global leaked" was a **stale `app/__pycache__/routes.cpython-312.pyc` (ts 08:08)** loading pre-edit code. Cleared pycache + wiped DB → clean recompile.
+
+**Security posture:** leaked operator `puls_` key = single-tenant compromise (strictly less dangerous than the former global key = all tenants). Global key is now dead for all tenant routes.
+
+**Backup:** `v208_adra008-pre`, `v209_phaseb-pre`, `v210_dbb4wipe` (pre-wipe DB snapshot).

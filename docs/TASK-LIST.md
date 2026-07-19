@@ -46,6 +46,7 @@
 - `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — ✅ DONE (T2-6, `a61b206`)
 - Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
 - 🔒 **Per-user isolation for instance list/create/delete — DONE (`c17304e`)**: `_current_user_id` no longer falls back to operator (global/missing key → 403); `GET/POST/DELETE /api/v2/instances` scoped by `user_id`; UI `create_instance` binds owner `user_id`. Live-verified: cross-user delete of engine-1 → 404, per-user list returns only own engines.
+- 🔒 **ADR-008 Operator UI Auth (Option A) — DONE (`09f268a`)**: inject operator's per-user `puls_` key into dashboard templates (19 render sites) via `get_dashboard_api_key()`; global `AGENT_API_KEY` now 403 on tenant routes. Fresh-DB verified: operator `puls_` → `/api/v2/credentials` 200; global → 403.
 
 ### Phase -1 Rewrite — guidance (NOT blocking, do after Tier 0+1)
 1. **Docs-in-parallel, not docs-as-gate.** Ship Tier 1/2 fixes on a maintenance branch while writing `VOCABULARY.md`/`ARCHITECTURE.md`/`DECISIONS.md`. No multi-day code freeze on a live-order system.
