@@ -173,7 +173,10 @@ def test_credential(request: Request, cred_id: str, api_key: str = Depends(verif
                     json={"model": data.get("model", ""), "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5},
                     timeout=15,
                 )
-                return {"ok": r.status_code in (200, 401), "status_code": r.status_code}
+                # 200 = credential accepted by provider. 401 means the key was
+                # REJECTED (invalid/expired) — must NOT be reported as ok:true,
+                # or users believe a dead key works. Only 200 is success.
+                return {"ok": r.status_code == 200, "status_code": r.status_code}
             except Exception as e:
                 return {"ok": False, "error": str(e)}
         elif cred.type == "eth_wallet":
