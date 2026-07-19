@@ -290,10 +290,8 @@
     const equityData = {{ equity_series | tojson | safe }};
     const tradesData = {{ trades | tojson | safe }};
 
-    // ── SVG Pulse Graph (T4-5: zero-centered relative oscillation) ──
-    // Renders equity as % deviation from the window's first point (anchor),
-    // NOT absolute dollar value. Baseline sits at viewBox centerY (100),
-    // positive up (green hemisphere), negative down (red hemisphere).
+    // ── SVG Pulse Graph (original ai-trading-agent-hl style: absolute min/max
+    //     scaling, shadow fills DOWNWARD only to the bottom edge, NO centerline) ──
     function buildPulse() {
         const path = document.getElementById('pulse-path');
         const area = document.getElementById('pulse-area');
@@ -301,34 +299,10 @@
         const empty = document.getElementById('pulse-empty');
         if (!path) return;
         const W = 1000, H = 200, PAD = 8;
-        const centerY = H / 2;          // 100 — zero centerline
-        const AMP = centerY * 0.82;      // max vertical swing into each hemisphere
-        // T4-5 Step 2: dashed zero-center baseline. Anchored in SVG coord space
-        // (not CSS) so it scales with viewBox across mobile/desktop profiles.
-        // Inserted as the FIRST child of each pulse SVG so wave paths paint on top.
-        // (Senior brief used .panel-chart-wrapper/#pulse-container selectors that
-        //  do NOT exist in this template — targeting the real #pulse-svg/#pulse-svg-m IDs.)
-        ['pulse-svg', 'pulse-svg-m'].forEach(function(svgId) {
-            const svgEl = document.getElementById(svgId);
-            if (!svgEl) return;
-            let baseline = svgEl.querySelector('#pulse-baseline');
-            if (!baseline) {
-                baseline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                baseline.setAttribute('id', 'pulse-baseline');
-                baseline.setAttribute('stroke', 'var(--border, rgba(255, 255, 255, 0.15))');
-                baseline.setAttribute('stroke-dasharray', '5,5');
-                baseline.setAttribute('stroke-width', '1');
-                svgEl.insertBefore(baseline, svgEl.firstChild);
-            }
-            baseline.setAttribute('x1', '0');
-            baseline.setAttribute('y1', centerY.toString());
-            baseline.setAttribute('x2', W.toString());
-            baseline.setAttribute('y2', centerY.toString());
-        });
         if (!equityData || equityData.length < 2) {
-            // Draw flat pulsing line on the zero centerline instead of empty state
+            // Draw flat pulsing line near the bottom instead of empty state
             empty.style.display = 'none';
-            const flatY = centerY;
+            const flatY = H - PAD - 2;
             const startX = PAD;
             const endX = W - PAD;
             path.setAttribute('d', 'M' + startX + ',' + flatY + ' L' + endX + ',' + flatY);
@@ -355,23 +329,13 @@
         }
         empty.style.display = 'none';
         const vals = equityData.map(d => parseFloat(d.value) || 0);
-        const baseValue = vals[0];                  // anchor = first point in window
-        if (!baseValue) {
-            // Degenerate anchor (zero) — fall back to flat line
-            const flatY = centerY;
-            path.setAttribute('d', 'M' + PAD + ',' + flatY + ' L' + (W - PAD) + ',' + flatY);
-            area.setAttribute('d', 'M' + PAD + ',' + flatY + ' L' + (W - PAD) + ',' + flatY + ' L' + (W - PAD) + ',' + (H - PAD) + ' L' + PAD + ',' + (H - PAD) + ' Z');
-            return;
-        }
-        // Δ% relative to anchor
-        const deviations = vals.map(v => ((v - baseValue) / baseValue) * 100);
-        let maxAbsDev = Math.max(...deviations.map(Math.abs));
-        if (maxAbsDev < 0.02) maxAbsDev = 0.02;    // floor so flat regimes don't clip/explode
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const span = (max - min) || 1;
         const n = equityData.length;
-        // Map deviation -> y around centerY (positive Δ = up = smaller y)
-        const pts = deviations.map((dev, i) => {
+        // Absolute min/max scaling — wiggle fills the box (no zero-anchored flatline)
+        const pts = equityData.map((d, i) => {
             const x = PAD + (i / (n - 1)) * (W - 2 * PAD);
-            const y = centerY - (dev / maxAbsDev) * AMP;
+            const y = H - PAD - ((parseFloat(d.value) || 0) - min) / span * (H - 2 * PAD);
             return [x, y];
         });
         // smooth cubic path
@@ -381,43 +345,45 @@
             const cx = (p0[0] + p1[0]) / 2;
             d += ' C' + cx.toFixed(1) + ',' + p0[1].toFixed(1) + ' ' + cx.toFixed(1) + ',' + p1[1].toFixed(1) + ' ' + p1[0].toFixed(1) + ',' + p1[1].toFixed(1);
         }
+        const last = pts[pts.length - 1];
         path.setAttribute('d', d);
-        area.setAttribute('d', d + ' L' + pts[n - 1][0].toFixed(1) + ',' + centerY + ' L' + pts[0][0].toFixed(1) + ',' + centerY + ' Z');
-        // Position dot at last data point (sits on the wave, not fixed 85%)
-        dot.setAttribute('cx', pts[n - 1][0].toFixed(1));
-        dot.setAttribute('cy', pts[n - 1][1].toFixed(1));
-        // ── SIGN-AWARE COLOR: net positive (last >= base) = green, else red ──
-        const lastV = vals[n - 1];
-        const netChange = lastV - baseValue;
+        // Area closes to the BOTTOM edge (H - PAD) → shadow points DOWN only
+        area.setAttribute('d', d + ' L' + last[0].toFixed(1) + ',' + (H - PAD) + ' L' + pts[0][0].toFixed(1) + ',' + (H - PAD) + ' Z');
+        // Position dot at 85% width (sits on the wave)
+        const dotX = PAD + 0.85 * (W - 2 * PAD);
+        dot.setAttribute('cx', dotX.toFixed(1));
+        dot.setAttribute('cy', last[1].toFixed(1));
+        // ── SIGN-AWARE COLOR (MASTER palette): profit #34D399 / loss #FB7185 ──
+        const first = vals[0], lastV = vals[vals.length - 1];
+        const netChange = lastV - first;
         const neg = netChange < 0;
         path.classList.remove('positive', 'negative');
         path.classList.add(neg ? 'negative' : 'positive');
         dot.classList.remove('positive', 'negative');
         dot.classList.add(neg ? 'negative' : 'positive');
-        // ── Dynamic gradient: green fill up, red fill down ──
+        // ── Dynamic gradient: green fills down on profit, red on loss ──
         const gradStops = document.querySelectorAll('#pulseGrad stop');
         if (gradStops.length >= 2) {
-            gradStops[0].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
-            gradStops[0].setAttribute('stop-opacity', neg ? '0.25' : '0.28');
-            gradStops[1].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
-            gradStops[1].setAttribute('stop-opacity', '0.04');
+            gradStops[0].setAttribute('stop-color', neg ? 'var(--color-loss, #FB7185)' : 'var(--color-profit, #34D399)');
+            gradStops[0].setAttribute('stop-opacity', neg ? '0.28' : '0.32');
+            gradStops[1].setAttribute('stop-color', neg ? 'var(--color-loss, #FB7185)' : 'var(--color-profit, #34D399)');
+            gradStops[1].setAttribute('stop-opacity', '0');
         }
         const gradStopsM = document.querySelectorAll('#pulseGradM stop');
         if (gradStopsM.length >= 2) {
-            gradStopsM[0].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
-            gradStopsM[0].setAttribute('stop-opacity', neg ? '0.25' : '0.28');
-            gradStopsM[1].setAttribute('stop-color', neg ? 'var(--coral-500)' : 'var(--emerald-500)');
-            gradStopsM[1].setAttribute('stop-opacity', '0.04');
+            gradStopsM[0].setAttribute('stop-color', neg ? 'var(--color-loss, #FB7185)' : 'var(--color-profit, #34D399)');
+            gradStopsM[0].setAttribute('stop-opacity', neg ? '0.28' : '0.32');
+            gradStopsM[1].setAttribute('stop-color', neg ? 'var(--color-loss, #FB7185)' : 'var(--color-profit, #34D399)');
+            gradStopsM[1].setAttribute('stop-opacity', '0');
         }
         // ── Live % deviation badge (desktop + mobile) ──
-        const pct = deviations[n - 1];
-        const pctStr = (pct >= 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(2) + '%';
+        const pct = first ? (netChange / first) * 100 : 0;
+        const pctStr = (neg ? '▼ ' : '▲ ') + Math.abs(pct).toFixed(2) + '%';
         const pctEl = document.getElementById('pulse-change');
         if (pctEl) { pctEl.textContent = pctStr; pctEl.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
         const pctElM = document.getElementById('pulse-change-m');
         if (pctElM) { pctElM.textContent = pctStr; pctElM.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
-        // ── Stat strip: Last / High / Low / Peak Δ (absolute $ for reference) ──
-        const min = Math.min(...vals), max = Math.max(...vals);
+        // ── Stat strip: Last / High / Low / Peak Δ ──
         const psLast = document.getElementById('ps-last');
         const psHigh = document.getElementById('ps-high');
         const psLow = document.getElementById('ps-low');
@@ -436,8 +402,6 @@
         path.style.animation = 'none'; void path.offsetWidth; path.style.animation = '';
     }
     buildPulse();
-
-    // ── Mirror pulse graph to mobile SVG ──
     function mirrorPulseToMobile() {
         const src = {
             path: document.getElementById('pulse-path'),
