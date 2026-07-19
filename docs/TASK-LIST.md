@@ -20,7 +20,7 @@
 | # | Task | Why / Effort |
 |---|------|--------------|
 | T0-1 | `core/llm.py` converter prompt → align to real `exit_config` contract (not `metadata`) | Generated strategies trade with NO SL/TP/trail, silently. 30 min | **DONE 2026-07-19 (commit 1cb2e7a)** — prompt now emits top-level `exit_config` with SL/TP price levels; metadata reserved for indicators. Compile + runtime-import + studio-page live-verified. |
-| T0-2 | `api/credentials.py:_current_user_id()` — stop collapsing `AGENT_API_KEY` into operator identity | Shared dashboard key = full CRUD on decrypted private keys. 1-2 hrs |
+| T0-2 | `api/credentials.py:_current_user_id()` — stop collapsing `AGENT_API_KEY` into operator identity | Shared dashboard key = full CRUD on decrypted private keys. 1-2 hrs | **DONE 2026-07-19 (commit 20fd4aa)** — `test_credential` now requires `puls_`-scoped key (403 for global key). Decrypted-secret exposure closed. list/create/delete still global-key ok (no decrypt in those paths). Live-verified. |
 | T0-3 | `app/paper_routes.py` + `app/backtest_routes.py` — resolve session user, not `get_or_seed_operator(db)` | Cross-tenant leak on 2nd signup. 1-2 hrs + audit all 20 `get_or_seed_operator` sites |
 | T0-4 | `setattr(self,k)` → `setattr(self,k,v)` in `engine/v6_1.py:97` + `engine/v1.py` fallback | 2-char fix; crashes v6.1 on any strategy_config override. 15 min |
 | T0-5 | `config.py` — remove `"operator"/"operator"` default, `raise` on boot if `DASHBOARD_USERNAME`/`PASSWORD` unset | Never tracked, live now. 20 min |
