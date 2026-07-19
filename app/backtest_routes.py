@@ -56,7 +56,7 @@ def testing_historical(request: Request, username: str = Depends(verify_ui_crede
     """Historical backtests — form + results table + equity curve SVG."""
     db = Session()
     try:
-        backtests = db.query(Backtest).filter(Backtest.kind == "backtest").order_by(Backtest.created_at.desc()).limit(50).all()
+        backtests = db.query(Backtest).filter(Backtest.kind == "backtest", Backtest.user_id == user.id).order_by(Backtest.created_at.desc()).limit(50).all()
         bt_data = [{
             "id": b.id, "instance_slug": b.instance_slug, "token": b.token,
             "strategy_id": b.strategy_id, "timeframe": b.timeframe, "profile": b.profile,
