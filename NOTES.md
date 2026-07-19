@@ -1863,3 +1863,14 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
   - **DEFERRED SPEC (operator 2026-07-19):** email should be REQUIRED (not optional) with double-entry confirm field for account safety; future email-verification sender to activate accounts in DB. Not built yet — current email is optional, used only for testing.
 
 **Remaining Tier 2:** T2-5 (session cookie MAC → hmac.new), T2-6 (Credential encrypt/decrypt → json not str/ast.literal_eval), T2-7 (re-verify UNVERIFIED BUGREPORT list).
+
+---
+
+## 2026-07-19 — T2-5 session cookie HMAC + critical auth import fix
+
+- **T2-5** (`1bfe968`): `app/routes.py` (signup + login) + `api/auth.py` (verify) switched session-cookie signing from weak `sha256(token+secret)` to `hmac.new(secret, token, sha256)` — proper keyed MAC, length-extension safe. Cookie format unchanged (`token.sig`).
+- **CRITICAL BUG FOUND + FIXED:** `api/auth.py` `verify_ui_credentials` used `hmac.new()` but never imported `hmac` → `NameError` on every cookie verify → session auth silently failed → UI fell back to Basic Auth popup on every login. Added `import hmac, hashlib, base64, json, time` at module top. This was the root cause of the operator's "login pops up a browser-only window asking to log in again" report.
+- **Browser-verified (real human-flow):** operator login → lands seamlessly on `/app/dashboard` (POST /login 303 → GET /app/dashboard 200, no 401, no Basic popup). Server log clean, no exceptions.
+- Backup: `backups/v206_t25-pre_*.tar.gz` before edit.
+
+**Remaining Tier 2:** T2-6 (Credential encrypt/decrypt → json not str/ast.literal_eval), T2-7 (re-verify UNVERIFIED BUGREPORT list).

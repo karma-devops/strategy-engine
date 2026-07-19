@@ -42,7 +42,7 @@
 - ✅ `instance_form.js` — removed dead preset machinery + Preset section (T2-3, `bcada4c`)
 - ✅ `User.email` DB-unique + wrap `signup_post` `db.commit()` in try/except (T2-4, `e89d4f3`)
 - `User.email` DEFERRED SPEC: make email REQUIRED + double-entry confirm; future email-verify sender to activate accounts (operator 2026-07-19, not built)
-- Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — OPEN (T2-5)
+- Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — ✅ DONE (T2-5, `1bfe968`, + fixed missing `import hmac` in auth.py that caused Basic Auth popup)
 - `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — OPEN (T2-6)
 - Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
 
