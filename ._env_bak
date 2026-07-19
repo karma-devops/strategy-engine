@@ -1,0 +1,31 @@
+# PULS-R Strategy Engine — Environment Configuration
+# Created: 2026-07-14 | Updated: 2026-07-15 (operator provided full creds)
+
+# === Core ===
+DATABASE_URL=sqlite:////workspace/projects/strategy-engine/main/data/dev_test.db
+STRATEGY_ENGINE_PORT=8792
+FLASK_SECRET_KEY=eve152535!
+INSTANCE_SECRET_KEY=ADoGEzLgsO-vdhdPTO09x8Yuhb5kmdinCgwnIfdUmvw=
+
+# === Auth ===
+DASHBOARD_USERNAME=operator
+DASHBOARD_EMAIL=karmaworks.asia@gmail.com
+DASHBOARD_PASSWORD=operator
+
+# === HyperLiquid ===
+HYPER_LIQUID_ETH_PRIVATE_KEY=0xa95f57a17b93ff5eff13bd4c6bd9c26780a5e24636bba8a83957989ade0de4b2
+HYPER_LIQUID_KEY=0xa95f57a17b93ff5eff13bd4c6bd9c26780a5e24636bba8a83957989ade0de4b2
+ACCOUNT_ADDRESS=0xA871D51A9D3Cf670c41FB53CDEe3822c51FD8078
+
+# === AI Provider ===
+AI_PROVIDER=ollama
+AI_MODEL=glm-5.1
+AI_API_KEY=f99d9ea0b5b84e6eb7e76997ca3199a5.vz1LZu-F3qwuAZBqGHMCix_2
+
+# === Strategy ===
+ACTIVE_STRATEGY=engine_v1_3
+DRY_RUN=false
+AGENT_API_KEY=goodgirl999
+
+# === Worker (port 9999, DRY_RUN=false for live) ===
+WORKER_PORT=9999

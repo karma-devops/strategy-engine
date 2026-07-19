@@ -62,6 +62,8 @@ class User(Base):
     avatar_url = Column(String(512), nullable=True)          # uploaded image (future)
     plan = Column(String(32), default="free")                # billing: free/pro/enterprise
     twofa_enabled = Column(Boolean, default=False)           # 2FA status
+    email_verified = Column(Boolean, default=False)           # email confirmation status
+    email_verify_token = Column(String(128), nullable=True, index=True)  # email verify token
     # Phase 9: per-user model selection
     assistant_model = Column(String(64), default="glm-5.1")  # chat model (Assistant + dashboard)
     coder_model = Column(String(64), default="glm-5.1")      # Pine->Python conversion model (Studio)
@@ -566,6 +568,8 @@ def _migrate_columns(engine):
             ("avatar_url", "VARCHAR(512)"),
             ("plan", "VARCHAR(32)"),
             ("twofa_enabled", "BOOLEAN"),
+            ("email_verified", "BOOLEAN"),
+            ("email_verify_token", "VARCHAR(128)"),
             ("assistant_model", "VARCHAR(64)"),
             ("coder_model", "VARCHAR(64)"),
             ("timezone", "VARCHAR(64)"),
