@@ -718,6 +718,29 @@
                 else if (e.type === 'signal') addConsole('signal', e.token + ' ' + e.direction + ' (strength=' + (e.signal || 0).toFixed(2) + ')');
                 else if (e.type === 'trade') addConsole('trade', e.token + ' ' + e.action + ' ' + (e.side || ''));
                 else if (e.type === 'ping') { /* keepalive */ }
+                else if (e.type === 'metrics') {
+                    // T4-3.1: bind 1s streaming metrics frame to existing KPI nodes
+                    const m = e.data || {};
+                    if (m.portfolio_value !== undefined) {
+                        const pv = fmtUsd(parseFloat(m.portfolio_value) || 0);
+                        const accEl = document.getElementById('kpi-account');
+                        if (accEl) accEl.textContent = pv;
+                        const accM = document.getElementById('kpi-account-m');
+                        if (accM) accM.textContent = pv;
+                        const tickAcc = document.getElementById('ticker-account');
+                        if (tickAcc) tickAcc.textContent = pv;
+                    }
+                    if (m.daily_pnl !== undefined) {
+                        const pnl = parseFloat(m.daily_pnl) || 0;
+                        const pv = fmtUsd(pnl);
+                        const realEl = document.getElementById('kpi-realized');
+                        if (realEl) { realEl.textContent = pv; realEl.className = 'kpi-value ' + (pnl >= 0 ? 'pos' : 'neg'); }
+                        const realM = document.getElementById('kpi-realized-m');
+                        if (realM) { realM.textContent = pv; realM.className = 'kpi-value ' + (pnl >= 0 ? 'pos' : 'neg'); }
+                        const tickPnl = document.getElementById('ticker-pnl');
+                        if (tickPnl) tickPnl.textContent = pv;
+                    }
+                }
             } catch (_) {}
         };
         es.onerror = () => { if (sseDot) sseDot.className = 'sse-dot dead'; addConsole('err', 'SSE stream disconnected'); };
