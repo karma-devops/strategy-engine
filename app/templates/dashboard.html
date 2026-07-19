@@ -674,11 +674,17 @@
                 renderFleet(d.instances);
                 renderPositions(d.instances);
                 renderTradesCompact(d.trades || []);
-                if (d.equity_series && d.equity_series.length) {
-                    equityData.length = 0;
-                    d.equity_series.forEach(p => equityData.push(p));
-                    buildPulse();
-                    mirrorPulseToMobile();
+                // T4-6: Poll acts strictly as a FIRST-LOAD SEED or SSE-FALLBACK.
+                // Do NOT wipe the live SSE buffer (equityData.length = 0) — that
+                // cannibalizes the real-time stream. Only seed when empty.
+                if (d.equity_series && Array.isArray(d.equity_series)) {
+                    if (equityData.length === 0) {
+                        console.log('[UI Engine] SSE buffer empty. Seeding equityData from /summary fallback.');
+                        d.equity_series.forEach(val => equityData.push(val));
+                        if (typeof buildPulse === 'function') {
+                            requestAnimationFrame(buildPulse);
+                        }
+                    }
                 }
                 // ── Show connect prompt if no HL credentials and zero balance ──
                 var connectPrompt = document.getElementById('connect-prompt');
