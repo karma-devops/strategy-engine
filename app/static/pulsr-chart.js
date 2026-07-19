@@ -421,18 +421,30 @@
                  * @param {Array} trades - [{time, value: pnl_usd}] for PnL bars
                  */
                 setData(equityData, trades) {
-                    if (equityData && equityData.length > 0) {
-                        lineSeries.setData(equityData);
-                    }
-                    if (trades && trades.length > 0) {
-                        const colored = trades.map(t => ({
-                            time: t.time,
-                            value: Math.abs(t.value),
-                            color: t.value >= 0
-                                ? 'rgba(0,230,118,0.8)'   // profit green
-                                : 'rgba(239,83,80,0.8)',    // loss red
-                        }));
-                        barSeries.setData(colored);
+                    // T3-1: normalize equity + trade series before setData so mixed
+                    // time formats / unsorted points don't throw (LWC needs ascending
+                    // Unix-seconds + numeric values). Both calls guarded so one bad
+                    // series can't blank the whole chart (Paper + Backtesting PnL).
+                    try {
+                        if (equityData && equityData.length > 0) {
+                            lineSeries.setData(normalizeSeries(equityData));
+                        }
+                        if (trades && trades.length > 0) {
+                            const norm = normalizeSeries(trades.map(t => ({
+                                time: t.time,
+                                value: t.value,
+                            })));
+                            const colored = norm.map(t => ({
+                                time: t.time,
+                                value: Math.abs(t.value),
+                                color: t.value >= 0
+                                    ? 'rgba(0,230,118,0.8)'   // profit green
+                                    : 'rgba(239,83,80,0.8)',    // loss red
+                            }));
+                            barSeries.setData(colored);
+                        }
+                    } catch (e) {
+                        console.error('PulsRChart.createEquityBarChart.setData failed:', e);
                     }
                 },
                 update(point) {
