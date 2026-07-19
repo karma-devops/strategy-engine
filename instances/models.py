@@ -3,6 +3,7 @@ SQLAlchemy models for strategy-engine instances.
 """
 
 import os
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -110,7 +111,7 @@ class Credential(Base):
         if not fernet:
             raise RuntimeError("INSTANCE_SECRET_KEY not configured; cannot encrypt credential")
         self.user_id = user_id
-        self.encrypted_data = fernet.encrypt(str(data).encode()).decode()
+        self.encrypted_data = fernet.encrypt(json.dumps(data).encode()).decode()
         # masked_preview derived from type-specific field
         if self.type == "eth_wallet":
             self.masked_preview = self._mask(data.get("address", ""))
@@ -128,9 +129,13 @@ class Credential(Base):
         if not fernet:
             raise RuntimeError("INSTANCE_SECRET_KEY not configured; cannot decrypt credential")
         raw = fernet.decrypt(self.encrypted_data.encode()).decode()
-        # Convert Python dict string back to dict
-        import ast
-        return ast.literal_eval(raw)
+        # New credentials are stored as JSON; legacy blobs used Python repr.
+        # Try JSON first, fall back to ast.literal_eval for pre-migration data.
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            import ast
+            return ast.literal_eval(raw)
 
 
 class ChatSession(Base):
