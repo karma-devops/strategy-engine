@@ -60,6 +60,17 @@ app = FastAPI(
 app.state.limiter = limiter
 add_rate_limiting(app)
 
+# SECURITY (T3-0): never let the browser or service worker cache authenticated
+# /app/* HTML — it bakes the per-user window.API_KEY + data into the markup.
+# A cached page would leak one user's dashboard to another. Force no-store.
+@app.middleware("http")
+async def _no_cache_app_html(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/app/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 # Static + templates
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
