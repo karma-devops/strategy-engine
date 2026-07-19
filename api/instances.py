@@ -182,7 +182,13 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
           "all" — show everything (no filter).
     Paper and live must never be mixed in the same metric.
     """
-    from instances.models import AccountSnapshot, Trade
+    from instances.models import AccountSnapshot, Trade, User
+    # PER-USER ISOLATION: scope everything to the authenticated user. No operator
+    # fallback — _current_user_id raises 403 for a global/missing key.
+    user_id = _current_user_id(db, request)
+    user = db.query(User).filter(User.id == user_id).first()
+    is_operator = bool(user and user.username == "operator")
+
     # Determine dry_run filter from mode parameter
     if mode == "paper":
         dry_run_filter = True
@@ -191,7 +197,7 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
     else:  # "live" (default)
         dry_run_filter = False
 
-    instances = db.query(Instance).order_by(Instance.created_at.asc()).all()
+    instances = db.query(Instance).filter(Instance.user_id == user_id).order_by(Instance.created_at.asc()).all()
     instances_data = []
     for i in instances:
         snap = (
@@ -270,16 +276,27 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
 
     account_value = latest.account_value if latest else 0.0
     has_hl_credentials = False
-    try:
-        from core.exchange import get_hyperliquid_client
-        hl = get_hyperliquid_client()
-        has_hl_credentials = getattr(hl, 'has_credentials', False)
-        if has_hl_credentials:
-            live_val = hl.get_account_value()
-            if live_val > 0:
-                account_value = round(live_val, 2)
-    except Exception:
-        pass
+    # Live HL value ONLY for operator, or a user who stored their OWN hl_api
+    # credential. Never call the operator's global client for a normal user —
+    # that leaks operator's live $ value. Non-operator with no credential keeps
+    # their snapshot/0 value (correct isolation).
+    if is_operator:
+        try:
+            from core.exchange import get_hyperliquid_client
+            hl = get_hyperliquid_client()
+            has_hl_credentials = getattr(hl, 'has_credentials', False)
+            if has_hl_credentials:
+                live_val = hl.get_account_value()
+                if live_val > 0:
+                    account_value = round(live_val, 2)
+        except Exception:
+            pass
+    else:
+        from instances.models import Credential
+        cred = db.query(Credential).filter(
+            Credential.user_id == user_id, Credential.type == "hl_api", Credential.is_active == True
+        ).first()
+        has_hl_credentials = cred is not None
 
     # Realized PnL: sum of closed trades matching the current mode filter.
     # Never mix paper and live trade PnL.
@@ -308,9 +325,7 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
             best_engine_token = best_inst.token
             best_engine_strategy = best_inst.strategy_id
 
-    # User start balance for pulse graph baseline
-    from instances.models import User
-    user = db.query(User).first()
+    # User start balance for pulse graph baseline (the authenticated user)
     start_balance = user.start_balance if user and user.start_balance > 0 else 0.0
 
     return {
