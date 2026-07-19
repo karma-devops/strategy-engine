@@ -254,16 +254,15 @@
 {% block scripts %}
 <script>
     // === Engine Instance Data (Z3: position-card.js consumes this) ===
-    window.ENGINE_INSTANCE_DATA = window.ENGINE_INSTANCE_DATA || {{ inst | tojson }};
+    window.ENGINE_INSTANCE_DATA = window.ENGINE_INSTANCE_DATA || {{ inst | tojson | safe }};
     // === Live/PAPER mode tag (Z3) ===
-    window.ENGINE_MODE = {{ 'paper' if inst.dry_run else 'live' | tojson }};
+    window.ENGINE_MODE = {{ ('paper' if inst.dry_run else 'live') | tojson | safe }};
     const SLUG = "{{ slug }}";
     const API_KEY = "{{ api_key }}";
     window.API_KEY = API_KEY; // Exposed for consumer scripts (position-card.js hydrate)
     const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@\/]+@/, 'http://');
 
     // ── Live API loop ──
-    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
     function apiPost(path) {

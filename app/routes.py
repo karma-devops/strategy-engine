@@ -85,7 +85,29 @@ def get_dashboard_api_key(request: Request = None) -> str:
                             return ""  # session user resolved but has no key - do NOT leak operator key
             except Exception:
                 pass
-    # No valid session cookie: never return the operator key. Empty -> 403 / empty dashboard.
+    # No valid session cookie: resolve from Basic Auth (e.g. operator logged in
+    # via URL-embedded credentials has no session cookie). Falls back to the
+    # authenticated user's OWN puls_ key — never leaks another tenant's key.
+    if request is not None:
+        from fastapi.security import HTTPBasic
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Basic "):
+            import base64
+            try:
+                decoded = base64.b64decode(auth[6:]).decode("utf-8")
+                username, _password = decoded.split(":", 1)
+                if username:
+                    from instances.models import SessionLocal, User as _U2
+                    _db = SessionLocal()
+                    try:
+                        u = _db.query(_U2).filter(_U2.username == username).first()
+                        if u and u.api_key:
+                            return decrypt_api_key(u.api_key)
+                    finally:
+                        _db.close()
+            except Exception:
+                pass
+    # No valid auth → empty key (403 / empty dashboard). Never operator key.
     return ""
 
 
