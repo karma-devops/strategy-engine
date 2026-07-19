@@ -53,14 +53,39 @@ def _inject_theme(request: Request):
 _DASHBOARD_API_KEY_CACHE = {"value": None}
 
 
-def get_dashboard_api_key() -> str:
-    """Return the operator's per-user `puls_` API key for dashboard client-side calls.
+def get_dashboard_api_key(request: Request = None) -> str:
+    """Return the LOGGED-IN user's per-user `puls_` API key for dashboard client-side calls.
 
-    Per-user isolation (T2-4) blocks the global AGENT_API_KEY from tenant routes, so the
-    operator UI must authenticate as the operator tenant via its own `puls_` key. This
-    replaces `config.AGENT_API_KEY` in template render contexts. No circular dependency:
-    get_or_seed_operator() / decrypt_api_key() do not call _current_user_id().
+    SECURITY (T3-0 cross-user leak fix): previously hardcoded to the operator key, so ANY
+    logged-in user saw the operator's portfolio/engines via client-side /api/v2/summary
+    calls. Now derives the key from the session cookie (or basic-auth operator). A session
+    user with no key gets "" (-> 403, empty dashboard) - NEVER the operator key. Falls back
+    to the cached operator key only for basic-auth operator sessions / non-request callers.
     """
+    if request is not None:
+        session = request.cookies.get("pulsr_session")
+        if session:
+            try:
+                import hmac as _hmac, hashlib as _hl, base64 as _b64, json as _js, time as _t, secrets as _sec
+                token, sig = session.split(".")
+                expected_sig = _hmac.new(config.INSTANCE_SECRET_KEY.encode(), token.encode(), _hl.sha256).hexdigest()
+                if _sec.compare_digest(sig, expected_sig):
+                    payload = _js.loads(_b64.b64decode(token).decode())
+                    if payload.get("exp", 0) > int(_t.time()):
+                        username = payload.get("username")
+                        if username:
+                            from instances.models import SessionLocal, User as _U
+                            _db = SessionLocal()
+                            try:
+                                u = _db.query(_U).filter(_U.username == username).first()
+                                if u and u.api_key:
+                                    return decrypt_api_key(u.api_key)
+                            finally:
+                                _db.close()
+                            return ""  # session user resolved but has no key - do NOT leak operator key
+            except Exception:
+                pass
+    # Fallback: basic-auth operator (no session cookie) or non-request caller
     if _DASHBOARD_API_KEY_CACHE["value"] is not None:
         return _DASHBOARD_API_KEY_CACHE["value"]
     from instances.models import SessionLocal
@@ -220,7 +245,7 @@ def dashboard(request: Request, username: str = Depends(verify_ui_credentials)):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        context={"request": request, "api_key": get_dashboard_api_key()},
+        context={"request": request, "api_key": get_dashboard_api_key(request)},
     )
 
 
@@ -255,8 +280,11 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
             "unrealized_pnl_pct": i.unrealized_pnl_pct or 0.0,
         } for i in instances]
 
-        # Equity snapshots for the Pulse Graph — LIVE ONLY (P14d)
-        snapshots = db.query(AccountSnapshot).filter(AccountSnapshot.dry_run == False).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
+        # Equity snapshots for the Pulse Graph — scoped to this user (T3-0)
+        snap_filter = AccountSnapshot.dry_run == False
+        if user_id:
+            snap_filter = snap_filter & (AccountSnapshot.user_id == user_id)
+        snapshots = db.query(AccountSnapshot).filter(snap_filter).order_by(AccountSnapshot.timestamp.asc()).limit(500).all()
         equity_series = [{"time": s.timestamp.isoformat(), "value": s.account_value} for s in snapshots]
         latest = snapshots[-1] if snapshots else None
 
@@ -275,27 +303,31 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
         open_pnl = sum((i.unrealized_pnl or 0.0) for i in instances)
         dry_global = all(i.dry_run for i in instances) if instances else True
 
-        # Recent trades for the Active Trades table — all trades (live + paper)
+        # Recent trades for the Active Trades table — scoped to this user's instances (T3-0)
+        user_instance_ids = [i.slug for i in instances]
         trades = (
             db.query(Trade)
+            .filter(Trade.instance_id.in_(user_instance_ids) if user_instance_ids else False)
             .order_by(Trade.timestamp.desc())
             .limit(15)
             .all()
-        )
-        trades_data = [{
-            "timestamp": t.timestamp.isoformat() if t.timestamp else None,
-            "instance_id": t.instance_id,
-            "side": t.side,
-            "size": t.size or 0.0,
-            "entry_price": t.entry_price or 0.0,
-            "exit_price": t.exit_price,
-            "pnl_usd": t.pnl_usd or 0.0,
-            "dry_run": t.dry_run,
-        } for t in trades]
+        ) if user_instance_ids else []
+        trades_data = [
+            {
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                "instance_id": t.instance_id,
+                "side": t.side,
+                "size": t.size or 0.0,
+                "entry_price": t.entry_price or 0.0,
+                "exit_price": t.exit_price,
+                "pnl_usd": t.pnl_usd or 0.0,
+                "dry_run": t.dry_run,
+            } for t in trades
+        ]
 
-        # Realized PnL + best engine (from live trades)
+        # Realized PnL + best engine (scoped to user's live trades, T3-0)
         from collections import defaultdict
-        live_trades = db.query(Trade).filter(Trade.dry_run == False).all()
+        live_trades = [t for t in trades if not t.dry_run] if trades else []
         realized_pnl = round(sum(t.pnl_usd for t in live_trades), 2) if live_trades else 0.0
         engine_pnl = defaultdict(float)
         for t in live_trades:
@@ -304,32 +336,33 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
         if engine_pnl:
             bs = max(engine_pnl, key=engine_pnl.get)
             best_engine = bs; best_engine_pnl = round(engine_pnl[bs], 2)
-            bi = db.query(Instance).filter(Instance.slug == bs).first()
+            bi = db.query(Instance).filter(Instance.slug == bs, Instance.user_id == user_id).first() if user_id else None
             if bi:
                 best_engine_token = bi.token; best_engine_strategy = bi.strategy_id
-        user = db.query(User).first()
-        start_balance = user.start_balance if user and user.start_balance > 0 else 0.0
-
-        # If no snapshots, try live exchange value as fallback
+        user_me = db.query(User).filter(User.username == username).first() if username else None
+        start_balance = user_me.start_balance if user_me and user_me.start_balance > 0 else 0.0
         account_value = latest.account_value if latest else 0.0
         has_hl_credentials = False
-        try:
-            from core.exchange import get_hyperliquid_client
-            hl = get_hyperliquid_client()
-            has_hl_credentials = getattr(hl, 'has_credentials', False)
-            if has_hl_credentials:
-                live_val = hl.get_account_value()
-                if live_val > 0:
-                    account_value = round(live_val, 2)
-        except Exception:
-            pass
+        # Live exchange value fallback: OPERATOR ONLY (T3-0). Non-operator users have no
+        # HL creds of their own and must never see the operator's exchange balance.
+        if is_operator:
+            try:
+                from core.exchange import get_hyperliquid_client
+                hl = get_hyperliquid_client()
+                has_hl_credentials = getattr(hl, 'has_credentials', False)
+                if has_hl_credentials:
+                    live_val = hl.get_account_value()
+                    if live_val > 0:
+                        account_value = round(live_val, 2)
+            except Exception:
+                pass
 
         return templates.TemplateResponse(
             request,
             "dashboard.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "account_value": account_value,
                 "realized_pnl": realized_pnl,
                 "best_engine": best_engine,
@@ -364,7 +397,7 @@ def assistant_app(request: Request, username: str = Depends(verify_ui_credential
         "assistant.html",
         context={
             "request": request,
-            "api_key": get_dashboard_api_key(),
+            "api_key": get_dashboard_api_key(request),
             "active": "assistant",
             "chat_context": "assistant",
         },
@@ -464,7 +497,7 @@ def testing_index(request: Request, username: str = Depends(verify_ui_credential
     """Testing section landing — Historical + Paper Trading."""
     return templates.TemplateResponse(
         request, "testing_index.html",
-        context={"request": request, "api_key": get_dashboard_api_key(), "active": "testing"},
+        context={"request": request, "api_key": get_dashboard_api_key(request), "active": "testing"},
     )
 
 
@@ -492,7 +525,7 @@ def testing_historical(request: Request, username: str = Depends(verify_ui_crede
         return templates.TemplateResponse(
             request, "testing_historical.html",
             context={
-                "request": request, "api_key": get_dashboard_api_key(),
+                "request": request, "api_key": get_dashboard_api_key(request),
                 "backtests": bt_data, "latest_equity": latest_equity, "active": "testing",
                 "chat_context": "backtester",
             },
@@ -539,7 +572,7 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
         return templates.TemplateResponse(
             request, "testing_paper.html",
             context={
-                "request": request, "api_key": get_dashboard_api_key(),
+                "request": request, "api_key": get_dashboard_api_key(request),
                 "instances": inst_data, "equity_series": equity_series,
                 "paper_trades": paper_trade_data,
                 "active_engines": sum(1 for i in inst_data if i["status"] == "running"),
@@ -595,7 +628,7 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
             "trades.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "trades": trade_data,
                 "paper_trades": paper_data,
                 "open_count": open_count,
@@ -720,7 +753,7 @@ def engines_page(request: Request, username: str = Depends(verify_ui_credentials
             "engines.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "active_engines": active,
                 "total_engines": len(instances),
                 "open_pnl": round(open_pnl, 2),
@@ -891,7 +924,7 @@ def engine_detail_page(request: Request, slug: str, username: str = Depends(veri
             "engine_detail.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "inst": inst_data,
                 "slug": slug,
                 "trades": trades_data,
@@ -992,7 +1025,7 @@ def account_overview(request: Request, username: str = Depends(verify_ui_credent
             "account_overview.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1056,7 +1089,7 @@ def account_secrets(request: Request, username: str = Depends(verify_ui_credenti
             "account_secrets.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "user": {"username": user.username, "withdrawal_eth_address": user.withdrawal_eth_address},
                 "engine_creds": engine_creds,
                 "global_masked": global_masked,
@@ -1091,7 +1124,7 @@ def settings_app(request: Request, username: str = Depends(verify_ui_credentials
             "settings.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1155,7 +1188,7 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
             "settings.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1253,7 +1286,7 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
             "strategies.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "strategies": strategies_data,
                 "total_strategies": len(strategies_data),
                 "active_count": sum(1 for s in strategies_data if s["status"] == "active"),
@@ -1273,7 +1306,7 @@ def strategy_upload_page(request: Request, username: str = Depends(verify_ui_cre
         "strategy_upload.html",
         context={
             "request": request,
-            "api_key": get_dashboard_api_key(),
+            "api_key": get_dashboard_api_key(request),
             "active": "strategies",
         },
     )
@@ -1288,7 +1321,7 @@ def strategy_studio_page(request: Request, username: str = Depends(verify_ui_cre
         "strategy_studio.html",
         context={
             "request": request,
-            "api_key": get_dashboard_api_key(),
+            "api_key": get_dashboard_api_key(request),
             "ai_provider": config.AI_PROVIDER,
             "ai_model": config.AI_MODEL,
             "active": "strategies",
@@ -1333,7 +1366,7 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
             "strategy_detail.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "strategy_id": strategy_id,
                 "name": info.get("name", strategy_id),
                 "description": info.get("description", ""),
@@ -1772,7 +1805,7 @@ def _instances_by_mode(request: Request, live: bool):
             "live_paper.html",
             context={
                 "request": request,
-                "api_key": get_dashboard_api_key(),
+                "api_key": get_dashboard_api_key(request),
                 "mode": "live" if live else "paper",
                 "mode_label": "Live Trading" if live else "Paper Trading",
                 "instances": inst_data,
@@ -1794,7 +1827,7 @@ def withdrawals_page(request: Request, username: str = Depends(verify_ui_credent
     cfg = Config()
     return templates.TemplateResponse(request, "withdrawals.html", context={
         "request": request,
-        "api_key": get_dashboard_api_key(),
+        "api_key": get_dashboard_api_key(request),
     })
 
 
