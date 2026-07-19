@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import sessionmaker
 
-from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
+from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT, AUTH_LIMIT
 from config import config
 from api.auth import verify_ui_credentials, require_ui_or_api
 from instances.models import engine, Instance, AccountSnapshot, Trade, Signal, Backtest, User, Strategy, Credential, get_or_seed_operator
@@ -33,6 +33,7 @@ def _inject_theme(request: Request):
 
 
 @public_router.post("/login")
+@limiter.limit(AUTH_LIMIT)
 async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     """Validate username + password, issue session cookie on success."""
     from instances.models import SessionLocal, User, verify_password
@@ -58,6 +59,7 @@ async def login_post(request: Request, username: str = Form(...), password: str 
 
 
 @public_router.post("/signup")
+@limiter.limit(AUTH_LIMIT)
 async def signup_post(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...)):
     """Create a new user account with auto-generated API key."""
     from instances.models import SessionLocal, User, hash_password, generate_api_key, encrypt_api_key, hash_api_key
