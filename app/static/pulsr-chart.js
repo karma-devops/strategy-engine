@@ -286,7 +286,11 @@
          */
         createCandleChart(container, options) {
             const el = (typeof container === 'string') ? document.getElementById(container) : container;
-            if (!el) return null;
+            // T4-1: defensive guard — block canvas layout thrashing if container absent
+            if (!el) {
+                console.warn("[Pulsr Chart Engine] Target viewport node absent from DOM. Postponing canvas mounting.");
+                return null;
+            }
             if (typeof LightweightCharts === 'undefined') {
                 console.error('PulsRChart: LightweightCharts not loaded.');
                 return null;
@@ -381,7 +385,11 @@
          */
         createEquityBarChart(container, options) {
             const el = (typeof container === 'string') ? document.getElementById(container) : container;
-            if (!el) return null;
+            // T4-1: defensive guard — block canvas layout thrashing if container absent
+            if (!el) {
+                console.warn("[Pulsr Chart Engine] Target viewport node absent from DOM. Postponing canvas mounting.");
+                return null;
+            }
             if (typeof LightweightCharts === 'undefined') {
                 console.error('PulsRChart: LightweightCharts not loaded.');
                 return null;

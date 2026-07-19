@@ -231,7 +231,7 @@
                     <button class="chip pulse-range" data-range="24" onclick="setPulseRange(24)">24H</button>
                 </div>
             </div>
-            <div class="pulse-wrap" style="flex:1;min-height:0;">
+            <div class="pulse-wrap" id="pulsr-chart-viewport" style="position:relative;height:320px;width:100%;flex:1;min-height:0;">
                 <svg class="pulse-svg" id="pulse-svg" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-label="Equity pulse" style="width:100%;height:100%;">
                     <defs>
                         <linearGradient id="pulseGrad" x1="0" y1="0" x2="0" y2="1">
