@@ -615,6 +615,25 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
             "fees": round((t.entry_cost or 0.0) + (t.exit_cost or 0.0), 4),
             "open": t.exit_price is None,
         } for t in paper_rows]
+        # BUG-7: Active Positions section — instances currently holding a position
+        active_positions = []
+        inst_rows = db.query(Instance).filter(
+            Instance.user_id == user.id,
+            Instance.position_side.isnot(None),
+            Instance.position_side != 'FLAT',
+            Instance.position_size > 0,
+        ).all()
+        for inst in inst_rows:
+            active_positions.append({
+                "slug": inst.slug,
+                "token": inst.token,
+                "side": inst.position_side,
+                "size": round(inst.position_size, 4),
+                "entry": round(inst.entry_price, 6) if inst.entry_price else 0.0,
+                "mark": round(inst.mark_price, 6) if inst.mark_price else 0.0,
+                "pnl": round(inst.unrealized_pnl, 2) if inst.unrealized_pnl else 0.0,
+                "pnl_pct": round(inst.unrealized_pnl_pct, 2) if inst.unrealized_pnl_pct else 0.0,
+            })
         return templates.TemplateResponse(
             request,
             "trades.html",
@@ -624,6 +643,7 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
                 "trades": trade_data,
                 "paper_trades": paper_data,
                 "open_count": open_count,
+                "active_positions": active_positions,
                 "total_trades": len(trade_data),
                 "closed_count": len(closed),
                 "total_pnl": total_pnl,
