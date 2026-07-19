@@ -4,7 +4,7 @@
 {% block content %}
 <style>
     .engine-topbar { display:flex; flex-wrap:wrap; gap:var(--space-3); align-items:center; margin-bottom:var(--space-3); }
-    .engine-kpi-row { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3); margin-bottom:var(--space-3); }
+    .engine-kpi-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:var(--space-3); margin-bottom:var(--space-3); }
     .engine-split { display:grid; grid-template-columns:2fr 1fr; gap:var(--space-3); align-items:start; }
     @media (max-width:1024px){ .engine-split { grid-template-columns:1fr; } }
     .topbar-actions { display:flex; gap:var(--space-2); flex-wrap:wrap; margin-left:auto; }
@@ -55,6 +55,10 @@
         <div class="kpi-label">Mode</div>
         <div class="kpi-value {{ 'negative' if not inst.dry_run else 'positive' }}" id="kpi-mode">{{ 'LIVE' if not inst.dry_run else 'PAPER' }}</div>
     </div>
+    <div class="kpi">
+        <div class="kpi-label">Position</div>
+        <div class="kpi-value" id="kpi-position" style="font-size:var(--text-sm);">{{ 'FLAT' if not inst.position_side or inst.position_side == 'FLAT' else (inst.position_side + ' ' + ('%.1f' | format(inst.position_size)) + ' ' + inst.token) }}</div>
+    </div>
 </div>
 
 {# ── 2/3 LEFT + 1/3 RIGHT ── #}
@@ -64,7 +68,10 @@
         <div class="chart-card" style="margin-bottom:var(--space-3);">
             <div class="card-head">
                 <h2>Pulse Graph</h2>
-                <span class="pulse-change" id="pulse-change">—</span>
+                <span style="display:flex;gap:10px;align-items:baseline;">
+                    <span id="pulse-last" style="font-size:var(--text-sm);color:var(--text-secondary);">—</span>
+                    <span class="pulse-change" id="pulse-change">—</span>
+                </span>
             </div>
             <div class="pulse-wrap" style="position:relative;height:260px;">
                 <div id="pulse-chart" style="width:100%;height:100%;"></div>
@@ -322,6 +329,12 @@
                 if (pnlEl) { pnlEl.textContent = fmtUsd(inst.unrealized_pnl); pnlEl.className = 'kpi-value ' + (inst.unrealized_pnl >= 0 ? 'positive' : 'negative'); }
                 const modeEl = document.getElementById('kpi-mode');
                 if (modeEl) { modeEl.textContent = inst.dry_run ? 'PAPER' : 'LIVE'; modeEl.className = 'kpi-value ' + (inst.dry_run ? 'positive' : 'negative'); }
+                const posEl = document.getElementById('kpi-position');
+                if (posEl) {
+                    const side = (inst.position_side || 'FLAT').toUpperCase();
+                    if (side === 'FLAT' || !inst.position_size) { posEl.textContent = 'FLAT'; posEl.className = 'kpi-value'; }
+                    else { posEl.textContent = side + ' ' + (parseFloat(inst.position_size).toFixed(1)) + ' ' + (inst.token || ''); posEl.className = 'kpi-value ' + (side === 'LONG' ? 'positive' : 'negative'); }
+                }
                 const mt = document.getElementById('mode-toggle');
                 if (mt) { mt.textContent = inst.dry_run ? 'PAPER' : 'LIVE'; mt.className = 'fleet-btn mode-toggle-btn ' + (inst.dry_run ? 'paper' : 'live'); }
                 // Position card (live) — use shared styled component (renders into #pos-card)
@@ -361,6 +374,23 @@
         if (typeof PulsRChart === 'undefined') return;
         if (!window.__pulseChart) window.__pulseChart = PulsRChart.createEquityChart('pulse-chart', { height: 260 });
         if (window.__pulseChart && window.equityData.length) window.__pulseChart.setData(window.equityData);
+        updatePulseReadout();
+    }
+    function updatePulseReadout() {
+        const len = window.equityData.length;
+        const lastEl = document.getElementById('pulse-last');
+        const chgEl = document.getElementById('pulse-change');
+        if (!len || !lastEl) return;
+        const last = window.equityData[len - 1].value;
+        const first = window.equityData[0].value;
+        lastEl.textContent = fmtUsd(last);
+        if (chgEl) {
+            if (len > 1 && first) {
+                const pct = (last - first) / Math.abs(first) * 100;
+                chgEl.textContent = (pct >= 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(2) + '%';
+                chgEl.className = 'pulse-change ' + (pct >= 0 ? 'positive' : 'negative');
+            } else { chgEl.textContent = '—'; chgEl.className = 'pulse-change'; }
+        }
     }
 
     // ── Runner console (SSE) ──
@@ -382,6 +412,7 @@
                     window.equityData.push({ time: t, value: v }); if (window.equityData.length > 60) window.equityData.shift();
                     if (window.__pulseChart) window.__pulseChart.update({ time: t, value: v });
                     else updatePulseChart();
+                    updatePulseReadout();
                 }
                 else if (e.type === 'ping') {}
             } catch (_) {}
