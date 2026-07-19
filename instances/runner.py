@@ -569,10 +569,26 @@ class InstanceRunner:
             )
 
             # Update instance status
-            self.instance.status = "running"
-            self.instance.updated_at = datetime.now(timezone.utc)
-            db.merge(self.instance)
-            db.commit()
+            # FIX: do NOT db.merge(self.instance) — that re-persists the stale
+            # in-memory dry_run (and other operator config) every tick, clobbering
+            # a LIVE/PAPER change made via PUT while the engine is running.
+            # Instead, reload the row and copy ONLY runner-owned fields.
+            db_inst = db.query(Instance).filter(Instance.slug == self.id).first()
+            if db_inst is not None:
+                db_inst.status = "running"
+                db_inst.updated_at = datetime.now(timezone.utc)
+                # runner-owned position cache (preserve operator dry_run/strategy/etc.)
+                for _f in ("position_side", "position_size", "entry_price", "mark_price",
+                           "unrealized_pnl", "unrealized_pnl_pct", "liquidation_price",
+                           "last_signal", "last_signal_strength", "last_reasoning"):
+                    if hasattr(self.instance, _f):
+                        setattr(db_inst, _f, getattr(self.instance, _f))
+                db.commit()
+            else:
+                self.instance.status = "running"
+                self.instance.updated_at = datetime.now(timezone.utc)
+                db.merge(self.instance)
+                db.commit()
 
         finally:
             db.close()
