@@ -414,13 +414,67 @@ def update_strategy_config(
     payload: dict,
     db: Session = Depends(get_db),
 ):
-    """Save per-instance strategy parameter overrides (Pine input.* equivalent)."""
+    """Save per-instance strategy parameter overrides (Pine input.* equivalent).
+
+    Validates each key against the strategy's declared get_parameters() schema
+    and coerces values to the declared type. Unknown keys are rejected (400)
+    instead of silently becoming a no-op. After a successful save the instance
+    is restarted so the running engine picks up the new config live.
+    """
     inst = db.query(Instance).filter(Instance.slug == instance_id).first()
     if not inst:
         return {"ok": False, "message": "Instance not found"}
-    inst.strategy_config = payload
+
+    from engine.registry import get_strategy
+    strategy_cls = get_strategy(inst.strategy_id)
+    if not strategy_cls:
+        return {"ok": False, "message": f"Unknown strategy {inst.strategy_id}"}
+
+    # Build {name: type} map from the strategy's declared parameters.
+    param_schema = {p["name"]: p.get("type", "float") for p in strategy_cls.get_parameters()}
+
+    validated: dict = {}
+    invalid_keys: list = []
+    for key, value in payload.items():
+        if key not in param_schema:
+            invalid_keys.append(key)
+            continue
+        ptype = param_schema[key]
+        try:
+            if ptype == "int":
+                validated[key] = int(value)
+            elif ptype == "float":
+                validated[key] = float(value)
+            elif ptype == "bool":
+                validated[key] = bool(value) if not isinstance(value, str) else value.lower() in ("1", "true", "yes", "on")
+            elif ptype == "select":
+                validated[key] = value  # option whitelist enforced client-side; accept as-is
+            else:
+                validated[key] = float(value)
+        except (ValueError, TypeError):
+            return {
+                "ok": False,
+                "message": f"Invalid value for parameter '{key}': expected {ptype}, got {value!r}",
+            }
+
+    if invalid_keys:
+        return {
+            "ok": False,
+            "message": f"Unknown parameter(s): {', '.join(invalid_keys)}. Valid: {', '.join(param_schema.keys())}",
+        }
+
+    inst.strategy_config = validated
     db.commit()
-    return {"ok": True, "message": f"Strategy config saved for {inst.slug}", "config": payload}
+
+    # Restart so the live engine re-reads strategy_config at _run_once start.
+    restarted = manager.restart_instance(inst.slug)
+
+    return {
+        "ok": True,
+        "message": f"Strategy config saved for {inst.slug}" + ("" if restarted else " (restart skipped — instance not running)"),
+        "config": validated,
+        "restarted": restarted,
+    }
 
 
 @router.get("/instances/{instance_id}/strategy-config")

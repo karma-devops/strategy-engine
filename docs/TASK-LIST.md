@@ -30,7 +30,7 @@
 | # | Task | Note |
 |---|------|------|
 | T1-1 | Circuit breaker (`error_consecutive`, trip at 5) | P0 safety, unstarted | **DONE 2026-07-19** — `instances/runner.py` `_run_once` inner loop now counts consecutive tick exceptions; at 5 it sets `instance.status="error"`, persists, and breaks (no infinite error-loop). Verified via forced-error harness: trips exactly at 5th error. |
-| T1-2 | Validate `PUT .../strategy-config` vs `get_parameters()`; restart instance on save | Silent no-op or crash otherwise |
+| T1-2 | Validate `PUT .../strategy-config` vs `get_parameters()`; restart instance on save | Silent no-op or crash otherwise | **DONE 2026-07-19** — `api/instances.py` `update_strategy_config` now validates keys against `strategy_cls.get_parameters()`, coerces types (int/float/bool), rejects unknown keys (400) + bad values (400), then `manager.restart_instance()` so live engine re-reads config. Verified coercion + rejection against real engine_v1_3 schema. |
 | T1-3 | `backtests/runner.py:389` — pass `instance.strategy_config` like live runner | Backtest parity broken |
 | T1-4 | Login/signup rate limiting (`app/routes.py:35,60`) | Brute-force/spam surface |
 | T1-5 | `WithdrawalRecord` idempotency key | Money-movement double-exec risk |
