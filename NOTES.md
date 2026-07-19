@@ -26,17 +26,26 @@
    ```
 3. Only THEN kill the worker (see below).
 
-**RESTART (fresh code load):**
-- Find current PID: `for p in /proc/[0-9]*/cmdline; do tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'uvicorn main:app' && echo "PID=$(echo $p|cut -d/ -f3)"; done`
-- Kill: `kill -TERM <PID>` (or `pkill -f 'uvicorn main:app'`)
-- Relaunch in background from `main/`:
+**RESTART (fresh code load) — KILL ALL, CONFIRM PORT FREE, THEN ONE:**
+- Kill EVERY uvicorn main:app process (stale duplicates silently survive a single kill — that's how pre-fix code kept serving):
+  ```bash
+  for p in /proc/[0-9]*/cmdline; do
+    tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'uvicorn main:app --host' && kill -TERM "$(echo $p|cut -d/ -f3)" 2>/dev/null && echo "killed $(echo $p|cut -d/ -f3)"
+  done
+  sleep 2
+  # confirm none left + port free
+  for p in /proc/[0-9]*/cmdline; do tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'uvicorn main:app --host' && echo "STILL ALIVE: $(echo $p|cut -d/ -f3)"; done
+  grep -qi ':2268' /proc/net/tcp && echo "PORT STILL LISTENING" || echo "PORT 8792 FREE"
   ```
+  If any survive, `kill -9` them. DO NOT relaunch until the port is FREE.
+- Relaunch ONE server in background from `main/`:
+  ```bash
   cd /workspace/projects/strategy-engine/main
   /workspace/projects/strategy-engine/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8792
   ```
   (Run via Hermes `terminal(background=true)` so the process is tracked. Or `nohup ... &` if shell-only.)
 - Wait for "Application startup complete" then verify:
-  ```
+  ```bash
   curl -s -o /dev/null -w "landing %{http_code}\n" http://127.0.0.1:8792/
   curl -s -o /dev/null -w "dashboard %{http_code}\n" -u operator:operator http://127.0.0.1:8792/app/dashboard
   ```
