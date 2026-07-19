@@ -277,6 +277,8 @@
 <script>
     const equityData = {{ equity_series | tojson | safe }};
     const tradesData = {{ trades | tojson | safe }};
+    // Operator start balance (user setting) — PnL baseline for the dashboard.
+    const START_BALANCE = (typeof {{ start_balance | tojson | safe }} === 'number' && {{ start_balance | tojson | safe }} > 0) ? {{ start_balance | tojson | safe }} : 0.0;
 
     // ── SVG Pulse Graph (original ai-trading-agent-hl style: absolute min/max
     //     scaling, shadow fills DOWNWARD only to the bottom edge, NO centerline) ──
@@ -371,9 +373,9 @@
         if (pctEl) { pctEl.textContent = pctStr; pctEl.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
         const pctElM = document.getElementById('pulse-change-m');
         if (pctElM) { pctElM.textContent = pctStr; pctElM.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
-        // ── Live PnL (KPI + ticker) derived from the SAME equity curve as the pulse ──
-        // (Fixes the frozen $0.00: previously wired to realized_pnl/daily_pnl only.)
-        const pnlUsd = netChange; // last value minus window-first value = session equity delta
+        // ── Live PnL (KPI + ticker) = current equity − operator START_BALANCE ──
+        // (operator directive: PnL derives from start balance, NOT window delta.)
+        const pnlUsd = (typeof lastV === 'number' ? lastV : 0) - START_BALANCE;
         const pnlStr = fmtUsd(pnlUsd);
         const pnlCls = (pnlUsd >= 0 ? 'pos' : 'neg');
         const pnlKpi = document.getElementById('kpi-realized');
