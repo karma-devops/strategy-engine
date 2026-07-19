@@ -1776,6 +1776,46 @@ Each strategy script is standalone and declares three ports:
 - Dashboard PnL mismatch: header $8.88 vs sidebar widget $0.00 (data source divergence)
 - Handover mislabeled `/kill/status` + `/shell` as UI pages (API/404)
 
+### New T0-3: Cross-tenant leak in paper/backtest routes
+- **BUG-10** (paper) & **BUG-11** (backtest): both routes use `get_or_seed_operator(db)` instead of session-based user resolution. Paper route uses `verify_ui_credentials` username but ignores it; backtest route has full `username` param but ignores it entirely. Both result in operator-scoped data for all users. Fix: replace `get_or_seed_operator` with `User` lookup via `username` from session.
+- **BUG-10** fix: change `user = get_or_seed_operator(db)` → `user = db.query(User).filter(User.username == username).first()` and use `user.id` for all DB queries.
+- **BUG-11** fix: add `Backtest.user_id == user.id` filter to `testing_historical` route (line 59 in backtest_routes.py).
+
+### New findings (added to TASK-LIST BUGHUNT)
+- **BUG-7**: `/app/trades` ends at filter bar — NO trades table, NO "Active Positions" section (missing empty-state)
+- **BUG-9-A**: recurring anonymous JS `exception` on dashboard/engines/engine-detail/strategies/strategy-detail ONLY (pages with PULSE console + position-card.js). Pages without those widgets = 0 errors. Root cause = position-card.js or console widget JS. Needs `window.onerror` capture + fix.
+- Dashboard PnL mismatch: header $8.88 vs sidebar widget $0.00 (data source divergence)
+- Handover mislabeled `/kill/status` + `/shell` as UI pages (API/404)
+
+### Vision note
+- Aux vision model (gemma-4-26b-a4b-it:free) rate-limited 429 mid-walk; structural verification via a11y snapshot used throughout. Screenshots captured for pages 1-4. Retry vision on remaining when limit clears or switch aux model per memory note.
+
+## 2026-07-19 (cont.) — UI Walkthrough COMPLETE (21/21)
+
+### Deliverable
+- `docs/UI-WALKTHROUGH-FINDINGS.md` — all 21 handover pages walked live via browser (recon-only, no code fixes). Committed `824974a`.
+
+### Results
+- **17 UI pages PASS** structurally (1,3,4,5,6,7,8,9,10,11,12,13,14,16,19,20,21).
+- **3 are API/SSE/static endpoints** (not UI pages): `/kill/status` (404 UI, API-only), `/logs` (JSON 200 auth), `/stream` (SSE 401 no-auth). All live + auth-protected.
+- `/shell` → 404 confirmed deleted (#42/43 ✅).
+- `spec.html` alive at `/spec` (NOT dead weight — BUGREPORT ⚠️ UNVERIFIED suspicion wrong).
+- `sw.js` + `manifest.json` served at `/static/` (200, correct paths).
+
+### Confirmed BUGREPORT items (live-verified)
+- **#1** auth on `/logs` + `/stream` ✅ (401 without creds)
+- **#6 / T0-1** converter prompt `exit_config` vs `metadata` mismatch — VERIFIED in `core/llm.py:83-94` (highest-priority Tier-0 fix, unfixed)
+- **#7 / E11** Port 1 UI missing — strategy detail Parameters section read-only, no `strategy-config` form
+- **#42/43** `/shell` deleted ✅
+- **#62** `sw.js` ASSETS list clean ✅
+- **#64** distinction: `engine_v6_1` present in backtest form (`/app/testing/historical`), missing ONLY in `instance_form.html` (create-instance)
+
+### New findings (added to TASK-LIST BUGHUNT)
+- **BUG-7**: `/app/trades` ends at filter bar — NO trades table, NO "Active Positions" section (missing empty-state)
+- **BUG-9-A**: recurring anonymous JS `exception` on dashboard/engines/engine-detail/strategies/strategy-detail ONLY (pages with PULSE console + position-card.js). Pages without those widgets = 0 errors. Root cause = position-card.js or console widget. Needs `window.onerror` capture + fix.
+- Dashboard PnL mismatch: header $8.88 vs sidebar widget $0.00 (data source divergence)
+- Handover mislabeled `/kill/status` + `/shell` as UI pages (API/404)
+
 ### Vision note
 - Aux vision model (gemma-4-26b-a4b-it:free) rate-limited 429 mid-walk; structural verification via a11y snapshot used throughout. Screenshots captured for pages 1-4. Retry vision on remaining when limit clears or switch aux model per memory note.
 
