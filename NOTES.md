@@ -1903,4 +1903,22 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 
 **Backup:** `backups/v207_peruser-iso-pre_2026-07-19_0716.tar.gz` (pre-edit, excludes secrets/db).
 
-**Remaining Tier 2:** T2-6, T2-7.
+**Remaining Tier 2:** T2-7.
+
+## T2-6 — Credential encrypt/decrypt → JSON (DONE `a61b206`)
+
+**Why:** `encrypt_and_store` used `str(data)` (Python repr) and `decrypt` used `ast.literal_eval` — fragile, non-portable, breaks on non-Python consumers. Switched to `json.dumps` / `json.loads`.
+
+**Change:** `instances/models.py`
+- `encrypt_and_store`: `fernet.encrypt(json.dumps(data).encode())`
+- `decrypt`: `json.loads(raw)` with `ast.literal_eval` fallback for legacy (pre-migration) blobs
+- added `import json`
+
+**Verification (live, running server):**
+- Created `app_api_key` cred via `POST /api/v2/credentials` with operator `puls_` key → 200
+- Inspected raw stored `encrypted_data` → decrypted to `{"key": "..."}`, starts with `{`, no single quotes (old repr gone)
+- `decrypt()` returns correct dict; `POST /test` round-trips (200 "Stored")
+- In-process: legacy `str(data)` blob still decrypts via fallback (no live HL key breakage)
+- Test cred soft-deleted after verify
+
+**Backup:** `backups/v208_t26-pre_2026-07-19_1526.tar.gz`.

@@ -43,7 +43,7 @@
 - ✅ `User.email` DB-unique + wrap `signup_post` `db.commit()` in try/except (T2-4, `e89d4f3`)
 - `User.email` DEFERRED SPEC: make email REQUIRED + double-entry confirm; future email-verify sender to activate accounts (operator 2026-07-19, not built)
 - Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — ✅ DONE (T2-5, `1bfe968`, + fixed missing `import hmac` in auth.py that caused Basic Auth popup)
-- `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — OPEN (T2-6)
+- `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — ✅ DONE (T2-6, `a61b206`)
 - Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
 - 🔒 **Per-user isolation for instance list/create/delete — DONE (`c17304e`)**: `_current_user_id` no longer falls back to operator (global/missing key → 403); `GET/POST/DELETE /api/v2/instances` scoped by `user_id`; UI `create_instance` binds owner `user_id`. Live-verified: cross-user delete of engine-1 → 404, per-user list returns only own engines.
 
