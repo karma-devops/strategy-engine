@@ -2063,6 +2063,6 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - Live verify: `/app/dashboard?hours=1` returns **200** and served HTML contains `centerY` (8×) → new code is served. No restart needed (HTML/JS serve live; Python routes untouched; engine-1 LIVE so no supervised restart).
 - Pushed `15cb2b7 → b02aed8` to `origin/main`.
 
-**NEXT (Step 2, separate turn):** add a dashed **zero-center baseline `<line>`** inside `buildPulse()` (current SVG has no centerline; brief's `baseline` line was the one useful element) + browser-verify (console clean, curve dances around center, pills 1H/2H/6H/12H/24H recalc without exceptions). Then commit/push/doc per step.
+**STEP 2 — DONE (commit 9d3e9b1):** added dashed `#pulse-baseline` `<line>` at `y=100` as FIRST child of BOTH `#pulse-svg` (desktop) and `#pulse-svg-m` (mobile), token stroke `var(--border, rgba(255,255,255,0.15))`, dash `5,5`, `x2=W`. Senior brief's `.panel-chart-wrapper svg` / `#pulse-container svg` selectors were WRONG (no such nodes in this template) → would have been a silent no-op (`if(svgElement)` guard fails); corrected to real SVG IDs. **Browser-verified via DevTools DOM**: `#pulse-baseline` is `firstChild` of both SVGs, `y1=y2="100"`, `x2="1000"`, dash `5,5`; `pulse-change` shows live `▲ 0.54%` (relative deviation, not absolute $). **T4-5 COMPLETE** (Step 1 b02aed8 + Step 2 9d3e9b1 + doc-sync 5a83be3). Pushed to origin/main.
 
 **Left uncommitted (unchanged, do NOT touch):** `instances/models.py` (T3-9 parked cols), `._env_bak` (junk).
