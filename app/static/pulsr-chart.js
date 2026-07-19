@@ -252,14 +252,32 @@
                     try { series.setData(norm); } catch (e) { /* ignore */ }
                     chart.timeScale().fitContent();
                 },
-                destroy() { try { chart.remove(); } catch (e) { /* ignore */ } },
+                destroy() {
+                    try { chart.remove(); } catch (e) { /* ignore */ }
+                    const i = PulsRChart._charts.indexOf(handle);
+                    if (i !== -1) PulsRChart._charts.splice(i, 1);
+                },
             };
+            PulsRChart._charts.push(handle);
+            return handle;
         },
 
-        // Re-read theme after a data-mode change (operator toggles dark/light).
-        // Charts using this must call refresh() and pass their handle in.
+        // Registry of live chart handles so a theme toggle can re-apply
+        // getTheme() to every rendered chart in place (no reload needed).
+        _charts: [],
         themeVersion: 0,
-        bumpTheme() { this.themeVersion += 1; },
+
+        // Re-read theme after a data-mode change (operator toggles dark/light).
+        // Applies the freshly-resolved theme to all live charts.
+        bumpTheme() {
+            this.themeVersion += 1;
+            const theme = getTheme();
+            this._charts.forEach(h => {
+                if (h && h.chart && typeof h.chart.applyOptions === 'function') {
+                    try { h.chart.applyOptions(theme); } catch (e) { /* ignore */ }
+                }
+            });
+        },
 
         /**
          * Create a candlestick chart for token price data.
@@ -452,8 +470,12 @@
                 },
                 destroy() {
                     chart.remove();
+                    const i = PulsRChart._charts.indexOf(handle);
+                    if (i !== -1) PulsRChart._charts.splice(i, 1);
                 },
             };
+            PulsRChart._charts.push(handle);
+            return handle;
         },
     };
 
