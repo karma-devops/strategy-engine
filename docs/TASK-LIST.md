@@ -24,7 +24,7 @@
 | T0-3 | `app/paper_routes.py` + `app/backtest_routes.py` — resolve session user, not `get_or_seed_operator(db)` | Cross-tenant leak on 2nd signup. 1-2 hrs + audit all 20 `get_or_seed_operator` sites |
 | T0-4 | `setattr(self,k)` → `setattr(self,k,v)` in `engine/v6_1.py:97` + `engine/v1.py` fallback | 2-char fix; crashes v6.1 on any strategy_config override. 15 min | **DONE 2026-07-19** — both engines now apply kwargs overrides without TypeError. Compile + runtime-instantiate (v6_1 active_offset=99, v1 MAN_OFFSET=42) + app-context import verified. |
 | T0-5 | `config.py` — remove `"operator"` DASHBOARD_PASSWORD default, fail-fast (`_require`) on boot if `DASHBOARD_PASSWORD`/`AGENT_API_KEY`/`INSTANCE_SECRET_KEY` unset | Ships weak default creds; silent crypto key absence. 20 min | **DONE 2026-07-19** — `_require()` helper; py_compile OK; import OK with .env; RuntimeError proven when var absent. Note: live uvicorn is supervisor-managed and injects its own DASHBOARD_PASSWORD env (differs from .env), so /app/dashboard now expects supervisor creds not `operator/*** — deploy-config detail, not a code regression. |
-| T0-6 | Create `data/` dir at startup (or `Dockerfile`) | Fresh deploy crashes immediately, reproduced. 10 min |
+| T0-6 | Create `data/` dir at startup (or `Dockerfile`) | Fresh deploy crashes immediately, reproduced. 10 min | **DONE 2026-07-19** — `config.py` now `os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)` at import. Verified: deleted `data/`, import recreated it + sqlite opened OK; live server respawned clean (landing 200). |
 
 ### TIER 1 — This week, still on current architecture
 | # | Task | Note |

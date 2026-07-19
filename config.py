@@ -65,6 +65,9 @@ class Config:
     DATABASE_PATH = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "data", "strategy_engine.db"
     )
+    # Ensure the data/ directory exists at boot so a fresh deploy doesn't
+    # crash on first DB access (sqlite can't create the parent dir itself).
+    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
     DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH}")
 
     # Logging
