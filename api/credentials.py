@@ -8,7 +8,7 @@ Routes:
   POST /api/v2/credentials/{id}/test → test connectivity
 """
 
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, Depends, status
 from pydantic import BaseModel
 from sqlalchemy.orm import sessionmaker
 
@@ -143,6 +143,16 @@ def delete_credential(request: Request, cred_id: str, api_key: str = Depends(ver
 @limiter.limit(WRITE_LIMIT)
 def test_credential(request: Request, cred_id: str, api_key: str = Depends(verify_api_key)):
     """Test credential connectivity. Returns ok/error."""
+    # SECURITY (T0-2): decrypt round-trips the raw secret. The shared global
+    # AGENT_API_KEY is embedded in dashboard page source, so it must NOT be
+    # allowed to reach decrypted operator credentials. Require a per-user
+    # puls_*-scoped key for this endpoint.
+    raw_key = request.headers.get("X-API-Key", "")
+    if not raw_key.startswith("puls_"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Decrypted credential access requires a per-user API key",
+        )
     db = Session()
     try:
         user_id = _current_user_id(db, request)
