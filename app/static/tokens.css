@@ -639,3 +639,14 @@
   --glass-border: var(--card-border);
   --glass-shadow: var(--card-shadow);
 }
+
+/* ════════════════════════════════════════════════════════════════
+   LAYER 6: TERMINAL / TELEMETRY COCKPIT TOKENS (T4-2.3)
+   Dedicated near-black surface for the live engine-stream console.
+   Declared globally (no theme block overrides it) so the terminal
+   stays consistent across all color modes.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  --surface-terminal: #050505;
+}

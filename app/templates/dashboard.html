@@ -269,7 +269,7 @@
                     <button class="btn-sm" onclick="clearConsole()" title="Clear">Clear</button>
                 </div>
             </div>
-            <div id="console-log" class="console-log" style="flex:1;min-height:0;overflow-y:auto;font-size:var(--text-xs);"></div>
+            <div id="console-log" class="console-log" style="flex:1;min-height:0;overflow-y:auto;font-size:var(--text-xs);background-color:var(--surface-terminal);color:#00ff66;"></div>
         </div>
         </div>
         {# ── /Mobile Module 5: Console ── #}
@@ -929,7 +929,7 @@
     }
     
     // === Position Data ===
-    window.POSITIONS_DATA = window.POSITIONS_DATA || {{ instances | tojson }};
+    window.POSITIONS_DATA = window.POSITIONS_DATA || {{ instances | tojson | safe }};
 </script>
 <script src="/static/chat_widget.js"></script>
 <script src="/static/position-card.js"></script>
