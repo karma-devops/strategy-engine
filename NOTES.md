@@ -1874,3 +1874,33 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - Backup: `backups/v206_t25-pre_*.tar.gz` before edit.
 
 **Remaining Tier 2:** T2-6 (Credential encrypt/decrypt → json not str/ast.literal_eval), T2-7 (re-verify UNVERIFIED BUGREPORT list).
+
+---
+
+## 2026-07-19 — PER-USER ISOLATION (security boundary, operator directive)
+
+**Requirement (operator, verbatim):** "list, create and delete routes should be on a per user level, not falling back to operator at all. for example, the engine 1 is 'my' engine, and not my neighbor user's, therefore he can't list, create or delete."
+
+**Changes (`c17304e`):**
+- `api/credentials.py` `_current_user_id()`: removed operator fallback. Global `AGENT_API_KEY` / missing key now → `403 Forbidden`. Only a per-user `puls_`-scoped key resolves to a tenant.
+- `api/instances.py`:
+  - `GET /api/v2/instances` — now `filter(Instance.user_id == user_id)` (was `all()` — leaked every user's engines).
+  - `POST /api/v2/instances` — binds `inst.user_id = user_id` on creation.
+  - `DELETE /api/v2/instances/{id}` — lookup scoped by `user_id` → 404 if not owner.
+  - All three now carry `Depends(verify_api_key)`.
+- `app/routes.py` `create_instance` (UI form POST): resolves owner `user_id` from the session user and binds `inst.user_id`.
+
+**Live verification matrix (all PASS):**
+- global AGENT_API_KEY → list = **403** (no operator fallback)
+- no key → list = **401**
+- testuser99 puls_ → list = **200**, empty (only own)
+- testuser99 → CREATE = **200**, `user_id` bound to `2b2b68d9-...`
+- testuser99 → DELETE operator engine-1 = **404** "not found" (cannot touch neighbor's engine)
+- operator puls_ → list = **200**, engine-1 + engine-2
+- engine-1 untouched after cross-user attack attempt
+
+**Note:** existing engine-1/engine-2 were ALREADY bound to operator id (not NULL) — no data fix needed. Test engine `tu99-engine` was created during verification; it is test data, left in place (operator to decide cleanup).
+
+**Backup:** `backups/v207_peruser-iso-pre_2026-07-19_0716.tar.gz` (pre-edit, excludes secrets/db).
+
+**Remaining Tier 2:** T2-6, T2-7.

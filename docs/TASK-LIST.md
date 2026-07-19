@@ -45,6 +45,7 @@
 - Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — ✅ DONE (T2-5, `1bfe968`, + fixed missing `import hmac` in auth.py that caused Basic Auth popup)
 - `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — OPEN (T2-6)
 - Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
+- 🔒 **Per-user isolation for instance list/create/delete — DONE (`c17304e`)**: `_current_user_id` no longer falls back to operator (global/missing key → 403); `GET/POST/DELETE /api/v2/instances` scoped by `user_id`; UI `create_instance` binds owner `user_id`. Live-verified: cross-user delete of engine-1 → 404, per-user list returns only own engines.
 
 ### Phase -1 Rewrite — guidance (NOT blocking, do after Tier 0+1)
 1. **Docs-in-parallel, not docs-as-gate.** Ship Tier 1/2 fixes on a maintenance branch while writing `VOCABULARY.md`/`ARCHITECTURE.md`/`DECISIONS.md`. No multi-day code freeze on a live-order system.
