@@ -1,7 +1,7 @@
 # CONTEXT.md — strategy-engine (PULS·R) — THE MAP
 
 > **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
-> Companion docs (consolidated 2026-07-18): **NOTES.md** (session log + audits + ROAST), **TASK-LIST.md** (open work), **BETA-ROADMAP.md** (forward plan).
+> Companion docs (consolidated 2026-07-19): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/bugreport.md**, **docs/task-priorities.md**, **HANDOVER-UI-WALKTHROUGH.md**.
 > Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
 > Do not commit to GitHub (local-only). Version: **v1.98**.
 
@@ -29,7 +29,7 @@ strategy-engine/
 ├── Dockerfile / docker-compose.yml
 ├── CONTEXT.md             # This file — THE MAP
 ├── NOTES.md               # Session log + audits + ROAST findings
-├── TASK-LIST.md           # Open work inventory (reconciled 2026-07-18)
+├── docs/TASK-LIST.md      # SINGLE consolidated work inventory (TIER 0/1/2) — see §companion line
 ├── BETA-ROADMAP.md        # Beta readiness action plan
 ├── api/                   # REST routes (11 modules, /api/v2)
 │   ├── instances.py       # CRUD + start/stop/close/leverage + delete cascade
@@ -256,7 +256,7 @@ Global `.env` DRY_RUN=false → live-connected. Per-instance `dry_run=true` → 
 - **Bug surface unknown** — next phase is systematic bughunting (UI + wiring + data flow) before any stability claim.
 - **manager.py D2 patch** required a restore+re-apply cycle (class-structure corruption) — indicates edit discipline needs tighter verification before beta.
 
-**Next phase:** bughunting + UI frontend improvement + wiring verification. See TASK-LIST.md (new BUGHUNT group) and BETA-ROADMAP.md.
+**Next phase:** bughunting + UI frontend improvement + wiring verification. See docs/TASK-LIST.md (TIER 0/1/2 + BUGHUNT group) and BETA-ROADMAP.md.
 
 ---
 
@@ -320,7 +320,7 @@ strategy-engine/
 - Keep worker (9999) standalone — do not integrate into main app.
 
 ## Doc pointer (2026-07-18)
-- `TASK-LIST.md` now lives in `docs/TASK-LIST.md` (work/status tracker).
+- `docs/TASK-LIST.md` is the single consolidated work/status tracker (TIER 0/1/2). ROOT `TASK-LIST.md` no longer exists — all work now lives in `docs/`.
 - `docs/` holds the architecture contract: README, VOCABULARY, ARCHITECTURE,
   DECISIONS, ROADMAP, CONTRIBUTING, STYLEGUIDE, AI_RULES, REFACTOR_PLAN.
 - `BACKLOG.md` (root) = bugreport tracking ledger.

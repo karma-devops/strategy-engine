@@ -1720,3 +1720,30 @@ Each strategy script is standalone and declares three ports:
 **Files touched this session:** `api/instances.py`, `instances/runner.py`, `instances/manager.py`, `backtests/runner.py`, `backtests/cost_model.py` (new), `testing/runner.py` (new, rewritten clean), `app/templates/testing_historical.html`, `main.py`, `app/_common.py`/`paper_routes.py`/`backtest_routes.py` (from earlier), `design-system/*` (Z4), `app/static/position-card.js` (Z5).
 
 **Handover for next session (2026-07-19):** `HANDOVER-UI-WALKTHROUGH.md` created at main root. Next session = browser UI walkthrough of all pages (server PID 29567, port 8792, login operator/operator). Recon only, no code fixes unless told. Verify BACKLOG #41-#66 against live UI.
+
+---
+
+## 2026-07-19 — Doc consolidation + UI walkthrough prep (session a8bd36534a59)
+
+### Docs consolidated (ADIX: backup `backups/adix-20260719_024835_docs/` + `adix-20260719_0253_docsync/`)
+- **`docs/TASK-LIST.md`** rewritten as the SINGLE consolidated work inventory — merged: prior v1.98 (A/B/X/Z/D groups) + BUGREPORT.md severity items + HANDOVER walkthrough queue + TASK-PRIORITIES.md 3-tier ordering.
+- **`docs/bugreport.md`** — verbatim copy of operator-supplied BUGREPORT.md (karma-devops, priority order intact). Read-only evidence.
+- **`docs/task-priorities.md`** — verbatim copy of pasted 3-tier companion (Tier 0/1/2 + Phase -1 rewrite guidance). Read-only evidence.
+- Unified priority = **TIER 0** (T0-1 converter prompt → T0-6 data/ dir, under a day) → **TIER 1** (circuit breaker, validation, parity, rate limits) → **TIER 2** (copy/form/nits/hygiene). Phase -1 rewrite = NOT blocking, docs-in-parallel, `git mv` not fresh dir.
+
+### CONTEXT.md / NOTES.md updated to reflect
+- CONTEXT.md companion line now points to `docs/TASK-LIST.md` as single WORK source + `docs/bugreport.md` + `docs/task-priorities.md` as read-only evidence.
+- NOTES.md (this entry) logs the consolidation; prior ROAST/audit groups preserved (append-only).
+
+### Session discipline
+- `project-manager` skill active: mode-logger started (`d0e106e02bd7`), modes switched per phase.
+- ADIX: one file per turn, backup before write, verify before advance. Zero autonomous deletion.
+- AEE + Karpathy: plan first, consent gate on structural/destructive, live-test every fix.
+
+### Next action (this session)
+- **UI walkthrough** of 21 pages (recon-only): one page/turn, `browser_navigate` → `browser_console` → `browser_vision` screenshot, findings → `docs/UI-WALKTHROUGH-FINDINGS.md`. Verify BACKLOG #41-#66. No code fixes unless trivial+explicit go.
+- After walkthrough: execute TIER 0 code fixes (T0-1..T0-6), one at a time, live-verified.
+
+### Live state (carried from handover)
+- engine-1 RUNNING LIVE (FARTCOIN LONG, liq via A4). Main app UP :8792 v1.98. Worker :9999 DOWN.
+- Server PID 29567 alive; restart cmd: `cd main && venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8792`.

@@ -669,6 +669,7 @@ def get_or_seed_operator(db=None) -> "User":
                 display_name="Operator",
                 start_balance=5.0,
                 default_dry_run=True,
+                password_hash=hash_password("operator"),  # seed so /login form works (Basic Auth + form parity)
                 api_key=encrypt_api_key(plaintext_key),
                 api_key_hash=hash_api_key(plaintext_key),
             )
@@ -680,6 +681,11 @@ def get_or_seed_operator(db=None) -> "User":
             plaintext_key = generate_api_key()
             user.api_key = encrypt_api_key(plaintext_key)
             user.api_key_hash = hash_api_key(plaintext_key)
+            db.commit()
+            db.refresh(user)
+        elif not user.password_hash:
+            # Backfill: seed operator password so /login form works on existing DBs
+            user.password_hash = hash_password("operator")
             db.commit()
             db.refresh(user)
         return user
