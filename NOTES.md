@@ -1833,3 +1833,33 @@ Each strategy script is standalone and declares three ports:
 - **Reuse:** T1-5 idempotency guard (WithdrawalRecord.idempotency_key) already in place for when withdrawal is fixed.
 - **When re-opened:** fix line 429 (1-line + arg swap), add address/amount guards, build deposit method+route, dry-run verify, then live round-trip (withdraw 1 → confirm MetaMask → deposit 5 → confirm HL). Explicit operator go required (real funds).
 - **Git:** deferred doc-only, committed `f19a1e1` (BUG-11 log) then expanded in this session.
+
+---
+
+## 2026-07-19 — T1-7 COMPLETE (verify → commit → push)
+
+**Task:** Disable withdraw/deposit UI + fund-touching routes (feature deferred per BUG-11/BUG-12, live funds).
+**Edits (from prior session, verified this turn):**
+- `api/withdrawals.py`: commented out `POST /withdrawals/manual/50`, `POST /withdrawals/manual/all`, `PUT /withdrawals/config`, `GET /withdrawals/calculate`. Kept read-only: `GET /account`, `GET /withdrawals/config`, `GET /withdrawals/history`, `GET /withdrawals/projection`.
+- `app/routes.py:559` `withdrawals_page`: now returns HTML notice "Withdrawals — Not Functional Yet" (no broken form render).
+**Live verification (fresh uvicorn reload from disk):**
+- `GET /app/withdrawals` → 200 + "Not Functional Yet" notice ✅
+- `POST /api/v2/withdrawals/manual/50` → 404 (disabled) ✅
+- `GET /api/v2/withdrawals/history` (X-API-Key) → 200 `{"ok":true,"history":[]}` ✅ (read-only intact)
+**Commit:** `579d7eb` — fix(T1-7). Pushed origin main (fd72e14→579d7eb, local=remote=28).
+**Stray files NOT committed:** `._env_bak` (macOS artifact), `docs/HANDOVER-T1-7.md` (handover doc, left untracked).
+**Note:** Supervisor did NOT auto-respawn after kill — relaunched uvicorn directly (background PID 74961) to load current disk code. Deploy artifact, not code defect.
+
+---
+
+## 2026-07-19 — TIER 2 CLEANUP PASS (T2-1 → T2-4), browser-verified
+
+All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t24) before each write. Server restarted + live-tested after each.
+
+- **T2-1** (`23ff458`): `instance_form.html` — "6-Engine Default Fleet" → "Default Fleet" (fleet is 1 engine). Browser-verified: /instances/new optgroup label correct, "6-Engine" gone.
+- **T2-2** (`b37a830`): `instance_form.html` — added `engine_v6_1` → "PRO v6.1" to Strategy dropdown (was selectable nowhere despite being a registered strategy). Browser-verified: 3 options present, label matches registry/routes/worker canonically.
+- **T2-3** (`bcada4c`): `instance_form.js` + `instance_form.html` — removed dead preset machinery (loadFleet/applyPreset + `preset-select` change listener + init IIFE + Preset chart-card). The JS fetched non-existent `/api/v2/presets/fleet` (always 404, silent console error). Form now starts at Identity. Browser-verified: Preset section gone, console clean (0 errors).
+- **T2-4** (`e89d4f3`): `instances/models.py` (email unique=True,index=True + idempotent `idx_users_email` in `_migrate_columns`) + `app/routes.py` (signup `db.commit()` wrapped in try/except IntegrityError → 409). Live-verified: index created; dup-username→409; valid→303; dup-email (diff username)→409 NOT 500. Browser-submit automation quirk blocked E2E click test, but endpoint proven via curl + DB-state.
+  - **DEFERRED SPEC (operator 2026-07-19):** email should be REQUIRED (not optional) with double-entry confirm field for account safety; future email-verification sender to activate accounts in DB. Not built yet — current email is optional, used only for testing.
+
+**Remaining Tier 2:** T2-5 (session cookie MAC → hmac.new), T2-6 (Credential encrypt/decrypt → json not str/ast.literal_eval), T2-7 (re-verify UNVERIFIED BUGREPORT list).

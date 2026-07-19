@@ -37,13 +37,14 @@
 | T1-6 | `test_credential` — stop treating 401 as `ok:true` | Misleads users |
 
 ### TIER 2 — Cleanup, opportunistic
-- `#32` fix "6-Engine Default Fleet" copy (decision locked: 1 engine, fix label)
-- `instance_form.html` — add `engine_v6_1` to dropdown
-- `instance_form.js` — wire or remove unused per-strategy presets endpoint
-- `User.email` DB-unique + wrap `signup_post` `db.commit()` in try/except
-- Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`)
-- `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()`
-- Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend
+- `#32` ✅ fix "6-Engine Default Fleet" copy → "Default Fleet" (T2-1, `23ff458`)
+- ✅ `instance_form.html` — add `engine_v6_1` (PRO v6.1) to dropdown (T2-2, `b37a830`)
+- ✅ `instance_form.js` — removed dead preset machinery + Preset section (T2-3, `bcada4c`)
+- ✅ `User.email` DB-unique + wrap `signup_post` `db.commit()` in try/except (T2-4, `e89d4f3`)
+- `User.email` DEFERRED SPEC: make email REQUIRED + double-entry confirm; future email-verify sender to activate accounts (operator 2026-07-19, not built)
+- Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — OPEN (T2-5)
+- `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — OPEN (T2-6)
+- Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
 
 ### Phase -1 Rewrite — guidance (NOT blocking, do after Tier 0+1)
 1. **Docs-in-parallel, not docs-as-gate.** Ship Tier 1/2 fixes on a maintenance branch while writing `VOCABULARY.md`/`ARCHITECTURE.md`/`DECISIONS.md`. No multi-day code freeze on a live-order system.
