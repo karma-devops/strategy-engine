@@ -15,7 +15,25 @@ from withdrawal.calculator import (
 )
 
 
-def execute_manual_50(db: Session, hl: HyperLiquidClient = None) -> dict:
+def execute_manual_50(db: Session, hl: HyperLiquidClient = None, idempotency_key: str = None) -> dict:
+    # Idempotency: if a record with this key already exists (any terminal or
+    # in-flight state), return its stored outcome instead of re-executing.
+    if idempotency_key:
+        existing = (
+            db.query(WithdrawalRecord)
+            .filter(WithdrawalRecord.idempotency_key == idempotency_key)
+            .first()
+        )
+        if existing:
+            return {
+                "ok": existing.status in ("completed", "dry_run"),
+                "idempotent": True,
+                "amount": existing.amount,
+                "message": f"Already processed (status={existing.status})",
+                "balance_after": existing.balance_after,
+                "status": existing.status,
+            }
+
     if hl is None:
         hl = HyperLiquidClient()
 
@@ -36,6 +54,7 @@ def execute_manual_50(db: Session, hl: HyperLiquidClient = None) -> dict:
         withdrawal_type="manual_50",
         status="pending",
         balance_before=balance,
+        idempotency_key=idempotency_key,
     )
     db.add(record)
     db.commit()
@@ -64,7 +83,25 @@ def execute_manual_50(db: Session, hl: HyperLiquidClient = None) -> dict:
         return {"ok": False, "amount": amount, "message": "Withdrawal execution failed"}
 
 
-def execute_manual_all(db: Session, hl: HyperLiquidClient = None) -> dict:
+def execute_manual_all(db: Session, hl: HyperLiquidClient = None, idempotency_key: str = None) -> dict:
+    # Idempotency: if a record with this key already exists, return its
+    # stored outcome instead of re-executing (prevents double on-chain send).
+    if idempotency_key:
+        existing = (
+            db.query(WithdrawalRecord)
+            .filter(WithdrawalRecord.idempotency_key == idempotency_key)
+            .first()
+        )
+        if existing:
+            return {
+                "ok": existing.status in ("completed", "dry_run"),
+                "idempotent": True,
+                "amount": existing.amount,
+                "message": f"Already processed (status={existing.status})",
+                "balance_after": existing.balance_after,
+                "status": existing.status,
+            }
+
     if hl is None:
         hl = HyperLiquidClient()
 
@@ -85,6 +122,7 @@ def execute_manual_all(db: Session, hl: HyperLiquidClient = None) -> dict:
         withdrawal_type="manual_all",
         status="pending",
         balance_before=balance,
+        idempotency_key=idempotency_key,
     )
     db.add(record)
     db.commit()

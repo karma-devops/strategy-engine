@@ -322,6 +322,7 @@ class WithdrawalRecord(Base):
     balance_before = Column(Float, nullable=True)
     balance_after = Column(Float, nullable=True)
     note = Column(String(255), nullable=True)
+    idempotency_key = Column(String(64), nullable=True, unique=True, index=True)
     timestamp = Column(DateTime, default=_now_utc)
 
 

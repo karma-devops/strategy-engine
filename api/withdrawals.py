@@ -3,6 +3,7 @@ Withdrawal API routes.
 """
 
 from fastapi import APIRouter, Depends, Form, Request
+import uuid
 from sqlalchemy.orm import Session
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
@@ -127,8 +128,9 @@ def withdraw_50_percent(request: Request, db: Session = Depends(get_db)):
     blocked = _check_withdrawal_kill(db)
     if blocked:
         return blocked
-    result = execute_manual_50(db)
-    return {"ok": result["ok"], **result}
+    idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
+    result = execute_manual_50(db, idempotency_key=idem_key)
+    return {"ok": result["ok"], "idempotency_key": idem_key, **result}
 
 
 @router.post("/withdrawals/manual/all")
@@ -137,8 +139,9 @@ def withdraw_all(request: Request, db: Session = Depends(get_db)):
     blocked = _check_withdrawal_kill(db)
     if blocked:
         return blocked
-    result = execute_manual_all(db)
-    return {"ok": result["ok"], **result}
+    idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
+    result = execute_manual_all(db, idempotency_key=idem_key)
+    return {"ok": result["ok"], "idempotency_key": idem_key, **result}
 
 
 @router.get("/withdrawals/history")
