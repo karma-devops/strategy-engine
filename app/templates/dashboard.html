@@ -65,7 +65,7 @@
                 </defs>
                 <path class="pulse-area" id="pulse-area-m" d=""/>
                 <path class="pulse-path" id="pulse-path-m" d=""/>
-                <circle class="pulse-dot" id="pulse-dot-m" cx="0" cy="0" r="4"/>
+                <circle class="pulse-dot" id="pulse-dot-m" cx="0" cy="0" r="5"/>
             </svg>
         </div>
     </div>
@@ -349,10 +349,10 @@
         path.setAttribute('d', d);
         // Area closes to the BOTTOM edge (H - PAD) → shadow points DOWN only
         area.setAttribute('d', d + ' L' + last[0].toFixed(1) + ',' + (H - PAD) + ' L' + pts[0][0].toFixed(1) + ',' + (H - PAD) + ' Z');
-        // Position dot at 85% width (sits on the wave)
-        const dotX = PAD + 0.85 * (W - 2 * PAD);
-        dot.setAttribute('cx', dotX.toFixed(1));
+        // Position dot at the END of the line (right edge, last data point = current tick), always ON the line
+        dot.setAttribute('cx', last[0].toFixed(1));
         dot.setAttribute('cy', last[1].toFixed(1));
+        dot.setAttribute('r', '5');
         // ── SIGN-AWARE COLOR (MASTER palette): profit #34D399 / loss #FB7185 ──
         const first = vals[0], lastV = vals[vals.length - 1];
         const netChange = lastV - first;
