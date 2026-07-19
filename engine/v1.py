@@ -86,7 +86,7 @@ class EngineV1Strategy(BaseStrategy):
             if hasattr(self, k.upper()):
                 setattr(self, k.upper(), v)
             elif hasattr(self, k):
-                setattr(self, k)
+                setattr(self, k, v)
 
     @classmethod
     def get_parameters(cls):

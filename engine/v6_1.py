@@ -94,7 +94,7 @@ class EngineV6_1Strategy(BaseStrategy):
         # Apply kwargs overrides (strategy_config from DB)
         for k, v in kwargs.items():
             if hasattr(self, k):
-                setattr(self, k)
+                setattr(self, k, v)
 
     @classmethod
     def get_parameters(cls):
