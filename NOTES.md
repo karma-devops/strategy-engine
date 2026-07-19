@@ -7,6 +7,51 @@
 
 ---
 
+## ═══ HOW TO RESTART THE SERVER (operator runbook, 2026-07-19) ═══
+
+**Context:** Dev box has NO local supervisord. The "supervisor-managed" in docs refers to the EasyPanel prod deploy. Locally the app is a bare `uvicorn main:app` process. Killing it does NOT auto-respawn — you must relaunch it.
+
+**Pre-reqs:** venv at `/workspace/projects/strategy-engine/venv`. `.env` (DASHBOARD_PASSWORD / AGENT_API_KEY / INSTANCE_SECRET_KEY) is auto-loaded by `config.py` on import — do NOT pass creds manually. Run everything from `main/`.
+
+**SAFE SHUTDOWN (if an engine is LIVE with real funds):**
+1. Stop engines first (graceful, no forced close):
+   ```
+   KEY=$(grep '^AGENT_API_KEY' .env | cut -d= -f2-)
+   curl -X POST -H "X-API-Key: $KEY" http://127.0.0.1:8792/api/v2/instances/engine-1/stop
+   curl -X POST -H "X-API-Key: $KEY" http://127.0.0.1:8792/api/v2/instances/engine-2/stop
+   ```
+2. Confirm both `stopped`:
+   ```
+   curl -s -u operator:operator http://127.0.0.1:8792/api/v2/summary | python3 -c "import sys,json; d=json.load(sys.stdin); print([(i['slug'],i['status']) for i in d['instances']])"
+   ```
+3. Only THEN kill the worker (see below).
+
+**RESTART (fresh code load):**
+- Find current PID: `for p in /proc/[0-9]*/cmdline; do tr '\0' ' ' < "$p" 2>/dev/null | grep -q 'uvicorn main:app' && echo "PID=$(echo $p|cut -d/ -f3)"; done`
+- Kill: `kill -TERM <PID>` (or `pkill -f 'uvicorn main:app'`)
+- Relaunch in background from `main/`:
+  ```
+  cd /workspace/projects/strategy-engine/main
+  /workspace/projects/strategy-engine/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8792
+  ```
+  (Run via Hermes `terminal(background=true)` so the process is tracked. Or `nohup ... &` if shell-only.)
+- Wait for "Application startup complete" then verify:
+  ```
+  curl -s -o /dev/null -w "landing %{http_code}\n" http://127.0.0.1:8792/
+  curl -s -o /dev/null -w "dashboard %{http_code}\n" -u operator:operator http://127.0.0.1:8792/app/dashboard
+  ```
+
+**AETHERIS NOTE (2026-07-19):** I killed the stale worker thinking supervisor would respawn it — it did NOT (no local supervisord). Relaunched manually per above. The discrepancy between "live 200 but disk had a NameError" in `backtest_routes.py` was because the OLD worker was serving pre-bug code; the fresh restart now correctly loads the fixed `user` assignment (T3-0). Always restart after editing Python routes.
+
+**Run the test suite (BUG-8):** pytest is NOT in the venv by default.
+```
+/workspace/projects/strategy-engine/venv/bin/pip install pytest pytest-asyncio httpx
+/workspace/projects/strategy-engine/venv/bin/python3 -m pytest tests/test_hardening.py -q
+```
+⚠️ `tests/test_hardening.py` is hardcoded to `BASE_URL="http://localhost:8788"` + `Bearer` auth + stale schema (`engine-3`, `capital_allocation`) — it CANNOT pass against the current app on :8792. Most other `tests/*.py` are standalone scripts (run `python tests/<name>.py`), not pytest modules. The only real pytest module is `test_hardening.py` (needs port/cred/schema updates before it's meaningful).
+
+---
+
 ## ROAST Index (from ROAST.md, status as of 2026-07-18)
 
 | ROAST # | Severity | Item | Reality check |

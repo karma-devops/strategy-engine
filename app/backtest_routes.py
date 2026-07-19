@@ -20,7 +20,7 @@ from slowapi.errors import RateLimitExceeded
 from api.ratelimit import limiter, READ_LIMIT
 from config import config
 from api.auth import verify_ui_credentials
-from instances.models import engine, Backtest, get_or_seed_operator
+from instances.models import engine, Backtest, User, get_or_seed_operator
 from sqlalchemy.orm import sessionmaker
 
 Session = sessionmaker(bind=engine)
@@ -56,6 +56,9 @@ def testing_historical(request: Request, username: str = Depends(verify_ui_crede
     """Historical backtests — form + results table + equity curve SVG."""
     db = Session()
     try:
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            user = get_or_seed_operator(db)
         backtests = db.query(Backtest).filter(Backtest.kind == "backtest", Backtest.user_id == user.id).order_by(Backtest.created_at.desc()).limit(50).all()
         bt_data = [{
             "id": b.id, "instance_slug": b.instance_slug, "token": b.token,

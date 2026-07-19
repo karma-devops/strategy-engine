@@ -6,7 +6,7 @@
 **Sources merged:** TASK-LIST v1.98 + BUGREPORT.md (karma-devops) + HANDOVER-UI-WALKTHROUGH.md + TASK-PRIORITIES.md (3-tier companion)
 
 **4-FILE DOC TAXONOMY:** CONTEXT.md (MAP) · NOTES.md (LOG) · TASK-LIST.md (WORK) · BETA-ROADMAP.md (FORWARD)
-**Companion evidence files (do NOT edit, read-only):** `docs/bugreport.md` (verbatim BUGREPORT) · `docs/task-priorities.md` (3-tier companion) · `docs/HANDOVER-UI-WALKTHROUGH.md`
+**Companion evidence files (do NOT edit, read-only):** `docs/bugreport.md` (verbatim BUGREPORT) · `docs/task-priorities.md` (3-tier companion) · `docs/HANDOVER-UI-WALKTHROUGH.md` · **`docs/BUGREPORT-1.md`, `docs/UI-TODO-1.md`, `docs/VERIFICATION-STATUS-1.md`** (operator-supplied 2026-07-19 — supersede earlier bugreport view; VERIFICATION-STATUS-1 is authoritative on what is actually fixed vs regressed).
 
 **Discipline (ADIX + AEE + Karpathy):** one file per turn, backup before each write, verify before advance, no batch edits, consent gate on structural/destructive changes, live-test every fix. Zero autonomous deletion.
 
@@ -34,7 +34,9 @@
 | T1-3 | `backtests/runner.py:389` — pass `instance.strategy_config` like live runner | Backtest parity broken | **DONE 2026-07-19** — `run_backtest` now loads `Instance` by slug, reads `strategy_config`, and passes it to `strategy_cls(**strategy_config)` (mirrors live runner instances/runner.py:183). Verified config overrides apply to backtest strategy. |
 | T1-4 | Login/signup rate limiting (`app/routes.py:35,60`) | Brute-force/spam surface | **DONE 2026-07-19** — both `/login` and `/signup` (public_router) now decorated `@limiter.limit(AUTH_LIMIT)` (5/min). Verified live: 7 rapid wrong-pw logins → 401×5 then 429×2; 7 rapid signups → 400×5 then 429×2. Browser login page renders clean (no console errors). Note: stale supervisor worker needed kill + fresh respawn to load new routes.py (deploy artifact, not code defect). |
 | T1-5 | `WithdrawalRecord` idempotency key | Money-movement double-exec risk | **DONE 2026-07-19** — `WithdrawalRecord.idempotency_key` column added (unique, indexed); `execute_manual_50`/`execute_manual_all` now accept `idempotency_key`, return existing record's outcome if key seen before (no re-exec); API endpoints read `Idempotency-Key` header (or auto-generate). Verified: same key → 2nd call idempotent=True, exactly 1 record; unique constraint blocks race. Live `dev_test.db` ALTERed to add column. |
-| T1-6 | `test_credential` — stop treating 401 as `ok:true` | Misleads users |
+| T1-6 | `test_credential` — stop treating 401 as `ok:true` | Misleads users | **DONE 2026-07-19** — `api/credentials.py:190` now `r.status_code == 200` only (no 401 pass). Verified against `cd3a1a1`. (Earlier TASK-LIST marked OPEN in error.) |
+
+**⚠️ T0-3 REGRESSION (found in VERIFICATION-STATUS-1, 2026-07-19):** the paper half of T0-3 is DONE (`app/paper_routes.py:47` resolves session user). The **backtest half is BROKEN** — `app/backtest_routes.py:59` (`testing_historical`) references `user.id` but `user` is **never assigned** in that function → `NameError` → `/app/testing/historical` 500s on every load. The cross-tenant leak is gone only because the page can't load for anyone. **Fix (T3-0, 5-min, pattern already in `paper_routes.py`):** assign `user = db.query(User).filter(User.username == username).first()` (operator fallback) before the query. Tracked as T3-0 below.
 
 ### TIER 2 — Cleanup, opportunistic
 - `#32` ✅ fix "6-Engine Default Fleet" copy → "Default Fleet" (T2-1, `23ff458`)
@@ -44,9 +46,22 @@
 - `User.email` DEFERRED SPEC: make email REQUIRED + double-entry confirm; future email-verify sender to activate accounts (operator 2026-07-19, not built)
 - Session cookie MAC → `hmac.new()` (was hand-rolled `sha256`) — ✅ DONE (T2-5, `1bfe968`, + fixed missing `import hmac` in auth.py that caused Basic Auth popup)
 - `Credential` encrypt/decrypt → `json` not `str()`/`ast.literal_eval()` — ✅ DONE (T2-6, `a61b206`)
-- Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — OPEN (T2-7)
+- Re-verify ⚠️ UNVERIFIED list in BUGREPORT against rewritten frontend — **T2-7 DONE 2026-07-19 (live browser + source walk, see block below)**
 - 🔒 **Per-user isolation for instance list/create/delete — DONE (`c17304e`)**: `_current_user_id` no longer falls back to operator (global/missing key → 403); `GET/POST/DELETE /api/v2/instances` scoped by `user_id`; UI `create_instance` binds owner `user_id`. Live-verified: cross-user delete of engine-1 → 404, per-user list returns only own engines.
 - 🔒 **ADR-008 Operator UI Auth (Option A) — DONE (`09f268a`)**: inject operator's per-user `puls_` key into dashboard templates (19 render sites) via `get_dashboard_api_key()`; global `AGENT_API_KEY` now 403 on tenant routes. Fresh-DB verified: operator `puls_` → `/api/v2/credentials` 200; global → 403.
+
+### TIER 3 — Frontend / chart bugs / wiring (from UI-TODO-1 + VERIFICATION-STATUS-1, 2026-07-19)
+| # | Task | Why / Effort | Status |
+|---|------|--------------|--------|
+| T3-0 | `app/backtest_routes.py:59` — assign `user` before `user.id` query (T0-3 backtest regression) | `/app/testing/historical` 500s (NameError) on every load. 5-min fix, pattern in `paper_routes.py:47`. | **OPEN — highest-priority regression** |
+| T3-1 | `app/static/pulsr-chart.js` `createEquityBarChart` — run `equityData`+`trades` through `normalizeSeries()`, wrap `setData()` in try/catch | Trade PnL histogram (Paper + Backtesting) throws + never renders. Confirmed root cause (UI-TODO-1). | OPEN |
+| T3-2 | `app/static/position-card.js:88` — `isShortPos` is a function ref, not a call → `sideClass` never `'flat'`; delete duplicate `isShort`/`isShortPos` | Silent display bug; flat/short misclassify; flat close-check unreachable. Likely also closes BUG-9-A. | OPEN |
+| T3-3 | `pulsr-chart.js` — `bumpTheme()` is a no-op: no `refresh(handle)` exists; theme toggle doesn't reapply to rendered charts | Pulse Graph + all charts ignore dark/light toggle until reload. | OPEN |
+| T3-4 | `position-card.js` `initSSEPositionListener()` opens a 2nd `EventSource('/stream')` per page (dup of page-level console SSE) | Wasted server conns + duplicate handlers (loaded on 5 pages). Consolidate to one shared connection. | OPEN |
+| T3-5 | Build the Port-1 Strategy Parameters UI (closes VERIFICATION #17) | Backend `GET /strategies/{id}/parameters` + `PUT /instances/{id}/strategy-config` are validated/safe but have ZERO frontend entry points (`grep` → 0 matches). Operator cannot set any per-instance param through the app. Pure frontend task. | OPEN |
+| T3-6 | Delete orphaned 2nd `withdrawals_page` in `app/routes.py:~1791` (no `@router.get`, shadows the real one) | Dead code (VERIFICATION #18); prevents future confusion when re-enabling withdrawals. | OPEN |
+| T3-7 | `engine_detail.html` Settings modal — add `confirm()` before saving `Dry Run → Live` (T2-7 item 6) | One misclick puts an engine LIVE with real funds, no warning. Backend T1-2 restarts on save. | OPEN |
+| T1-7 | Withdraw/deposit routes disabled (BUG-11 broken SDK `.withdraw()`; BUG-12 no deposit path) | Good judgment call: commented-out write routes, `/app/withdrawals` shows "feature deferred". **DEFERRED — live funds, needs explicit operator go.** | DEFERRED |
 
 ### Phase -1 Rewrite — guidance (NOT blocking, do after Tier 0+1)
 1. **Docs-in-parallel, not docs-as-gate.** Ship Tier 1/2 fixes on a maintenance branch while writing `VOCABULARY.md`/`ARCHITECTURE.md`/`DECISIONS.md`. No multi-day code freeze on a live-order system.
@@ -96,12 +111,12 @@
 
 ## E. BUGREPORT Severity Items (mapped to tiers above)
 - **P0/Tier0:** E1=T0-1 converter prompt · E2=T0-2 creds access · E3=T0-3 cross-tenant · E4=T0-4 setattr · E5=T0-5 cred fail-fast · E6=T0-6 data/ dir · E7=T1-1 circuit breaker
-- **P1/Tier1:** E8=T1-2 strategy-config validation · E9=T1-3 backtest parity · E10(UI Port1)=Tier2 · E11=T1-4 rate limit · E12=#32 copy · E13=T1-5 withdrawal idempotency · E14=#64/#65 form gaps · E15=T1-6 test_credential 401
+- **P1/Tier1:** E8=T1-2 strategy-config validation · E9=T1-3 backtest parity · E10(UI Port1)=T3-5 · E11=T1-4 rate limit · E12=#32 copy · E13=T1-5 withdrawal idempotency · E14=#64/#65 form gaps · E15=T1-6 test_credential 401 **(DONE 2026-07-19 — `api/credentials.py:190` ==200 only)**
 - **P2/Tier2:** E16=#12 rate limit(login) · E17=#13/#14 email+signup exc · E18=#15/#16 hmac+json
 - **⚠️ UNVERIFIED:** XSS on innerHTML · fleet alerts badge · fleet Evaluate Alerts · Testing Pool UI · rotation clarity · Dry→LIVE confirm · API-key banner · loading/error/empty · mobile responsive · landing.html fetch race · spec.html dead weight
 
 ## BUGHUNT — Live Frontend (pre-beta, must actually use UI)
-- **BUG-1.** Visual verify `#pos-grid` (Z5) · **BUG-2.** engine_detail LIVE/PAPER tag (Z3) · **BUG-3.** backtest form→results (X3/Z7) · **BUG-4.** paper forward-test (Z1/Z2) · **BUG-5.** menu integrity (Z2) · **BUG-6.** PAPER/LIVE badge (D4) · **BUG-7.** dry-run toggle (D5) · **BUG-8.** `pytest tests/` pass/fail · **BUG-9.** console error sweep · **BUG-10.** [OPEN] Signup form end-to-end verify — `/signup` (`app/routes.py:60`) creates user + hashes password but never browser-tested. Verify: success→`/app/dashboard`, session cookie issued, login with new creds works, dup-user/email handled, pw<6 rejected. Note: `/login` form was broken until operator `password_hash` seeded 2026-07-19 (`get_or_seed_operator` now sets `hash_password("operator")`); signup path itself still unverified — test after Tier 0.
+- **BUG-1.** Visual verify `#pos-grid` (Z5) · **BUG-2.** engine_detail LIVE/PAPER tag (Z3) · **BUG-3.** backtest form→results (X3/Z7) · **BUG-4.** paper forward-test (Z1/Z2) · **BUG-5.** menu integrity (Z2) · **BUG-6.** PAPER/LIVE badge (D4) · **BUG-7.** [OPEN] `/app/trades` has no trades table or Active Positions section (filter bar renders, then nothing — missing empty-state at minimum; possibly whole data-render path) — tracked, not yet fixed · **BUG-8.** `pytest tests/` pass/fail · **BUG-9.** console error sweep → narrowed to `position-card.js` / PULSE console widget; `isShortPos` reference bug (T3-2) likely closes it; add `window.onerror` capture if still reproducing · **BUG-10.** [OPEN] Signup form end-to-end verify — `/signup` (`app/routes.py:60`) creates user + hashes password but never browser-tested. Verify: success→`/app/dashboard`, session cookie issued, login with new creds works, dup-user/email handled, pw<6 rejected. Note: `/login` form was broken until operator `password_hash` seeded 2026-07-19 (`get_or_seed_operator` now sets `hash_password("operator")`); signup path itself still unverified — test after Tier 0.
 - **BUG-11 + BUG-12 — WITHDRAWAL/DEPOSIT ROUND-TRIP FEATURE [DEFERRED, full scope below].** Withdrawal is BROKEN; deposit has NO code path. Deferred per operator 2026-07-19. Detailed scope:
 
   **BUG-11 (withdrawal broken — confirmed live 2026-07-19):**
@@ -134,3 +149,29 @@ Discipline: one page/turn, screenshot+console, no code fixes unless trivial. Fin
 - engine-1 RUNNING LIVE (FARTCOIN LONG ~390, liq via A4, auto-resumed). Main app UP :8792 v1.98. Worker :9999 DOWN.
 - ADIX: one file/turn, verify before next. Zero autonomous deletion.
 - Stability: NOT STABLE / NOT BETA until BUGHUNT closed + tests green + Tier 0 closed.
+
+---
+
+## T2-7 — UNVERIFIED Re-Verification Results (2026-07-19, live browser + source walk)
+
+**Method:** server live at :8792 (auth via session cookie from `/login` form — Basic `operator:operator` is now correctly 403'd by T0-2/T2-6; supervisor-managed worker is a *stale-good* import, see caveat). Walked `/`, `/app/dashboard`, `/app/engines`, `/app/engines/{slug}`, `/app/trades`, `/app/testing/paper`, `/app/testing/historical` in-browser + read `app/templates/*.html`, `app/static/*.js` source. Console sweep run on dashboard.
+
+**⚠️ Disk-vs-runtime caveat (important):** the live worker is running a *stale* Python import. `app/backtest_routes.py` on **disk** has the T3-0 `NameError` (undefined `user`), but the **live** `/app/testing/historical` returns 200 because the supervisor worker was started before that code existed / hasn't re-imported. Consequence: **frontend/JS/HTML changes are served live immediately; Python-route changes will NOT reflect until a supervised restart** — which is intentionally NOT done here because **engine-1 is trading LIVE with real funds**. T2-7 items assessed against disk (source of truth) + live where safe.
+
+| # | UNVERIFIED item | Verdict | Evidence |
+|---|---|---|---|
+| 1 | XSS-escaping on user-editable `innerHTML` | **SAFE** | `chat_widget.js:renderMsg` uses `d.textContent = text` (no innerHTML) for all operator/user chat content. `position-card.js` / `pulsr-chart.js` innerHTML only ever interpolate app-controlled data (side/size/token from API), not free user text. No exploitable innerHTML sink found. |
+| 2 | Fleet-wide alerts visibility / badge | **NOT PRESENT** | Zero `alert`/`badge` refs in any template or route. The "Monitoring & Alerts" feature described in `landing.html` copy has **no route or template** in current frontend (`#/monitoring` in spec.html is dead). Gap never built, not broken-by-rewrite. |
+| 3 | Fleet "Evaluate Alerts" vs per-instance | **NOT PRESENT** | No `evaluate_alert`/`evaluateAlert` route or UI exists. Same as #2. |
+| 4 | Testing Pool UI presence | **NOT PRESENT** | Nav has Paper Trading + Backtesting only. No `/app/testing/pool` route or template (`testing_*.html` set = index/paper/historical). Gap not closed. |
+| 5 | Rotation approve/apply UI clarity | **NOT PRESENT** | Zero `rotation`/`rotate` refs in templates; no `/monitoring` or rotation route. Not built. |
+| 6 | Confirmation step for Dry Run → LIVE toggle | **OPEN — no confirm** | `engine_detail.html` Settings modal has `Dry Run (Paper)` select (Paper/Live) but `saveSettings()` PUTs with **no `confirm()` gate** before switching to Live. A misclick goes Live with no warning. (Backend T1-2 restart-on-save applies.) → track as **T3-7** (add confirm modal). |
+| 7 | API-key-not-configured banner | **NOT PRESENT (acceptable)** | No banner in any template; `api_key` is server-injected into every dashboard page (`window.API_KEY`), so the "not configured" state is currently unreachable in normal flow. Low priority; flag only if key can be absent. |
+| 8 | Loading/error/empty state consistency | **OK (spot-checked)** | Dashboard Open Positions → "No open positions" empty state renders. Paper → "No equity data yet" / "Loading token price data". Backtesting → "No backtests yet. Run one above." Trades → KPI + filter bar + empty table. Consistent empty/loading states present across checked tabs. |
+| 9 | Mobile responsive layout | **SCAFFOLDED, unverified visually** | `@media (max-width: 768px)` present in `engine_detail.html` modal + `layout.html` + `position-card.js` (3-col→1-col). Structurally present; full device-emulation pass not done this turn. |
+| 10 | `landing.html` login fetch-before-navigate race | **RESOLVED** | Old `doLogin()` fired `location.href` synchronously. Current `doLogin()` (lines 393-420) `fetch('/login')` then sets `window.location.href='/app/dashboard'` *inside* `.then()` after response resolves. Race gone. Live login form works (tested). |
+| 11 | `spec.html` dead weight | **GONE (live 404)** | `/spec.html` returns 404 on live server; template still on disk (`app/templates/spec.html`) but unrouted — harmless dead weight. Verified removed from nav. |
+
+**Live console finding (cross-refs BUG-9-A / T3-2):** dashboard load threw **1 anonymous JS exception** (`browser_console` → `js_errors: [{message:"", source:"exception"}]`). Empty-message anonymous throw is consistent with the `position-card.js:88` `isShortPos` function-reference bug (UI-TODO-1 / T3-2) or an SSE parse edge. Not yet pinned to a line — fixing T3-2 is the likely cure; add `window.onerror` capture if it persists.
+
+**Net:** of the 11, 1 RESOLVED (10), 1 SAFE (1), 1 GONE (11), 1 OK spot-check (8), 1 scaffolded-unverified (9), 1 acceptable-absence (7), **4 confirmed NOT PRESENT** (2,3,4,5 — features never built, not regressions), and **1 OPEN needing a fix** (6 → T3-7 Dry→LIVE confirm).
