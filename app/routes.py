@@ -1831,15 +1831,3 @@ def _instances_by_mode(request: Request, live: bool):
     finally:
         db.close()
 
-
-@limiter.limit(READ_LIMIT)
-def withdrawals_page(request: Request, username: str = Depends(verify_ui_credentials)):
-    # BUG #25: pass api_key to template so withdrawals.js can read window.API_KEY
-    from config import Config
-    cfg = Config()
-    return templates.TemplateResponse(request, "withdrawals.html", context={
-        "request": request,
-        "api_key": get_dashboard_api_key(request),
-    })
-
-
