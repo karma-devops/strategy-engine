@@ -371,6 +371,17 @@
         if (pctEl) { pctEl.textContent = pctStr; pctEl.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
         const pctElM = document.getElementById('pulse-change-m');
         if (pctElM) { pctElM.textContent = pctStr; pctElM.className = 'pulse-change ' + (neg ? 'negative' : 'positive'); }
+        // ── Live PnL (KPI + ticker) derived from the SAME equity curve as the pulse ──
+        // (Fixes the frozen $0.00: previously wired to realized_pnl/daily_pnl only.)
+        const pnlUsd = netChange; // last value minus window-first value = session equity delta
+        const pnlStr = fmtUsd(pnlUsd);
+        const pnlCls = (pnlUsd >= 0 ? 'pos' : 'neg');
+        const pnlKpi = document.getElementById('kpi-realized');
+        if (pnlKpi) { pnlKpi.textContent = pnlStr; pnlKpi.className = 'kpi-value ' + pnlCls; }
+        const pnlKpiM = document.getElementById('kpi-realized-m');
+        if (pnlKpiM) { pnlKpiM.textContent = pnlStr; pnlKpiM.className = 'kpi-value ' + pnlCls; }
+        const pnlTicker = document.getElementById('ticker-pnl');
+        if (pnlTicker) { pnlTicker.textContent = pnlStr; }
         // ── Stat strip: Last / High / Low / Peak Δ ──
         const psLast = document.getElementById('ps-last');
         const psHigh = document.getElementById('ps-high');
@@ -651,10 +662,7 @@
                 if (elEngines) elEngines.innerHTML = d.active_engines + '<span style="font-size:var(--text-sm);color:var(--text-muted);"> / ' + d.total_engines + '</span>';
                 var elEnginesM = document.getElementById('kpi-engines-m');
                 if (elEnginesM) elEnginesM.innerHTML = d.active_engines + '<span style="font-size:var(--text-sm);color:var(--text-muted);"> / ' + d.total_engines + '</span>';
-                var elReal = document.getElementById('kpi-realized');
-                if (elReal) { elReal.textContent = fmtUsd(d.realized_pnl || 0); elReal.className = 'kpi-value ' + ((d.realized_pnl || 0) >= 0 ? 'pos' : 'neg'); }
-                var elRealM = document.getElementById('kpi-realized-m');
-                if (elRealM) { elRealM.textContent = fmtUsd(d.realized_pnl || 0); elRealM.className = 'kpi-value ' + ((d.realized_pnl || 0) >= 0 ? 'pos' : 'neg'); }
+                // PnL KPI/ticker now derived from equityData inside buildPulse() (single source of truth)
                 var elPos = document.getElementById('kpi-positions');
                 if (elPos) { var openCount = (d.instances || []).filter(function(i){ return i.position_side && i.position_side !== 'FLAT'; }).length; elPos.textContent = openCount; }
                 var elMode = document.getElementById('kpi-mode');
@@ -749,14 +757,7 @@
                         // ─────────────────────────────────────────────────────────────
                     }
                     if (m.daily_pnl !== undefined) {
-                        const pnl = parseFloat(m.daily_pnl) || 0;
-                        const pv = fmtUsd(pnl);
-                        const realEl = document.getElementById('kpi-realized');
-                        if (realEl) { realEl.textContent = pv; realEl.className = 'kpi-value ' + (pnl >= 0 ? 'pos' : 'neg'); }
-                        const realM = document.getElementById('kpi-realized-m');
-                        if (realM) { realM.textContent = pv; realM.className = 'kpi-value ' + (pnl >= 0 ? 'pos' : 'neg'); }
-                        const tickPnl = document.getElementById('ticker-pnl');
-                        if (tickPnl) tickPnl.textContent = pv;
+                        // PnL KPI/ticker now derived from equityData in buildPulse(); skip here to avoid clobbering.
                     }
                 }
             } catch (_) {}
