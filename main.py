@@ -71,6 +71,40 @@ async def _no_cache_app_html(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
     return response
 
+
+# Identity middleware: resolve the session user and expose their identity to
+# ALL templates via request.state (NO operator fallback / hardcoded values).
+# Fixes the cross-user leak where layout.html hardcoded "Karma" / operator email.
+@app.middleware("http")
+async def _inject_user_identity(request: Request, call_next):
+    request.state.user_display = None
+    request.state.user_email = None
+    request.state.user_initial = "?"
+    try:
+        session = request.cookies.get("pulsr_session")
+        if session:
+            import hmac as _hmac, hashlib as _hl, base64 as _b64, json as _js, time as _t
+            token, sig = session.split(".")
+            expected = _hmac.new(config.INSTANCE_SECRET_KEY.encode(), token.encode(), _hl.sha256).hexdigest()
+            if _hmac.compare_digest(sig, expected):
+                payload = _js.loads(_b64.b64decode(token).decode())
+                if payload.get("exp", 0) > int(_t.time()):
+                    uname = payload.get("username")
+                    if uname:
+                        from instances.models import SessionLocal, User as _U
+                        _db = SessionLocal()
+                        try:
+                            u = _db.query(_U).filter(_U.username == uname).first()
+                            if u:
+                                request.state.user_display = u.display_name or u.username
+                                request.state.user_email = u.email or None
+                                request.state.user_initial = (u.display_name or u.username or "?")[0].upper()
+                        finally:
+                            _db.close()
+    except Exception:
+        pass
+    return await call_next(request)
+
 # Static + templates
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")

@@ -1122,7 +1122,7 @@
                         {% for f in fleet %}
                         <a href="/app/engines/{{ f.slug }}" class="nav-item sub">
                             <span class="dot {{ f.status }}"></span>
-                            <span class="name">{{ f.token }} {{ (f.position_side or 'F')[:1] }}</span>
+                            <span class="name">{{ f.name }}</span>
                         </a>
                         {% endfor %}
                         {% endif %}
@@ -1229,14 +1229,14 @@
                     <!-- Google-Style User Avatar + Dropdown -->
                     <div class="user-menu-wrap">
                         <button class="topbar-icon-btn" id="user-menu-toggle" title="Account menu" aria-label="Account menu" aria-haspopup="true" aria-expanded="false">
-                            <span class="topbar-avatar">K</span>
+                            <span class="topbar-avatar">{{ request.state.user_initial | default('?') }}</span>
                         </button>
                         <div class="user-dropdown" id="user-dropdown" role="menu" aria-hidden="true">
                             <div class="user-dropdown-header">
-                                <div class="user-dropdown-avatar">K</div>
+                                <div class="user-dropdown-avatar">{{ request.state.user_initial | default('?') }}</div>
                                 <div class="user-dropdown-info">
-                                    <div class="user-dropdown-name">Karma</div>
-                                    <div class="user-dropdown-email">{{ email | default('karmaworks.asia@gmail.com') }}</div>
+                                    <div class="user-dropdown-name">{{ request.state.user_display | default('Guest') }}</div>
+                                    <div class="user-dropdown-email">{{ request.state.user_email | default('') }}</div>
                                     <div class="user-dropdown-clock" id="dropdown-clock" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:2px;font-family:var(--font-mono);"></div>
                                 </div>
                             </div>
