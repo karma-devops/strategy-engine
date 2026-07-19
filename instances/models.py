@@ -662,6 +662,57 @@ def find_user_by_api_key(plaintext_key: str, db):
     return db.query(User).filter(User.api_key_hash == key_hash).first()
 
 
+def get_user_or_seed_user(db, username: str) -> "User":
+    """Resolve the AUTHENTICATED session user (NOT the operator singleton).
+
+    Used by all multi-tenant routes so a logged-in user only ever sees their
+    own data. Only returns the operator when the authenticated username is
+    literally 'operator' (Basic-auth operator / true admin). Never silently
+    returns operator for a normal user — that was the cross-user leak.
+
+    Returns None if the username does not map to a real user (caller 404s).
+    """
+    if not username or username == "operator":
+        return get_or_seed_operator(db)
+    return db.query(User).filter(User.username == username).first()
+
+
+def seed_user_fleet(user: "User") -> list:
+    """Seed a NEW user's starter fleet: exactly ONE engine — 'Engine HYPE v1'.
+
+    Engine HYPE v1: token HYPE, strategy engine_v1 (v1 strategy), 30m timeframe,
+    paper (dry_run) by default, owned by the user (user_id). No operator keys,
+    no shared credentials. Called once at signup.
+    """
+    db = SessionLocal()
+    try:
+        existing = db.query(Instance).filter(Instance.user_id == user.id).first()
+        if existing:
+            return []  # idempotent — already seeded
+        inst = Instance(
+            slug=f"engine-hype-v1-{user.id[:8]}",
+            user_id=user.id,
+            name="Engine HYPE v1",
+            token="HYPE",
+            strategy_id="engine_v1",
+            mode="Scalp",
+            profile="aggressive_8_3",
+            timeframe="30m",
+            leverage=5,
+            max_position_pct=0.97,
+            poll_interval_seconds=30,
+            dry_run=True,
+            enabled=True,
+            status="stopped",
+        )
+        db.add(inst)
+        db.commit()
+        db.refresh(inst)
+        return [inst.slug]
+    finally:
+        db.close()
+
+
 def get_or_seed_operator(db=None) -> "User":
     """Return the singleton operator user, seeding it on first run.
 

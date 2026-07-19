@@ -167,6 +167,9 @@ async def signup_post(request: Request, username: str = Form(...), email: str = 
                 content='<script>localStorage.setItem("pulsr_signup_error", "Username or email already registered"); history.back();</script>',
                 status_code=409,
             )
+        # Seed this user's starter fleet: ONE engine — Engine HYPE v1 (HYPE/30m).
+        from instances.models import seed_user_fleet
+        seed_user_fleet(user)
         # Issue session cookie and redirect
         import hmac, hashlib, base64, json, time
         payload = {"user_id": user.id, "username": user.username, "exp": int(time.time()) + 86400}
@@ -528,7 +531,7 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
     """Paper Trading — forward-test instances (dry_run=True) with pure-SVG equity."""
     db = Session()
     try:
-        user = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(
             Instance.user_id == user.id, Instance.dry_run == True
         ).all()
@@ -576,7 +579,7 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
     """All LIVE trades (dry_run=false) for the operator user (multi-tenant). P14d separation."""
     db = Session()
     try:
-        user = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         rows = db.query(Trade).filter(Trade.user_id == user.id, Trade.dry_run == False).order_by(Trade.timestamp.desc()).limit(200).all()
         trade_data = [{
             "id": t.id,
@@ -979,13 +982,27 @@ def account_overview(request: Request, username: str = Depends(verify_ui_credent
     """Account overview: portfolio value, start balance, PnL, engine allocation."""
     db = Session()
     try:
-        user = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
-        # Live account value from HL
-        from core.exchange import get_hyperliquid_client
-        hl = get_hyperliquid_client()
-        portfolio_value = hl.get_account_value()
-        withdrawable = hl.get_withdrawable()
+        # Live account value from HL — ONLY if this user has their OWN HL credential.
+        # Non-operator users seed with no HL key, so we must NOT call the operator's
+        # global client (that would leak operator's live $ value). Show 0 / "connect".
+        portfolio_value = 0.0
+        withdrawable = 0.0
+        has_exchange = False
+        if user.username == "operator":
+            from core.exchange import get_hyperliquid_client
+            hl = get_hyperliquid_client()
+            portfolio_value = hl.get_account_value()
+            withdrawable = hl.get_withdrawable()
+            has_exchange = True
+        else:
+            # Check if this user stored their own HL credential
+            from instances.models import Credential
+            cred = db.query(Credential).filter(
+                Credential.user_id == user.id, Credential.type == "hl_api", Credential.is_active == True
+            ).first()
+            has_exchange = cred is not None
         # Per-engine allocation
         engine_alloc = []
         total_pnl = 0.0
@@ -1046,7 +1063,7 @@ def account_secrets(request: Request, username: str = Depends(verify_ui_credenti
     """Account Secrets: Wallets, HyperLiquid DEX API, AI Inference - with instructions."""
     db = Session()
     try:
-        user = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
         # Mask addresses for display
         engine_creds = []
@@ -1102,7 +1119,7 @@ def settings_app(request: Request, username: str = Depends(verify_ui_credentials
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = get_or_seed_operator(db)
+            user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
         total_engines = len(instances)
         from engine.registry import list_strategies
@@ -1143,7 +1160,7 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            user = get_or_seed_operator(db)
+            user = get_user_or_seed_user(db, username)
         # Trading
         try:
             user.start_balance = float(form.get("start_balance", user.start_balance))
@@ -1486,8 +1503,8 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
     user_id = None
     db0 = Session()
     try:
-        op = get_or_seed_operator(db0)
-        user_id = op.id
+        user = get_user_or_seed_user(db, username)
+        user_id = user.id
     finally:
         db0.close()
 
@@ -1542,8 +1559,8 @@ async def chat_api(request: Request, username: str = Depends(verify_ui_credentia
 
     db = Session()
     try:
-        op = get_or_seed_operator(db)
-        user_id = op.id
+        user = get_user_or_seed_user(db, username)
+        user_id = user.id
 
         # Resolve or create session
         sess = None
@@ -1629,7 +1646,7 @@ async def chat_api(request: Request, username: str = Depends(verify_ui_credentia
                 user_id=user_id, model_role="assistant",
                 model_override=model_override,
             )
-            model_used = model_override or op.assistant_model or "glm-5.1"
+            model_used = model_override or user.assistant_model or "glm-5.1"
         except Exception as e:
             return {"ok": False, "session_id": sess.id,
                     "message": f"LLM error: {e}"}
@@ -1651,10 +1668,10 @@ async def chat_session_delete_api(session_id: str, request: Request, username: s
     from instances.models import ChatSession, ChatMessage, get_or_seed_operator
     db = Session()
     try:
-        op = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         sess = db.query(ChatSession).filter(
             ChatSession.id == session_id,
-            ChatSession.user_id == op.id,
+            ChatSession.user_id == user.id,
         ).first()
         if not sess:
             return {"ok": False, "message": "Session not found"}
@@ -1673,10 +1690,10 @@ async def chat_sessions_api(request: Request, username: str = Depends(verify_ui_
     from instances.models import ChatSession, get_or_seed_operator
     db = Session()
     try:
-        op = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         sessions = (
             db.query(ChatSession)
-            .filter(ChatSession.user_id == op.id)
+            .filter(ChatSession.user_id == user.id)
             .order_by(ChatSession.updated_at.desc())
             .limit(10).all()
         )
@@ -1699,10 +1716,10 @@ async def chat_session_detail_api(session_id: str, request: Request, username: s
     from instances.models import ChatSession, ChatMessage, get_or_seed_operator
     db = Session()
     try:
-        op = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         sess = db.query(ChatSession).filter(
             ChatSession.id == session_id,
-            ChatSession.user_id == op.id,
+            ChatSession.user_id == user.id,
         ).first()
         if not sess:
             return {"ok": False, "message": "Session not found"}
@@ -1765,7 +1782,7 @@ def paper_redirect():
 def _instances_by_mode(request: Request, live: bool):
     db = Session()
     try:
-        user = get_or_seed_operator(db)
+        user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(
             Instance.user_id == user.id,
             Instance.dry_run == (not live),

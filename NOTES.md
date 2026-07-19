@@ -1995,4 +1995,25 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 
 **Security posture:** leaked operator `puls_` key = single-tenant compromise (strictly less dangerous than the former global key = all tenants). Global key is now dead for all tenant routes.
 
+---
+
+## ═══ T3-0 ULTIMATE ISOLATION — ROOT CAUSE + FIX (2026-07-19, final session) ═══
+
+**The leak was NEVER just the dashboard key cache.** Three stacked bugs bled operator data to every user:
+1. `get_dashboard_api_key()` cached operator key globally (fixed earlier).
+2. `landing.html` `sessionStorage.pulsr_auth` Basic-Auth shortcut cached operator creds in browser (fixed earlier).
+3. **THE DEEP ONE:** every data route called `get_or_seed_operator(db)` and **ignored the authenticated `username`** from `verify_ui_credentials`. So `/app/account`, `/app/trades`, `/app/testing/paper`, `/app/engines`, chat history — all queried OPERATOR's instances/trades/live HL `$` value. New users saw operator's portfolio.
+
+**Fix applied (this session, pushed):**
+- `instances/models.py`: added `get_user_or_seed_user(db, username)` — resolves the SESSION user; returns operator ONLY when username IS literally "operator". Added `seed_user_fleet(user)` — every new signup gets EXACTLY ONE engine `Engine HYPE v1` (slug `engine-hype-v1-<uid8>`, token HYPE, strategy `engine_v1`, 30m, dry_run=True, user-owned, empty HL/account addr).
+- `app/routes.py`: replaced all 17 `get_or_seed_operator(db)` data/chat call sites with `get_user_or_seed_user(db, username)`. Chat history now per-user (`ChatSession.user_id == user.id`). `/app/account` live HL value gated: operator → own live client; non-operator → only if they stored their OWN `hl_api` Credential, else `$0` + "connect" (NEVER operator's live $).
+- Signup calls `seed_user_fleet(user)` after commit.
+- `seed_default_fleet()` (operator's 6 engines) retained ONLY for the operator bootstrap; new users no longer inherit it.
+
+**Dropdown fix:** dashboard fleet cards + open-positions list engine `name` cleanly (e.g. "Engine HYPE v1"). The `position_side` "FLAT"/"F" display was only on the position badge, not the engine selector — engine dropdowns list names properly.
+
+**Out-of-band additions (operator, this session):** T3-8 onboarding popup (HL DEX wallet + API key + ETH address to `Credential`, user-scoped); T3-9 email 2FA (app-sent confirmation link, `email_verified` flag). Both OPEN, pending build.
+
+**VERIFY BEFORE CLAIMING DONE:** after any auth/isolation change, sign up a fresh user via the REAL proxy URL, log in, and confirm `/app/account` + `/app/dashboard` + `/app/trades` show ONLY that user's own (empty) data — never operator's `$`. A curl test with the operator `-u operator:operator` does NOT represent a normal user; test as the actual session user.
+
 **Backup:** `v208_adra008-pre`, `v209_phaseb-pre`, `v210_dbb4wipe` (pre-wipe DB snapshot).
