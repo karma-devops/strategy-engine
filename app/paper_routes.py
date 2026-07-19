@@ -43,10 +43,14 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
     """Paper Trading — forward-test instances (dry_run=True) with pure-SVG equity."""
     db = Session()
     try:
-        user = get_or_seed_operator(db)
-        instances = db.query(Instance).filter(
-            Instance.user_id == user.id, Instance.dry_run == True
-        ).all()
+        # Resolve current user from session (not operator seed)
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            # Fallback for legacy data where user_id may be NULL in older snapshots
+            user = db.query(User).filter(User.id == user_id).first() if 'user_id' in locals() else None
+        if not user:
+            # Fallback: create operator if no user found (should not happen in prod)
+            user = get_or_seed_operator(db)
         inst_data, equity_series = [], []
         for i in instances:
             # P14d: paper-only snapshots (user_id may be NULL in older data)
