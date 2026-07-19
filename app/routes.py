@@ -361,6 +361,10 @@ def create_instance(
 ):
     db = Session()
     try:
+        # PER-USER ISOLATION: resolve the logged-in owner's user_id so the
+        # new engine is bound to them (not operator, not shared).
+        owner = db.query(User).filter(User.username == username).first()
+        owner_id = owner.id if owner else None
         # Auto-generate slug if empty
         if not slug:
             existing = db.query(Instance).count()
@@ -388,6 +392,7 @@ def create_instance(
             offset=offset,
             dry_run=dry_run,
             enabled=True,
+            user_id=owner_id,  # PER-USER ISOLATION: bind engine to the logged-in owner
         )
         if account_address:
             inst.account_address = account_address.strip()

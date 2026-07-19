@@ -4,11 +4,13 @@ API routes for instance control.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
+from api.auth import verify_api_key
+from api.credentials import _current_user_id
 from engine.registry import STRATEGIES
 from instances.models import get_db, Instance, AccountSnapshot, PositionSnapshot
 from instances.manager import manager
@@ -74,8 +76,16 @@ class UpdateInstanceRequest(BaseModel):
 
 @router.get("/instances")
 @limiter.limit(READ_LIMIT)
-def list_instances(request: Request, db: Session = Depends(get_db)):
-    instances = db.query(Instance).order_by(Instance.created_at.desc()).all()
+def list_instances(request: Request, db: Session = Depends(get_db), api_key: str = Depends(verify_api_key)):
+    # PER-USER ISOLATION: only return engines owned by the authenticated user.
+    # No operator fallback — a global/missing key raises 403 in _current_user_id.
+    user_id = _current_user_id(db, request)
+    instances = (
+        db.query(Instance)
+        .filter(Instance.user_id == user_id)
+        .order_by(Instance.created_at.desc())
+        .all()
+    )
     return {
         "ok": True,
         "instances": [
@@ -340,8 +350,14 @@ def create_instance(
     request: Request,
     payload: CreateInstanceRequest,
     db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
 ):
-    """Create a new engine instance programmatically. Not exposed in the UI."""
+    """Create a new engine instance programmatically. Not exposed in the UI.
+
+    PER-USER ISOLATION: the engine is owned by the authenticated user. A
+    global/missing key raises 403 in _current_user_id (no operator fallback).
+    """
+    user_id = _current_user_id(db, request)
     if payload.strategy_id not in STRATEGIES:
         return {"ok": False, "message": f"Unknown strategy_id: {payload.strategy_id}"}
     if db.query(Instance).filter(Instance.slug == payload.slug).first():
@@ -362,6 +378,7 @@ def create_instance(
         dry_run=payload.dry_run,
         enabled=payload.enabled,
         status="stopped",
+        user_id=user_id,  # PER-USER ISOLATION: bind ownership
     )
     if payload.hyperliquid_private_key:
         inst.set_private_key(payload.hyperliquid_private_key)
@@ -721,10 +738,20 @@ def restart_instance(request: Request, instance_id: str, db: Session = Depends(g
 
 @router.delete("/instances/{instance_id}")
 @limiter.limit(WRITE_LIMIT)
-def delete_instance(request: Request, instance_id: str, db: Session = Depends(get_db)):
-    """Delete an instance and all associated data (trades, signals, backtests, snapshots)."""
+def delete_instance(
+    request: Request,
+    instance_id: str,
+    db: Session = Depends(get_db),
+    api_key: str = Depends(verify_api_key),
+):
+    """Delete an instance and all associated data (trades, signals, backtests, snapshots).
+
+    PER-USER ISOLATION: only the owning user may delete. Lookup is scoped by
+    user_id — a non-owner gets 404 (instance not found), never another user's engine.
+    """
+    user_id = _current_user_id(db, request)
     manager.stop_instance(instance_id)
-    inst = db.query(Instance).filter(Instance.slug == instance_id).first()
+    inst = db.query(Instance).filter(Instance.slug == instance_id, Instance.user_id == user_id).first()
     if not inst:
         return {"ok": False, "message": f"Instance {instance_id} not found"}
     # BUG #15: check for open exchange position before deleting.

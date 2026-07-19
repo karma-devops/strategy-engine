@@ -37,7 +37,14 @@ class CredentialUpdate(BaseModel):
 
 
 def _current_user_id(db, request: Request = None):
-    """Resolve current tenant user_id from the API key in the request."""
+    """Resolve current tenant user_id from the API key in the request.
+
+    SECURITY (per-user isolation): only a per-user `puls_`-scoped key resolves
+    to a tenant. The global AGENT_API_KEY (embedded in dashboard page source)
+    and any missing key are REJECTED with 403 — they must NEVER fall back to
+    the operator identity. This prevents one user's list/create/delete routes
+    from leaking or hijacking another user's engines.
+    """
     if request:
         api_key = request.headers.get("X-API-Key", "")
         if api_key.startswith("puls_"):
@@ -45,8 +52,12 @@ def _current_user_id(db, request: Request = None):
             user = find_user_by_api_key(api_key, db)
             if user:
                 return user.id
-    # Fall back to operator for global AGENT_API_KEY or missing key
-    return get_or_seed_operator(db).id
+    # No valid per-user key → refuse. No operator fallback.
+    from fastapi import HTTPException, status
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Per-user API key required for this operation",
+    )
 
 
 def _to_dict(c: Credential) -> dict:
