@@ -2044,3 +2044,25 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 **Test user created during BUG-10 verify:** `aetheris_e2e_v1` (dry_run=True, $1000 start) — left in DB; zero-autonomous-deletion rule → flagged for operator cleanup decision.
 
 **OPEN (unchanged from prior):** T3-8 onboarding popup (OPEN), T3-9 email 2FA (OPEN, PARKED — no email code), T3-0 backtest `user` NameError regression (OPEN per TASK-LIST), BUG-11/12 withdrawal/deposit (DEFERRED — live funds).
+
+---
+
+## 2026-07-19 (session 12566a5215e5, 21:3x Asia/Makassar) — T4-5 Pulse Graph zero-centered rewrite (STEP 1)
+
+**Context:** Senior brief (`pasted-text 13-17-58` / `13-31-02` / `13-47-30`) asks to convert the PULSE graph from absolute $ scaling to a zero-centered relative oscillation (Δ% from window anchor, green-up/red-down hemispheres). Brief's verbatim `buildPulse()` + `switchPulseTimeframe()` code block was **REJECTED** after grounding against the real `app/templates/dashboard.html` (976 lines, HEAD `15cb2b7`):
+- Brief does `svgNode.innerHTML=''` then `createElementNS` → would destroy `<defs>#pulseGrad` + pre-existing `#pulse-path`/`#pulse-area`/`#pulse-dot` nodes, breaking `mirrorPulseToMobile()`.
+- Brief uses `clientWidth/clientHeight` px coords; real SVG uses fixed `viewBox 0 0 1000 200` + `preserveAspectRatio="none"` → must compute in viewBox units (`centerY=100`).
+- Brief adds `.tf-pill` + `switchPulseTimeframe(this, N)` → duplicates the EXISTING `.chip.pulse-range` pills + `setPulseRange(N)` → `pulseRangeHours` → `refresh()` → backend `?hours=N` (pills are NOT dead; brief's premise was wrong).
+- Brief targets `#pulse-delta-pct` (doesn't exist); real IDs are `pulse-change` + `pulse-change-m`.
+
+**Corrected plan (operator-approved, kept real DOM + real math):** rewrite only `buildPulse()` body.
+
+**STEP 1 — DONE (commit b02aed8):**
+- `buildPulse()` now: anchor = `vals[0]` (first point in window, NOT `start_balance`); `deviations = (v-base)/base*100`; `maxAbsDev = max(|dev|)` floored at `0.02`; `y = centerY - (dev/maxAbsDev)*AMP` where `AMP = centerY*0.82` (swing into each hemisphere, no clip); area path closes to `centerY` (zero line) not bottom; dot sits on last point of the wave; `pulse-change` + `pulse-change-m` show `▲/▼ %`; gradient swap applied to BOTH `#pulseGrad` (desktop) and `#pulseGradM` (mobile).
+- Backup: `backups/adix-<ts>_pre-t45-step1_dashboard.html`.
+- Live verify: `/app/dashboard?hours=1` returns **200** and served HTML contains `centerY` (8×) → new code is served. No restart needed (HTML/JS serve live; Python routes untouched; engine-1 LIVE so no supervised restart).
+- Pushed `15cb2b7 → b02aed8` to `origin/main`.
+
+**NEXT (Step 2, separate turn):** add a dashed **zero-center baseline `<line>`** inside `buildPulse()` (current SVG has no centerline; brief's `baseline` line was the one useful element) + browser-verify (console clean, curve dances around center, pills 1H/2H/6H/12H/24H recalc without exceptions). Then commit/push/doc per step.
+
+**Left uncommitted (unchanged, do NOT touch):** `instances/models.py` (T3-9 parked cols), `._env_bak` (junk).
