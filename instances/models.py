@@ -69,6 +69,8 @@ class User(Base):
     # api_key stores Fernet-encrypted key; api_key_hash stores SHA256 for O(1) lookup
     api_key = Column(Text, nullable=True)  # Fernet-encrypted puls_<uuid4>_key
     api_key_hash = Column(String(64), nullable=True, unique=True, index=True)  # SHA256 hex digest
+    # Per-user display timezone (IANA name, e.g. "GMT", "Asia/Jakarta"). Defaults to GMT.
+    timezone = Column(String(64), default="GMT")
     # Theme preference (pulsr, hyperfluid, portrait)
     theme = Column(String(32), default="pulsr")
     created_at = Column(DateTime, default=_now_utc)
@@ -566,6 +568,7 @@ def _migrate_columns(engine):
             ("twofa_enabled", "BOOLEAN"),
             ("assistant_model", "VARCHAR(64)"),
             ("coder_model", "VARCHAR(64)"),
+            ("timezone", "VARCHAR(64)"),
         ],
         "chat_sessions": [
             ("user_id", "VARCHAR(36)"),

@@ -17,6 +17,13 @@
                 <label>Email (for 2FA)<span class="tip-i" data-tip="Used for two-factor authentication notifications"></span></label>
                 <input type="email" name="email" value="{{ user.email or '' }}" placeholder="operator@example.com" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
             </div>
+            <div class="bt-form-field">
+                <label>Timezone<span class="tip-i" data-tip="Your local timezone for timestamps across the app"></span></label>
+                <select name="timezone" style="width:100%;background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);font-size:var(--text-sm);height:36px;">
+                    {% set tzs = ['GMT','UTC','Europe/London','Europe/Berlin','Asia/Dubai','Asia/Jakarta','Asia/Singapore','Asia/Tokyo','Australia/Sydney','America/New_York','America/Chicago','America/Los_Angeles','America/Sao_Paulo'] %}
+                    {% for t in tzs %}<option value="{{ t }}" {% if (user.timezone or 'GMT') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+                </select>
+            </div>
             <div class="bt-form-field" style="grid-column:1 / -1;">
                 <label>User Icon</label>
                 <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;padding:var(--space-2) 0;">

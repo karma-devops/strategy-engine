@@ -23,6 +23,7 @@ from instances.models import (
     Strategy,
     Credential,
     get_or_seed_operator,
+    get_user_or_seed_user,
     decrypt_api_key,
 )
 from instances.manager import manager
@@ -1141,6 +1142,7 @@ def settings_app(request: Request, username: str = Depends(verify_ui_credentials
                     "plan": user.plan or "free",
                     "twofa_enabled": user.twofa_enabled,
                     "theme": user.theme or "pulsr",
+                    "timezone": user.timezone or "GMT",
                 },
                 "total_engines": total_engines,
                 "total_strategies": total_strategies,
@@ -1185,6 +1187,10 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
         user.twofa_enabled = form.get("twofa_enabled") in ("on", "true", "1", True)
         # Wallet
         user.withdrawal_eth_address = (form.get("withdrawal_eth_address") or "").strip() or None
+        # Timezone (per-user display timezone; IANA name, default GMT)
+        tz = (form.get("timezone") or "").strip()
+        if tz:
+            user.timezone = tz
         db.commit()
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
         from engine.registry import list_strategies
@@ -1205,6 +1211,7 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
                     "plan": user.plan or "free",
                     "twofa_enabled": user.twofa_enabled,
                     "theme": user.theme or "pulsr",
+                    "timezone": user.timezone or "GMT",
                 },
                 "total_engines": len(instances),
                 "total_strategies": len(list_strategies()),
