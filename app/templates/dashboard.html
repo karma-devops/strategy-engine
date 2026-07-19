@@ -127,7 +127,7 @@
                                 {% else %}
                                 <button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">▶</button>
                                 {% endif %}
-                                <a href="/app/engines/{{ inst.slug }}" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;">⚙</a>
+                                <button class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation();openEngineSettings('{{ inst.slug }}')">⚙</button>
                             </div>
                         </div>
                         <div class="fleet-row"><span class="label">Status</span><span class="tag tag-{{ inst.status }}">{{ inst.status }}</span></div>
@@ -582,7 +582,7 @@
                     '<div class="fleet-sub">' + inst.token + ' · ' + inst.strategy_id + ' · ' + inst.timeframe + '</div></div>' +
                     '<div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;">' +
                         startStopBtn +
-                        '<a href="/app/engines/' + inst.slug + '" class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation()">⚙</a>' +
+                        '<button class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation();openEngineSettings(\'' + inst.slug + '\')">⚙</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="fleet-row"><span class="label">Status</span><span class="tag tag-' + inst.status + '">' + inst.status + '</span></div>' +
