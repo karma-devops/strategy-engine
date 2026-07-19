@@ -2080,3 +2080,35 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - **TIME BUTTONS:** removed `.pulse-range` chips (desktop 5-btn 1H/2H/6H/12H/24H + mobile 3-btn 1H/2H/6H) + `setPulseRange()` fn. `pulseRangeHours` fixed to `1` (used only for the seed fetch `?hours=1`). Graph now auto-shows last window (seed on load pulls 1h history; SSE appends live). No "last 24h" time-label note added (operator: "keep it simple", confirmed none existed). Pushed `5319e73 → 6562c7a`.
 
 **Left uncommitted (unchanged, do NOT touch):** `instances/models.py` (T3-9 parked cols), `._env_bak` (junk).
+
+---
+
+## 2026-07-19 (session d3e51877ed78) — ENGINE DETAIL CONTROLS WERE DEAD: ROOT-CAUSE FIX
+
+**Operator complaint (autonomous fix, no back-and-forth):** Settings modal would not open; Start/Stop/Restart buttons did nothing; paper→live toggle in Settings did nothing. UI looked alive (KPIs rendered) so it read as "features broken / not implemented."
+
+**Two independent root causes found by LIVE testing (not by reading Gemini's claims):**
+
+1. **`app/templates/engine_detail.html` — entire page `<script>` block was a SyntaxError → NOTHING in it ran.**
+   - `const fmtUsd` was declared TWICE (duplicate `const` = SyntaxError, kills the whole block).
+   - `window.ENGINE_MODE = {{ 'paper' if inst.dry_run else 'live' | tojson }}` — Jinja `|tojson` bound tighter than the ternary, emitting bare `paper`/`live` (unquoted → ReferenceError).
+   - `window.ENGINE_INSTANCE_DATA = {{ inst | tojson }}` — Jinja autoescape turned `"` into `&#34;` → invalid JS.
+   - Result: `openSettings`, `apiPost`, `saveSettings`, `refresh` all undefined. Clicking Settings = silent nothing.
+   - **FIX:** removed duplicate `const fmtUsd`; added `| safe` to both `tojson` outputs; corrected ternary to `{{ ('paper' if inst.dry_run else 'live') | tojson | safe }}`. Verified with esprima parse + browser console (0 JS errors after).
+
+2. **`app/routes.py` `get_dashboard_api_key()` — returned `""` for the operator logged in via Basic Auth (URL-embedded creds, no session cookie).**
+   - Every write (Start/Stop/Restart/DELETE/paper-live PUT) sends `X-API-Key: ""` → 401. Reads need no key, so dashboard looked fine while all buttons 401'd.
+   - **FIX:** added Basic-Auth fallback — when no session cookie, decode `Authorization: Basic`, resolve that user's OWN `puls_` key via `decrypt_api_key`. Never leaks another tenant's key (returns `""` only if no valid auth). Verified: empty key → 401, real `puls_` key → 200.
+
+**LIVE VERIFICATION (all passed):**
+- Settings modal opens (`display=flex`, `#settings-form` present), 0 JS exceptions.
+- `apiPost('/api/v2/instances/engine-2/start')` → engine-2 `stopped → running`; `/stop` → `stopped` (paper, no real funds).
+- `PUT /api/v2/instances/engine-2` `{"dry_run":false}` → `dry_run=False`; back to `true` → `True`. Paper↔Live toggle works.
+- Server restarted clean (killed stale worker, one process on 8792).
+
+**Commit:** `aa46e15` (pushed to `main`). Files: `app/templates/engine_detail.html`, `app/routes.py`.
+
+**RESIDUAL (not fixed this turn — separate bug, does NOT block the above):**
+- `app/static/position-card.js:324` builds a fetch URL that includes embedded Basic-Auth creds (`operator:operator@.../api/v2/positions`) → `TypeError: Request cannot be constructed from a URL that includes credentials`. Breaks the live Position card render on engine_detail. Next turn: fix `API_BASE` construction in `position-card.js` (strip `user:pass@` before building fetch URLs, or build from `location.origin` + explicit path without creds). Engine detail's own `API_BASE` (line 263) already strips creds correctly — `position-card.js` does not.
+
+**NOTE ON PRIOR DOC CLAIMS:** Gemini's VERIFICATION-STATUS/UI-UX-SPRINT asserted Start/Stop/kill-switch/paper-live were "done." They were NOT functionally reachable from the operator's Basic-Auth session because of bug #2 (and bug #1 broke the whole page). Treat those docs' "DONE" marks on engine_detail controls as UNVERIFIED until re-tested through the actual operator session.
