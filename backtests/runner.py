@@ -19,7 +19,7 @@ import pandas as pd
 
 from core.market_data import HyperLiquidMarketData
 from engine.registry import get_strategy
-from instances.models import CandleCache, SessionLocal
+from instances.models import CandleCache, Instance, SessionLocal
 from backtests.cost_model import ExecutionCostModel, get_cost_model
 
 
@@ -386,7 +386,18 @@ def run_backtest(
         result.error_message = f"Unknown strategy_id: {strategy_id}"
         return result
 
-    strategy = strategy_cls()
+    # Parity with live runner: apply the instance's saved strategy_config
+    # overrides (Pine input.* equivalent) instead of always using defaults.
+    strategy_config = {}
+    try:
+        db = SessionLocal()
+        inst = db.query(Instance).filter(Instance.slug == instance_slug).first()
+        if inst and inst.strategy_config:
+            strategy_config = inst.strategy_config
+    finally:
+        db.close()
+
+    strategy = strategy_cls(**strategy_config) if strategy_config else strategy_cls()
 
     try:
         if use_saved_ohlcv is not None and not use_saved_ohlcv.empty:
