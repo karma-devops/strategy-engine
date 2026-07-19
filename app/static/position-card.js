@@ -234,30 +234,26 @@
   }
   
   //=== SSE Stream Listener (Z5) ===//
+  // T3-4: consume the shared page-level socket (window.__appSSE) instead of
+  // opening a 2nd EventSource('/stream'). Dashboard + engine_detail own the
+  // single connection; this just attaches position/trade handlers to it.
   function initSSEPositionListener() {
-    if (typeof EventSource === 'undefined') {
-      console.warn('Position-card: EventSource not supported, falling back to polling');
+    const stream = window.__appSSE;
+    if (!stream) {
+      console.warn('[PositionCard] shared SSE not ready — skipping live push (3s poll covers it)');
       return;
     }
-    
-    const source = new EventSource('/stream');
-    source.onmessage = function(event) {
+    stream.addEventListener('message', function(event) {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'position' || msg.type === 'trade') {
-          // Refresh positions on any position/trade event
           renderPositions();
           renderEngineDetailPosition();
         }
       } catch (e) {
-        console.error('Position-card SSE parse error:', e);
+        console.error('[PositionCard] SSE parse error:', e);
       }
-    };
-    
-    source.onerror = function(err) {
-      console.warn('Position-card SSE error:', err);
-      source.close();
-    };
+    });
   }
   
   //=== Toast Helper ===//

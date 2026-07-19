@@ -362,6 +362,8 @@
 
     if (typeof EventSource !== 'undefined') {
         const es = new EventSource(API_BASE + '/stream');
+        // T3-4: expose the single shared socket for consumer scripts (position-card.js)
+        window.__appSSE = es;
         const sseDot = document.getElementById('sse-dot');
         es.onopen = () => { if (sseDot) sseDot.className = 'sse-dot live'; };
         es.onmessage = ev => {
