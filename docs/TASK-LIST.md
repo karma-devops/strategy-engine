@@ -119,6 +119,8 @@
   **Deferred scope summary (do as one feature, not two):** Build `withdraw_to_wallet` fix (BUG-11) + `deposit_to_hl` method + matching API routes + idempotency on both + balance/address guards. Then live round-trip test: withdraw 1 USDC → confirm MetaMask → deposit 5 USDC → confirm HL. Reuse T1-5 idempotency pattern.
   **Status: DEFERRED. Do NOT implement until operator re-opens. Live funds involved — explicit go required.**
 
+  **UI direction (operator note 2026-07-19, also deferred):** Current `/app/withdrawals` renders HTML but **no CSS** (bare unstyled markup, not inheriting the account layout). When this feature is built: (1) nest withdrawal/deposit under `/app/account/` (route + template inherits account layout with CSS); (2) add a **"Balance"** card on the Account Overview; (3) create a `/app/account/balance` (or `/balance`) page that displays Deposit + Withdraw functions properly. Not a code task now — recorded for the future feature build.
+
 ## UI WALKTHROUGH QUEUE (HANDOVER, recon-only)
 Server PID 29567 :8792, login `operator`/`operator`, base `http://127.0.0.1:8792`.
 Per page: HTTP status, render, JS console, data population, auth, mobile, screenshot. Verify BACKLOG #41-#66. Deliverable: `docs/UI-WALKTHROUGH-FINDINGS.md`.
