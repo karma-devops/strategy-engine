@@ -54,7 +54,7 @@ class User(Base):
     # Default execution mode for new instances (True = Paper Trading)
     default_dry_run = Column(Boolean, default=True)
     # Account settings (Phase 8b)
-    email = Column(String(256), nullable=True)              # for 2FA / notifications
+    email = Column(String(256), nullable=True, unique=True, index=True)  # for 2FA / notifications; unique per T2-4
     password_hash = Column(String(256), nullable=True)       # for login auth (future)
     withdrawal_eth_address = Column(String(64), nullable=True)  # same as metamask env
     avatar_emoji = Column(String(16), nullable=True)         # emoji icon selector
@@ -582,6 +582,11 @@ def _migrate_columns(engine):
             for col, ctype in cols:
                 if col not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ctype}"))
+        # T2-4: enforce unique email on existing DBs (idempotent; SQLite allows
+        # multiple NULLs in a unique column, so existing NULL emails are safe).
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)"
+        ))
 
 
 engine = init_db()

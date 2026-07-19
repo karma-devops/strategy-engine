@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT, AUTH_LIMIT
 from config import config
@@ -103,7 +104,14 @@ async def signup_post(request: Request, username: str = Form(...), email: str = 
             theme="pulsr",
         )
         db.add(user)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return HTMLResponse(
+                content='<script>localStorage.setItem("pulsr_signup_error", "Username or email already registered"); history.back();</script>',
+                status_code=409,
+            )
         # Issue session cookie and redirect
         import hashlib, base64, json, time
         payload = {"user_id": user.id, "username": user.username, "exp": int(time.time()) + 86400}
