@@ -29,7 +29,7 @@
 ### TIER 1 — This week, still on current architecture
 | # | Task | Note |
 |---|------|------|
-| T1-1 | Circuit breaker (`error_consecutive`, trip at 5) | P0 safety, unstarted |
+| T1-1 | Circuit breaker (`error_consecutive`, trip at 5) | P0 safety, unstarted | **DONE 2026-07-19** — `instances/runner.py` `_run_once` inner loop now counts consecutive tick exceptions; at 5 it sets `instance.status="error"`, persists, and breaks (no infinite error-loop). Verified via forced-error harness: trips exactly at 5th error. |
 | T1-2 | Validate `PUT .../strategy-config` vs `get_parameters()`; restart instance on save | Silent no-op or crash otherwise |
 | T1-3 | `backtests/runner.py:389` — pass `instance.strategy_config` like live runner | Backtest parity broken |
 | T1-4 | Login/signup rate limiting (`app/routes.py:35,60`) | Brute-force/spam surface |

@@ -77,6 +77,7 @@ class InstanceRunner:
         self._last_entry_bar_time: Optional[object] = None  # Pine: bar_index > lastEntryBar
         self._equity_history: list = []  # closed-trade equity values for adaptive strategy
         self._stale_position_retries: int = 0  # consecutive None ticks while in trade
+        self._consecutive_errors: int = 0  # circuit breaker: consecutive tick exceptions
         self._hl = get_hyperliquid_client(instance)
 
     def _refresh_hl_client(self):
@@ -183,13 +184,33 @@ class InstanceRunner:
         strategy = strategy_class(**strategy_config) if strategy_config else strategy_class()
         hl = self._hl
 
+        CIRCUIT_TRIP_THRESHOLD = 5  # consecutive tick errors before tripping
+
         while not self._stop_event.is_set():
             try:
                 self._tick(strategy, hl)
+                # Successful tick — reset breaker
+                self._consecutive_errors = 0
             except Exception as e:
-                print(f"[RUNNER {self.id}] Tick error: {e}")
+                self._consecutive_errors += 1
+                print(f"[RUNNER {self.id}] Tick error ({self._consecutive_errors}/{CIRCUIT_TRIP_THRESHOLD}): {e}")
                 traceback.print_exc()
-                add_log(f"Tick error in {self.instance.token}: {e}", "error", dry_run=self.instance.dry_run)
+                add_log(
+                    f"Tick error in {self.instance.token} "
+                    f"({self._consecutive_errors}/{CIRCUIT_TRIP_THRESHOLD}): {e}",
+                    "error", dry_run=self.instance.dry_run,
+                )
+                # Circuit breaker: too many consecutive failures — stop hammering
+                # a broken exchange/DB and surface the fault instead of looping forever.
+                if self._consecutive_errors >= CIRCUIT_TRIP_THRESHOLD:
+                    add_log(
+                        f"[RUNNER {self.id}] CIRCUIT BREAKER TRIPPED after "
+                        f"{self._consecutive_errors} consecutive errors — marking error",
+                        "error", dry_run=self.instance.dry_run,
+                    )
+                    self.instance.status = "error"
+                    self._persist_status(self.instance, "error")
+                    break
             self._stop_event.wait(self.instance.poll_interval_seconds)
 
         print(f"[RUNNER {self.id}] Stopped")
