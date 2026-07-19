@@ -559,13 +559,17 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
 @router.get("/app/withdrawals", response_class=HTMLResponse)
 @limiter.limit(READ_LIMIT)
 def withdrawals_page(request: Request, username: str = Depends(verify_ui_credentials)):
-    # BUG #25: pass api_key to template so withdrawals.js can read window.API_KEY
-    from config import Config
-    cfg = Config()
-    return templates.TemplateResponse(request, "withdrawals.html", context={
-        "request": request,
-        "api_key": cfg.AGENT_API_KEY,
-    })
+    # T1-7 DEFERRED 2026-07-19: withdraw/deposit feature is broken/deferred
+    # (BUG-11 broken SDK call, BUG-12 no deposit path). Per operator, keep the
+    # page reachable but show a non-functional notice instead of the broken form.
+    notice = (
+        "<h2>Withdrawals &mdash; Not Functional Yet</h2>"
+        "<p style='color:#e5534b;font-weight:600;'>⚠ This feature is in the works and "
+        "not functional to withdraw yet.</p>"
+        "<p>The withdrawal/deposit round-trip is currently deferred. Fund-moving "
+        "actions are disabled on the backend. Check back when the feature ships.</p>"
+    )
+    return HTMLResponse(content=notice)
 
 
 @router.get("/app/engines", response_class=HTMLResponse)

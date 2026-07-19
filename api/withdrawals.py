@@ -76,72 +76,79 @@ def get_withdrawal_config(request: Request, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/withdrawals/config")
-@limiter.limit(WRITE_LIMIT)
-def update_withdrawal_config(
-    request: Request,
-    cycle_days: int = Form(30),
-    auto_withdraw_enabled: bool = Form(False),
-    withdrawal_rate: float = Form(0.50),
-    compound_rate: float = Form(0.50),
-    min_capital: float = Form(10000.0),
-    db: Session = Depends(get_db),
-):
-    config = get_or_create_config(db)
-    config.cycle_days = cycle_days
-    config.auto_withdraw_enabled = auto_withdraw_enabled
-    config.withdrawal_rate = withdrawal_rate
-    config.compound_rate = compound_rate
-    config.min_capital = min_capital
-    db.commit()
-    return {"ok": True, "message": "Withdrawal config updated"}
+# === T1-7 DEFERRED: comment out config-write + calculate (fund-touching) ===
+# @router.put("/withdrawals/config")
+# @limiter.limit(WRITE_LIMIT)
+# def update_withdrawal_config(
+#     request: Request,
+#     cycle_days: int = Form(30),
+#     auto_withdraw_enabled: bool = Form(False),
+#     withdrawal_rate: float = Form(0.50),
+#     compound_rate: float = Form(0.50),
+#     min_capital: float = Form(10000.0),
+#     db: Session = Depends(get_db),
+# ):
+#     config = get_or_create_config(db)
+#     config.cycle_days = cycle_days
+#     config.auto_withdraw_enabled = auto_withdraw_enabled
+#     config.withdrawal_rate = withdrawal_rate
+#     config.compound_rate = compound_rate
+#     config.min_capital = min_capital
+#     db.commit()
+#     return {"ok": True, "message": "Withdrawal config updated"}
+#
+#
+# @router.get("/withdrawals/calculate")
+# @limiter.limit(READ_LIMIT)
+# def calculate_withdrawal_endpoint(request: Request, db: Session = Depends(get_db)):
+#     hl = HyperLiquidClient()
+#     if not hl.has_credentials:
+#         return {
+#             "ok": True,
+#             "balance": 0.0,
+#             "manual_50": {"amount": 0.0, "reason": "No HyperLiquid credentials configured"},
+#             "manual_all": {"amount": 0.0, "reason": "No HyperLiquid credentials configured"},
+#             "credentials_present": False,
+#         }
+#     config = get_or_create_config(db)
+#     balance = hl.get_account_value()
+#     amount_50, reason_50 = calculate_manual_50(db, balance, config)
+#     amount_all, reason_all = calculate_manual_all(db, balance, config)
+#     return {
+#         "ok": True,
+#         "balance": balance,
+#         "manual_50": {"amount": amount_50, "reason": reason_50},
+#         "manual_all": {"amount": amount_all, "reason": reason_all},
+#         "credentials_present": True,
+#     }
 
 
-@router.get("/withdrawals/calculate")
-@limiter.limit(READ_LIMIT)
-def calculate_withdrawal_endpoint(request: Request, db: Session = Depends(get_db)):
-    hl = HyperLiquidClient()
-    if not hl.has_credentials:
-        return {
-            "ok": True,
-            "balance": 0.0,
-            "manual_50": {"amount": 0.0, "reason": "No HyperLiquid credentials configured"},
-            "manual_all": {"amount": 0.0, "reason": "No HyperLiquid credentials configured"},
-            "credentials_present": False,
-        }
-    config = get_or_create_config(db)
-    balance = hl.get_account_value()
-    amount_50, reason_50 = calculate_manual_50(db, balance, config)
-    amount_all, reason_all = calculate_manual_all(db, balance, config)
-    return {
-        "ok": True,
-        "balance": balance,
-        "manual_50": {"amount": amount_50, "reason": reason_50},
-        "manual_all": {"amount": amount_all, "reason": reason_all},
-        "credentials_present": True,
-    }
-
-
-@router.post("/withdrawals/manual/50")
-@limiter.limit(WRITE_LIMIT)
-def withdraw_50_percent(request: Request, db: Session = Depends(get_db)):
-    blocked = _check_withdrawal_kill(db)
-    if blocked:
-        return blocked
-    idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
-    result = execute_manual_50(db, idempotency_key=idem_key)
-    return {"ok": result["ok"], "idempotency_key": idem_key, **result}
-
-
-@router.post("/withdrawals/manual/all")
-@limiter.limit(WRITE_LIMIT)
-def withdraw_all(request: Request, db: Session = Depends(get_db)):
-    blocked = _check_withdrawal_kill(db)
-    if blocked:
-        return blocked
-    idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
-    result = execute_manual_all(db, idempotency_key=idem_key)
-    return {"ok": result["ok"], "idempotency_key": idem_key, **result}
+# === T1-7 DEFERRED 2026-07-19: withdraw/deposit round-trip feature ===
+# Withdrawal is BROKEN (BUG-11: SDK missing .withdraw) and deposit has NO
+# code path (BUG-12). Operator deferred the feature. Comment out fund-moving
+# routes so the broken flow is unreachable. Re-enable when BUG-11/12 are built.
+# Idempotency logic (T1-5) preserved in withdrawal/manual.py for reuse.
+#
+# @router.post("/withdrawals/manual/50")
+# @limiter.limit(WRITE_LIMIT)
+# def withdraw_50_percent(request: Request, db: Session = Depends(get_db)):
+#     blocked = _check_withdrawal_kill(db)
+#     if blocked:
+#         return blocked
+#     idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
+#     result = execute_manual_50(db, idempotency_key=idem_key)
+#     return {"ok": result["ok"], "idempotency_key": idem_key, **result}
+#
+#
+# @router.post("/withdrawals/manual/all")
+# @limiter.limit(WRITE_LIMIT)
+# def withdraw_all(request: Request, db: Session = Depends(get_db)):
+#     blocked = _check_withdrawal_kill(db)
+#     if blocked:
+#         return blocked
+#     idem_key = request.headers.get("Idempotency-Key") or str(uuid.uuid4().hex)
+#     result = execute_manual_all(db, idempotency_key=idem_key)
+#     return {"ok": result["ok"], "idempotency_key": idem_key, **result}
 
 
 @router.get("/withdrawals/history")
