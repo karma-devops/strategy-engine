@@ -6,22 +6,6 @@
 
     <form id="instance-form" style="display:flex;flex-direction:column;gap:var(--space-4);">
 
-        {# ── Section: Preset ── #}
-        <div class="chart-card">
-            <div class="card-head">
-                <h2>Preset</h2>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr;gap:var(--space-3);">
-                <div>
-                    <label class="kpi-label" for="preset-select" style="display:block;margin-bottom:4px;">Fleet Preset</label>
-                    <select id="preset-select" name="preset" style="width:100%;padding:var(--space-2) var(--space-3);background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--radius-md);color:var(--input-text);font-size:var(--text-sm);">
-                        <option value="" selected>Custom / Manual</option>
-                        <optgroup label="Default Fleet" id="fleet-optgroup"></optgroup>
-                    </select>
-                </div>
-            </div>
-        </div>
-
         {# ── Section: Identity ── #}
         <div class="chart-card">
             <div class="card-head">
