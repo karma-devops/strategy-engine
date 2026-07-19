@@ -327,6 +327,12 @@
     }
     function saveSettings(e) {
         e.preventDefault();
+        const dryRunSel = document.getElementById('s-dryrun');
+        // T3-7: confirm before switching Dry Run (Paper) -> Live (real funds)
+        if (dryRunSel && dryRunSel.value === '0') {
+            const ok = window.confirm('Switch this engine to LIVE trading? It will trade REAL funds. Confirm only if you intend to go live.');
+            if (!ok) return;
+        }
         const body = {
             name: document.getElementById('s-name').value,
             token: document.getElementById('s-token').value.toUpperCase(),
