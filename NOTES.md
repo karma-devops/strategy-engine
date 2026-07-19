@@ -2017,3 +2017,30 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 **VERIFY BEFORE CLAIMING DONE:** after any auth/isolation change, sign up a fresh user via the REAL proxy URL, log in, and confirm `/app/account` + `/app/dashboard` + `/app/trades` show ONLY that user's own (empty) data — never operator's `$`. A curl test with the operator `-u operator:operator` does NOT represent a normal user; test as the actual session user.
 
 **Backup:** `v208_adra008-pre`, `v209_phaseb-pre`, `v210_dbb4wipe` (pre-wipe DB snapshot).
+
+---
+
+## ═══ SESSION LOG — T3 repair series + BUG-8/10 + launch hardening (2026-07-19, Asia/Makassar) ═══
+
+**Scope completed + pushed (all to `main`):**
+- **T3-1** `pulsr-chart.js` `createEquityBarChart.setData()` → equity+trades through `normalizeSeries()` + try/catch. (commit 643174d)
+- **T3-2** `position-card.js:88` `isShortPos` → declared `const` + removed duplicate `function isShortPos` collision (would SyntaxError). Closes BUG-9-A. (commit 6a117e7)
+- **T3-3** `pulsr-chart.js bumpTheme()` no-op → added `_charts` registry + `bumpTheme()` re-applies `getTheme()` via `chart.applyOptions()`. (commit 643174d)
+- **T3-4** `position-card.js` duplicate `EventSource('/stream')` → now consumes `window.__appSSE` (set by page-level SSE in dashboard + engine_detail); 0 private sockets; degrades to 3s poll. (commit e55e3cd)
+- **T3-5** Port-1 Strategy Parameters UI in engine_detail Settings modal: GET schema, `renderDynamicFields` (select/float/int/bool), PUT with per-field coercion + engine hot-restart. Reuses page `API_KEY` + `showToast`. (commit dd13e94)
+- **T3-6** Deleted orphaned 2nd `withdrawals_page()` in routes.py (~1835-1843, no `@router.get`). (commit e2f3d1e)
+- **T3-7** `engine_detail.html saveSettings()` → `window.confirm()` before Dry Run (Paper) → Live; aborts if cancelled. (commit 6a91946)
+- **BUG-7** `/app/trades` Active Positions section added above trades table (live non-FLAT positions). (commit 4fe89df)
+- **BUG-8 (P0)** `start_instance` enforces kill switch at API boundary: global kill active OR instance `status=='killed'` → HTTP 409. **Live-verified** all 3 paths (global-active→409, reset→200 Started, instance-killed→409). (commit c88c669)
+- **BUG-10** Signup form **e2e browser-verified**: fresh user `aetheris_e2e_v1` → redirect to `/app/dashboard` authenticated, fleet seeded (Engine HYPE v1), session cookie issued. Route was correct; no code change needed. (verified this session, no commit)
+- **Launch hardening (senior brief, redefines T3-6/T3-7):** position-card.js `hydratePositions()` fetches `/api/v2/positions` on mount + SSE push (merges live szi/entryPx into `POSITIONS_DATA`); `window.API_KEY` exposed on dashboard + engine_detail. Dashboard `refresh()` gets `dashboardRefreshLock` (freed in finally{}) wrapping the 3s `setInterval` poll. (commit 9fa8e6c)
+
+**Verification environment:** server was NOT running at session start (port 8792 empty). Started local uvicorn (`venv/bin/python3 main.py`, background) to live-verify BUG-8 + BUG-10. Server reads uncommitted `api/instances.py` from disk — BUG-8 test ran against the fix.
+
+**Pre-existing issue (OUT OF SCOPE, flagged for next pass):** 2 anonymous JS exceptions on `/app/dashboard` console (empty-message `js_errors`). NOT from position-card.js (dashboard uses its own inline `renderPositions`). Consistent with SSE `/stream` connect/parse edge (keep-alive heartbeat / empty frame). `hydratePositions` + `dashboardRefreshLock` added NO new errors. T3-4 consolidation is structurally correct (backend SSE healthy — ping frames confirmed; API_BASE valid; 1 EventSource/page).
+
+**Left uncommitted (correctly excluded):** `instances/models.py` (T3-9 parked prep — `email_verified`/`email_verify_token` columns), `._env_bak` (junk). These must NOT enter T3/BUG commits.
+
+**Test user created during BUG-10 verify:** `aetheris_e2e_v1` (dry_run=True, $1000 start) — left in DB; zero-autonomous-deletion rule → flagged for operator cleanup decision.
+
+**OPEN (unchanged from prior):** T3-8 onboarding popup (OPEN), T3-9 email 2FA (OPEN, PARKED — no email code), T3-0 backtest `user` NameError regression (OPEN per TASK-LIST), BUG-11/12 withdrawal/deposit (DEFERRED — live funds).
