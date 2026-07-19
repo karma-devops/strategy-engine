@@ -45,22 +45,21 @@ def _inject_theme(request: Request):
     return theme
 
 
-# Module-level cache for the operator's decrypted dashboard API key.
-# Security (ADR-008): the key is decrypted once per process and held only in memory;
-# it is NEVER written to disk, logs, or HTML source beyond the template render value.
-# A leaked operator `puls_` key is a single-tenant compromise (strictly less dangerous
-# than the former global AGENT_API_KEY, which granted all tenants).
-_DASHBOARD_API_KEY_CACHE = {"value": None}
+# Per-user dashboard API keys are resolved per-request from the session cookie
+# (see get_dashboard_api_key). No module-level cache: a shared cached key would
+# bleed one tenant's key to another. SECURITY (T3-0).
 
 
 def get_dashboard_api_key(request: Request = None) -> str:
     """Return the LOGGED-IN user's per-user `puls_` API key for dashboard client-side calls.
 
-    SECURITY (T3-0 cross-user leak fix): previously hardcoded to the operator key, so ANY
-    logged-in user saw the operator's portfolio/engines via client-side /api/v2/summary
-    calls. Now derives the key from the session cookie (or basic-auth operator). A session
-    user with no key gets "" (-> 403, empty dashboard) - NEVER the operator key. Falls back
-    to the cached operator key only for basic-auth operator sessions / non-request callers.
+    SECURITY (T3-0 cross-user leak fix): NEVER a global/shared value. Previously a
+    module-level cache held the operator key and bled it to other users. Now strictly
+    per-request from the session cookie. Resolution order:
+      - valid session cookie -> that user's own decrypted puls_ key
+      - session cookie present but invalid/expired -> "" (403, empty dashboard; NEVER operator)
+      - no session cookie (e.g. basic-auth operator) -> "" (operator UI uses its own session)
+    No fallback to the operator key for any session user. This guarantees isolation.
     """
     if request is not None:
         session = request.cookies.get("pulsr_session")
@@ -85,19 +84,8 @@ def get_dashboard_api_key(request: Request = None) -> str:
                             return ""  # session user resolved but has no key - do NOT leak operator key
             except Exception:
                 pass
-    # Fallback: basic-auth operator (no session cookie) or non-request caller
-    if _DASHBOARD_API_KEY_CACHE["value"] is not None:
-        return _DASHBOARD_API_KEY_CACHE["value"]
-    from instances.models import SessionLocal
-
-    db = SessionLocal()
-    try:
-        op = get_or_seed_operator(db)
-        if op and op.api_key:
-            _DASHBOARD_API_KEY_CACHE["value"] = decrypt_api_key(op.api_key)
-    finally:
-        db.close()
-    return _DASHBOARD_API_KEY_CACHE["value"] or ""
+    # No valid session cookie: never return the operator key. Empty -> 403 / empty dashboard.
+    return ""
 
 
 @public_router.post("/login")

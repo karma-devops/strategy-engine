@@ -465,29 +465,12 @@
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/static/sw.js').catch(() => {});
             }
-            // ── Check if already authenticated ──
-            var auth = sessionStorage.getItem('pulsr_auth');
-            if (auth) {
-                var creds = atob(auth);
-                fetch('/health', { headers: { 'Authorization': 'Basic ' + auth } })
-                    .then(r => {
-                        if (r.ok) {
-                            // Already logged in — show dashboard link
-                            var navLinks = document.querySelector('.pub-nav-links');
-                            if (navLinks) {
-                                var dashLink = document.createElement('a');
-                                dashLink.href = '//' + creds + '@' + location.host + '/app/dashboard';
-                                dashLink.textContent = 'Dashboard';
-                                dashLink.className = 'pub-nav-link';
-                                dashLink.style.cssText = 'background:var(--brand);color:#fff;padding:8px 16px;border-radius:var(--radius-sm);font-weight:600;';
-                                navLinks.appendChild(dashLink);
-                            }
-                            // Show logged-in state on login page
-                            var loginBtn = document.querySelector('.login-form button[type=submit]');
-                            if (loginBtn) { loginBtn.textContent = 'Go to Dashboard'; loginBtn.onclick = function(e) { e.preventDefault(); window.location.href = '//' + creds + '@' + location.host + '/app/dashboard'; }; }
-                        }
-                    }).catch(() => {});
-            }
+            // NOTE (T3-0 security): previously this block read sessionStorage.pulsr_auth
+            // and built a `//user:pass@host/app/dashboard` Basic-Auth link. That could
+            // shunt a returning visitor to ANOTHER user's dashboard (e.g. operator) and
+            // cache their credentials in the browser. Removed. Auth is via the
+            // pulsr_session cookie set at login; the landing page never synthesizes
+            // Basic-Auth links.
         }
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
