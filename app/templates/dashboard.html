@@ -429,6 +429,7 @@
 
     // ---- Live API <-> UI loop (bidirectional) ----
     const API_KEY = "{{ api_key }}";
+    window.API_KEY = API_KEY; // Exposed for consumer scripts (position-card.js hydrate)
     const DRY = {{ 'true' if dry_run_global else 'false' }};
     // P14: paper/live separation — dashboard defaults to 'live' mode.
     // Paper and live data are never mixed in the same view.
@@ -633,7 +634,12 @@
             .catch(e => addConsole('err', 'POST ' + path + ' failed: ' + e));
     }
 
+    // T3-7: concurrency guard — prevent overlapping 3s poll requests if the
+    // server is slow to respond. Always freed in finally{} so it can't wedge.
+    var dashboardRefreshLock = false;
     function refresh() {
+        if (dashboardRefreshLock) return; // a sync is already in flight — drop out
+        dashboardRefreshLock = true;
         fetch(API_BASE + '/api/v2/summary?hours=' + (typeof pulseRangeHours !== 'undefined' ? pulseRangeHours : 24) + '&mode=' + currentMode, { headers: { 'X-API-Key': API_KEY } })
             .then(r => r.json())
             .then(d => {
@@ -677,7 +683,8 @@
                     }
                 }
             })
-            .catch(e => addConsole('err', 'summary fetch failed: ' + e));
+            .catch(e => addConsole('err', 'summary fetch failed: ' + e))
+            .finally(() => { dashboardRefreshLock = false; });
     }
 
     // ---- Runner console log (SSE /stream -> prepend) ----

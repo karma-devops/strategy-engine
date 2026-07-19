@@ -259,6 +259,7 @@
     window.ENGINE_MODE = {{ 'paper' if inst.dry_run else 'live' | tojson }};
     const SLUG = "{{ slug }}";
     const API_KEY = "{{ api_key }}";
+    window.API_KEY = API_KEY; // Exposed for consumer scripts (position-card.js hydrate)
     const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@\/]+@/, 'http://');
 
     // ── Live API loop ──

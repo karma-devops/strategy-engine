@@ -247,6 +247,7 @@
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'position' || msg.type === 'trade') {
+          hydratePositions(); // T3-6: re-pull live positions from API on push
           renderPositions();
           renderEngineDetailPosition();
         }
@@ -254,6 +255,37 @@
         console.error('[PositionCard] SSE parse error:', e);
       }
     });
+  }
+
+  //=== T3-6: Fail-safe bootstrap hydration ===//
+  // Populates the positions grid immediately on mount (and on SSE push) by
+  // pulling live positions from /api/v2/positions, merged into the server-
+  // pre-filled POSITIONS_DATA. Works even before the first socket tick.
+  function hydratePositions() {
+    const key = window.API_KEY;
+    if (!key) return;
+    fetch('/api/v2/positions', { headers: { 'X-API-Key': key } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d || !d.ok || !d.positions) return;
+        const live = d.positions; // {COIN: {slug, coin, szi, entryPx}}
+        const base = window.POSITIONS_DATA || [];
+        const merged = base.map(function(inst) {
+          const lp = live[inst.token];
+          if (lp && Math.abs(parseFloat(lp.szi)) > 0) {
+            const side = parseFloat(lp.szi) > 0 ? 'LONG' : 'SHORT';
+            return Object.assign({}, inst, {
+              position_side: side,
+              position_size: Math.abs(parseFloat(lp.szi)),
+              entry_price: lp.entryPx,
+            });
+          }
+          return inst;
+        });
+        window.POSITIONS_DATA = merged;
+        renderPositions();
+      })
+      .catch(function(e) { console.warn('[PositionCard] hydratePositions failed:', e); });
   }
   
   //=== Toast Helper ===//
@@ -289,11 +321,13 @@
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function() {
         renderPositions();
+        hydratePositions(); // T3-6: bootstrap live positions on mount
         renderEngineDetailPosition();
         initSSEPositionListener();
       });
     } else {
       renderPositions();
+      hydratePositions(); // T3-6: bootstrap live positions on mount
       renderEngineDetailPosition();
       initSSEPositionListener();
     }
