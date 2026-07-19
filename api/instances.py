@@ -5,6 +5,7 @@ API routes for instance control.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,7 @@ from api.credentials import _current_user_id
 from engine.registry import STRATEGIES
 from instances.models import get_db, Instance, AccountSnapshot, PositionSnapshot
 from instances.manager import manager
+from api.killswitch import is_global_killed, is_instance_killed
 
 router = APIRouter()
 
@@ -537,6 +539,19 @@ def start_instance(request: Request, instance_id: str, db: Session = Depends(get
     inst = db.query(Instance).filter(Instance.slug == instance_id).first()
     if not inst:
         return {"ok": False, "message": "Instance not found"}
+    # BUG-8 (P0): enforce kill switch at the API boundary (defense in depth).
+    # Block start if the global kill switch is active OR this instance is killed,
+    # regardless of manager internals. Returns 409 so callers can't mistake it for success.
+    if is_instance_killed(db, instance_id):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"ok": False, "message": f"Instance {inst.name} is killed. Reset the kill before starting."},
+        )
+    if is_global_killed(db):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"ok": False, "message": f"Global kill switch active — {inst.name} start blocked."},
+        )
     ok = manager.start_instance(inst)
     if not ok:
         return {"ok": False, "message": f"Could not start {inst.name} (kill switch active, already running, or instance killed)"}
