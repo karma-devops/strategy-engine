@@ -49,11 +49,6 @@
                 <h2 style="font-size:var(--text-sm);margin:0;">Pulse</h2>
                 <span class="pulse-change" id="pulse-change-m">—</span>
             </div>
-            <div class="pulse-range-chips" style="display:flex;gap:2px;flex-shrink:0;">
-                <button class="chip pulse-range active" data-range="1" onclick="setPulseRange(1)">1H</button>
-                <button class="chip pulse-range" data-range="2" onclick="setPulseRange(2)">2H</button>
-                <button class="chip pulse-range" data-range="6" onclick="setPulseRange(6)">6H</button>
-            </div>
         </div>
         <div class="pulse-wrap" style="flex:1;min-height:140px;position:relative;padding:0 var(--space-3) var(--space-2);">
             <svg class="pulse-svg" id="pulse-svg-m" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-label="Equity pulse" style="width:100%;height:100%;">
@@ -222,13 +217,6 @@
                     <span class="pulse-change" id="pulse-change">—</span>
                     {# P14: Mode toggle — paper/live separation. Click to cycle LIVE → PAPER → ALL #}
                     <button id="mode-toggle" onclick="cycleMode()" style="font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;letter-spacing:1px;font-weight:700;transition:all 0.2s;">LIVE</button>
-                </div>
-                <div class="pulse-range-chips" style="display:flex;gap:2px;">
-                    <button class="chip pulse-range active" data-range="1" onclick="setPulseRange(1)">1H</button>
-                    <button class="chip pulse-range" data-range="2" onclick="setPulseRange(2)">2H</button>
-                    <button class="chip pulse-range" data-range="6" onclick="setPulseRange(6)">6H</button>
-                    <button class="chip pulse-range" data-range="12" onclick="setPulseRange(12)">12H</button>
-                    <button class="chip pulse-range" data-range="24" onclick="setPulseRange(24)">24H</button>
                 </div>
             </div>
             <div class="pulse-wrap" id="pulsr-chart-viewport" style="position:relative;height:320px;width:100%;flex:1;min-height:0;">
@@ -780,16 +768,8 @@
     refresh();
     setInterval(refresh, 3000);
 
-    // ── Pulse range selector (default 1H) ──
+    // ── Pulse range fixed to 1H (time buttons removed per operator request; graph auto-shows last window) ──
     var pulseRangeHours = 1;
-    function setPulseRange(hours) {
-        pulseRangeHours = hours;
-        document.querySelectorAll('.pulse-range').forEach(function(btn) {
-            btn.classList.toggle('active', parseInt(btn.dataset.range) === hours);
-        });
-        // Re-trigger refresh to apply new range
-        refresh();
-    }
 
     // P14: Paper/Live mode toggle — cycles LIVE → PAPER → ALL
     function cycleMode() {
