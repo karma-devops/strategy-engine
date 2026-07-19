@@ -303,6 +303,28 @@
         const W = 1000, H = 200, PAD = 8;
         const centerY = H / 2;          // 100 — zero centerline
         const AMP = centerY * 0.82;      // max vertical swing into each hemisphere
+        // T4-5 Step 2: dashed zero-center baseline. Anchored in SVG coord space
+        // (not CSS) so it scales with viewBox across mobile/desktop profiles.
+        // Inserted as the FIRST child of each pulse SVG so wave paths paint on top.
+        // (Senior brief used .panel-chart-wrapper/#pulse-container selectors that
+        //  do NOT exist in this template — targeting the real #pulse-svg/#pulse-svg-m IDs.)
+        ['pulse-svg', 'pulse-svg-m'].forEach(function(svgId) {
+            const svgEl = document.getElementById(svgId);
+            if (!svgEl) return;
+            let baseline = svgEl.querySelector('#pulse-baseline');
+            if (!baseline) {
+                baseline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                baseline.setAttribute('id', 'pulse-baseline');
+                baseline.setAttribute('stroke', 'var(--border, rgba(255, 255, 255, 0.15))');
+                baseline.setAttribute('stroke-dasharray', '5,5');
+                baseline.setAttribute('stroke-width', '1');
+                svgEl.insertBefore(baseline, svgEl.firstChild);
+            }
+            baseline.setAttribute('x1', '0');
+            baseline.setAttribute('y1', centerY.toString());
+            baseline.setAttribute('x2', W.toString());
+            baseline.setAttribute('y2', centerY.toString());
+        });
         if (!equityData || equityData.length < 2) {
             // Draw flat pulsing line on the zero centerline instead of empty state
             empty.style.display = 'none';
