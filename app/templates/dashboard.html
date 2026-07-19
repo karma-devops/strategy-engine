@@ -613,7 +613,10 @@
         document.getElementById('focus-modal-price').textContent = fmtUsd(parseFloat(d.markPrice || 0));
         document.getElementById('focus-modal-leverage').textContent = (d.leverage || '1') + 'x';
         document.getElementById('focus-modal-view').href = '/app/engines/' + d.slug;
-        document.getElementById('focus-modal-edit').href = '/app/engines/' + d.slug;
+        var editBtn = document.getElementById('focus-modal-edit');
+        editBtn.removeAttribute('href');
+        editBtn.style.cursor = 'pointer';
+        editBtn.onclick = function() { closeFocusModal(); openEngineSettings(d.slug); };
         var toggleBtn = document.getElementById('focus-modal-toggle');
         if (d.status === 'running') {
             toggleBtn.textContent = '⏹ Stop';
