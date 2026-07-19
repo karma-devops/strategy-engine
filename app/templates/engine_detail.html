@@ -228,6 +228,19 @@
                     <span class="label">Poll</span><span class="mono">{{ inst.poll_interval_seconds }}s</span>
                     <span class="label">Mode</span><span class="mono">{{ inst.mode }}</span>
                 </div>
+
+                <!-- T3-5: Strategy Parameters (Port-1) — dynamic from GET /instances/{slug}/strategy-config -->
+                <div class="modal-section-divider"><span>Strategy Parameters</span></div>
+                <p class="modal-hint">Per-instance parameter overrides. Saving triggers an engine hot-restart to apply live.</p>
+                <div id="strategy-params-wrap">
+                    <div id="dynamic-params-container">
+                        <div class="modal-hint" style="text-align:center;padding:8px 0;">Loading strategy parameters…</div>
+                    </div>
+                    <div style="margin-top:12px;display:flex;justify-content:flex-end;">
+                        <button type="button" id="save-params-btn" class="btn-sm" style="background:var(--brand);color:#fff;border:1px solid var(--brand);" disabled
+                            onclick="handleStrategyFormSubmit(event)">Save Parameters &amp; Restart</button>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn-sm" onclick="closeSettings()">Cancel</button>
@@ -285,6 +298,7 @@
     // ── Settings modal ──
     function openSettings() {
         document.getElementById('settings-modal').style.display = 'flex';
+        loadStrategyConfig(SLUG);
         // Populate strategy dropdown from API
         fetch(API_BASE + '/api/v2/strategies', { headers: { 'X-API-Key': API_KEY } })
             .then(r => r.json())
@@ -334,6 +348,87 @@
             else { showToast(j.message || 'Save failed', 'error'); }
         })
         .catch(err => showToast('Save error: ' + err, 'error'));
+    }
+
+    // ── T3-5: Strategy Parameters (Port-1) ──
+    function loadStrategyConfig(slug) {
+        const container = document.getElementById('dynamic-params-container');
+        const btn = document.getElementById('save-params-btn');
+        if (!container) return;
+        container.innerHTML = '<div class="modal-hint" style="text-align:center;padding:8px 0;">Loading strategy parameters…</div>';
+        if (btn) btn.disabled = true;
+        fetch(API_BASE + '/api/v2/instances/' + slug + '/strategy-config', { headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.ok) throw new Error(d.message || 'Failed to load strategy config');
+                renderDynamicFields(d.parameters || [], d.config || {});
+                if (btn) btn.disabled = false;
+            })
+            .catch(err => {
+                console.error('[T3-5] loadStrategyConfig failed:', err);
+                if (container) container.innerHTML = '<div class="modal-hint" style="color:var(--color-loss);">Could not load parameters: ' + err.message + '</div>';
+            });
+    }
+
+    function renderDynamicFields(parameters, config) {
+        const container = document.getElementById('dynamic-params-container');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!parameters || parameters.length === 0) {
+            container.innerHTML = '<div class="modal-hint" style="text-align:center;padding:8px 0;">No configurable parameters for this strategy.</div>';
+            return;
+        }
+        parameters.forEach(param => {
+            const name = param.name;
+            const value = (config[name] !== undefined) ? config[name] : (param.default !== undefined ? param.default : '');
+            const field = document.createElement('div');
+            field.className = 'modal-field';
+            let control = '';
+            if (param.type === 'bool') {
+                const checked = (value === true || value === 'true' || value === 1 || value === '1') ? 'checked' : '';
+                control = '<input type="checkbox" id="param_' + name + '"' + checked + '>';
+            } else if (param.type === 'select' && Array.isArray(param.options)) {
+                const opts = param.options.map(c => '<option value="' + c + '"' + (c === value ? ' selected' : '') + '>' + c + '</option>').join('');
+                control = '<select id="param_' + name + '">' + opts + '</select>';
+            } else {
+                const step = param.type === 'float' ? 'any' : '1';
+                control = '<input type="number" step="' + step + '" id="param_' + name + '" value="' + value + '">';
+            }
+            field.innerHTML = '<label for="param_' + name + '">' + name + '</label>' + control;
+            container.appendChild(field);
+        });
+    }
+
+    function handleStrategyFormSubmit(e) {
+        e.preventDefault();
+        const btn = document.getElementById('save-params-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving & Restarting…'; }
+        const fields = document.querySelectorAll('#dynamic-params-container [id^="param_"]');
+        const payload = {};
+        fields.forEach(el => {
+            const key = el.id.replace('param_', '');
+            if (el.type === 'checkbox') payload[key] = el.checked;
+            else if (el.type === 'number') payload[key] = (el.getAttribute('step') === '1') ? parseInt(el.value, 10) : parseFloat(el.value);
+            else payload[key] = el.value;
+        });
+        fetch(API_BASE + '/api/v2/instances/' + SLUG + '/strategy-config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(j => {
+            if (!j.ok) throw new Error(j.message || 'Save rejected');
+            showToast('Strategy parameters saved — engine restarting', 'success');
+            loadStrategyConfig(SLUG);
+        })
+        .catch(err => {
+            console.error('[T3-5] save failed:', err);
+            showToast('Parameter save failed: ' + err.message, 'error');
+        })
+        .finally(() => {
+            if (btn) { btn.disabled = false; btn.textContent = 'Save Parameters & Restart'; }
+        });
     }
 
     // ── Console helpers ──
