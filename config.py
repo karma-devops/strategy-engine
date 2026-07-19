@@ -10,24 +10,41 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _require(name: str) -> str:
+    """Fail-fast: mandatory env var must be present at boot.
+
+    Prevents silent security regressions (e.g. shipping with a default
+    dashboard password, or running credential encryption with no key).
+    """
+    val = os.getenv(name)
+    if not val:
+        raise RuntimeError(
+            f"FATAL: required env var {name} is not set. "
+            f"Set it in .env or the environment before booting."
+        )
+    return val
+
+
 class Config:
     # Web
     PORT = int(os.getenv("STRATEGY_ENGINE_PORT", "8888"))
     FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or _secrets.token_hex(32)
 
     # Dashboard auth
+    # Username defaults to "operator" (not a secret). Password MUST be set
+    # via env — no default, fails fast at boot if missing.
     DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "operator")
-    DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "operator")
+    DASHBOARD_PASSWORD = _require("DASHBOARD_PASSWORD")
 
-    # API key for agent endpoints
-    AGENT_API_KEY = os.getenv("AGENT_API_KEY")
+    # API key for agent endpoints — mandatory, fails fast if unset
+    AGENT_API_KEY = _require("AGENT_API_KEY")
 
     # HyperLiquid secrets
     HYPER_LIQUID_ETH_PRIVATE_KEY = os.getenv("HYPER_LIQUID_ETH_PRIVATE_KEY")
     ACCOUNT_ADDRESS = os.getenv("ACCOUNT_ADDRESS")
 
-    # Per-instance credential encryption
-    INSTANCE_SECRET_KEY = os.getenv("INSTANCE_SECRET_KEY")
+    # Per-instance credential encryption — mandatory, fails fast if unset
+    INSTANCE_SECRET_KEY = _require("INSTANCE_SECRET_KEY")
 
     # Trading safety
     DRY_RUN = os.getenv("DRY_RUN", "true").lower() in ("1", "true", "yes")
