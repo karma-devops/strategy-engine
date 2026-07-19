@@ -12,7 +12,19 @@ from sqlalchemy.exc import IntegrityError
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT, AUTH_LIMIT
 from config import config
 from api.auth import verify_ui_credentials, require_ui_or_api
-from instances.models import engine, Instance, AccountSnapshot, Trade, Signal, Backtest, User, Strategy, Credential, get_or_seed_operator
+from instances.models import (
+    engine,
+    Instance,
+    AccountSnapshot,
+    Trade,
+    Signal,
+    Backtest,
+    User,
+    Strategy,
+    Credential,
+    get_or_seed_operator,
+    decrypt_api_key,
+)
 from instances.manager import manager
 from engine.registry import get_strategy
 
@@ -31,6 +43,36 @@ def _inject_theme(request: Request):
     if theme not in ("pulsr", "hyperfluid", "portrait"):
         theme = "pulsr"
     return theme
+
+
+# Module-level cache for the operator's decrypted dashboard API key.
+# Security (ADR-008): the key is decrypted once per process and held only in memory;
+# it is NEVER written to disk, logs, or HTML source beyond the template render value.
+# A leaked operator `puls_` key is a single-tenant compromise (strictly less dangerous
+# than the former global AGENT_API_KEY, which granted all tenants).
+_DASHBOARD_API_KEY_CACHE = {"value": None}
+
+
+def get_dashboard_api_key() -> str:
+    """Return the operator's per-user `puls_` API key for dashboard client-side calls.
+
+    Per-user isolation (T2-4) blocks the global AGENT_API_KEY from tenant routes, so the
+    operator UI must authenticate as the operator tenant via its own `puls_` key. This
+    replaces `config.AGENT_API_KEY` in template render contexts. No circular dependency:
+    get_or_seed_operator() / decrypt_api_key() do not call _current_user_id().
+    """
+    if _DASHBOARD_API_KEY_CACHE["value"] is not None:
+        return _DASHBOARD_API_KEY_CACHE["value"]
+    from instances.models import SessionLocal
+
+    db = SessionLocal()
+    try:
+        op = get_or_seed_operator(db)
+        if op and op.api_key:
+            _DASHBOARD_API_KEY_CACHE["value"] = decrypt_api_key(op.api_key)
+    finally:
+        db.close()
+    return _DASHBOARD_API_KEY_CACHE["value"] or ""
 
 
 @public_router.post("/login")
@@ -178,7 +220,7 @@ def dashboard(request: Request, username: str = Depends(verify_ui_credentials)):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        context={"request": request, "api_key": config.AGENT_API_KEY or ""},
+        context={"request": request, "api_key": get_dashboard_api_key()},
     )
 
 
@@ -287,7 +329,7 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
             "dashboard.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "account_value": account_value,
                 "realized_pnl": realized_pnl,
                 "best_engine": best_engine,
@@ -322,7 +364,7 @@ def assistant_app(request: Request, username: str = Depends(verify_ui_credential
         "assistant.html",
         context={
             "request": request,
-            "api_key": config.AGENT_API_KEY or "",
+            "api_key": get_dashboard_api_key(),
             "active": "assistant",
             "chat_context": "assistant",
         },
@@ -422,7 +464,7 @@ def testing_index(request: Request, username: str = Depends(verify_ui_credential
     """Testing section landing — Historical + Paper Trading."""
     return templates.TemplateResponse(
         request, "testing_index.html",
-        context={"request": request, "api_key": config.AGENT_API_KEY or "", "active": "testing"},
+        context={"request": request, "api_key": get_dashboard_api_key(), "active": "testing"},
     )
 
 
@@ -450,7 +492,7 @@ def testing_historical(request: Request, username: str = Depends(verify_ui_crede
         return templates.TemplateResponse(
             request, "testing_historical.html",
             context={
-                "request": request, "api_key": config.AGENT_API_KEY or "",
+                "request": request, "api_key": get_dashboard_api_key(),
                 "backtests": bt_data, "latest_equity": latest_equity, "active": "testing",
                 "chat_context": "backtester",
             },
@@ -497,7 +539,7 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
         return templates.TemplateResponse(
             request, "testing_paper.html",
             context={
-                "request": request, "api_key": config.AGENT_API_KEY or "",
+                "request": request, "api_key": get_dashboard_api_key(),
                 "instances": inst_data, "equity_series": equity_series,
                 "paper_trades": paper_trade_data,
                 "active_engines": sum(1 for i in inst_data if i["status"] == "running"),
@@ -553,7 +595,7 @@ def trades_page(request: Request, username: str = Depends(verify_ui_credentials)
             "trades.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "trades": trade_data,
                 "paper_trades": paper_data,
                 "open_count": open_count,
@@ -678,7 +720,7 @@ def engines_page(request: Request, username: str = Depends(verify_ui_credentials
             "engines.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "active_engines": active,
                 "total_engines": len(instances),
                 "open_pnl": round(open_pnl, 2),
@@ -849,7 +891,7 @@ def engine_detail_page(request: Request, slug: str, username: str = Depends(veri
             "engine_detail.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "inst": inst_data,
                 "slug": slug,
                 "trades": trades_data,
@@ -950,7 +992,7 @@ def account_overview(request: Request, username: str = Depends(verify_ui_credent
             "account_overview.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1014,7 +1056,7 @@ def account_secrets(request: Request, username: str = Depends(verify_ui_credenti
             "account_secrets.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "user": {"username": user.username, "withdrawal_eth_address": user.withdrawal_eth_address},
                 "engine_creds": engine_creds,
                 "global_masked": global_masked,
@@ -1049,7 +1091,7 @@ def settings_app(request: Request, username: str = Depends(verify_ui_credentials
             "settings.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1113,7 +1155,7 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
             "settings.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "user": {
                     "username": user.username,
                     "display_name": user.display_name,
@@ -1211,7 +1253,7 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
             "strategies.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "strategies": strategies_data,
                 "total_strategies": len(strategies_data),
                 "active_count": sum(1 for s in strategies_data if s["status"] == "active"),
@@ -1231,7 +1273,7 @@ def strategy_upload_page(request: Request, username: str = Depends(verify_ui_cre
         "strategy_upload.html",
         context={
             "request": request,
-            "api_key": config.AGENT_API_KEY or "",
+            "api_key": get_dashboard_api_key(),
             "active": "strategies",
         },
     )
@@ -1246,7 +1288,7 @@ def strategy_studio_page(request: Request, username: str = Depends(verify_ui_cre
         "strategy_studio.html",
         context={
             "request": request,
-            "api_key": config.AGENT_API_KEY or "",
+            "api_key": get_dashboard_api_key(),
             "ai_provider": config.AI_PROVIDER,
             "ai_model": config.AI_MODEL,
             "active": "strategies",
@@ -1291,7 +1333,7 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
             "strategy_detail.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "strategy_id": strategy_id,
                 "name": info.get("name", strategy_id),
                 "description": info.get("description", ""),
@@ -1730,7 +1772,7 @@ def _instances_by_mode(request: Request, live: bool):
             "live_paper.html",
             context={
                 "request": request,
-                "api_key": config.AGENT_API_KEY or "",
+                "api_key": get_dashboard_api_key(),
                 "mode": "live" if live else "paper",
                 "mode_label": "Live Trading" if live else "Paper Trading",
                 "instances": inst_data,
@@ -1752,7 +1794,7 @@ def withdrawals_page(request: Request, username: str = Depends(verify_ui_credent
     cfg = Config()
     return templates.TemplateResponse(request, "withdrawals.html", context={
         "request": request,
-        "api_key": cfg.AGENT_API_KEY,
+        "api_key": get_dashboard_api_key(),
     })
 
 
