@@ -85,6 +85,7 @@
     const duration = 0; // TODO: implement from start_time if added to API
     
     const isLongPos = side.toLowerCase() === 'long';
+    const isShortPos = side.toLowerCase() === 'short';
     const sideClass = isLongPos ? 'long' : (isShortPos ? 'short' : 'flat');
     
     //=== Card Structure ===//
@@ -159,10 +160,6 @@
     }
     
     return card;
-  }
-  
-  function isShortPos(position) {
-    return position && position.side && position.side.toLowerCase() === 'short';
   }
   
   function renderEmptyState(container) {
