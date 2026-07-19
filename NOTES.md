@@ -1718,3 +1718,5 @@ Each strategy script is standalone and declares three ports:
 **Doc restructure (2026-07-18):** `TASK-LIST.md` moved to `docs/TASK-LIST.md`. `docs/` now holds the architecture contract (README, VOCABULARY, ARCHITECTURE, DECISIONS, CONTRIBUTING, STYLEGUIDE, AI_RULES, REFACTOR_PLAN). BACKLOG.md (root) tracks bugs. CONTEXT/NOTES stay at root per operator.
 
 **Files touched this session:** `api/instances.py`, `instances/runner.py`, `instances/manager.py`, `backtests/runner.py`, `backtests/cost_model.py` (new), `testing/runner.py` (new, rewritten clean), `app/templates/testing_historical.html`, `main.py`, `app/_common.py`/`paper_routes.py`/`backtest_routes.py` (from earlier), `design-system/*` (Z4), `app/static/position-card.js` (Z5).
+
+**Handover for next session (2026-07-19):** `HANDOVER-UI-WALKTHROUGH.md` created at main root. Next session = browser UI walkthrough of all pages (server PID 29567, port 8792, login operator/operator). Recon only, no code fixes unless told. Verify BACKLOG #41-#66 against live UI.
