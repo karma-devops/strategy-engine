@@ -699,6 +699,9 @@
         while (box.childElementCount > 200) box.removeChild(box.lastChild);
     }
 
+    // T4-4: rolling memory buffer for the SVG pulse graph (max 60 ticks / 1 min)
+    window.__pulseGraphBuffer = window.__pulseGraphBuffer || [];
+
     if (typeof EventSource !== 'undefined') {
         const es = new EventSource(API_BASE + '/stream');
         // T3-4: expose the single shared socket for consumer scripts (position-card.js)
@@ -729,6 +732,20 @@
                         if (accM) accM.textContent = pv;
                         const tickAcc = document.getElementById('ticker-account');
                         if (tickAcc) tickAcc.textContent = pv;
+
+                        // ─────────── T4-4: reactive SVG pulse graph repaint ───────────
+                        // buildPulse() reads the global `equityData` array (not its arg),
+                        // so we push the live value there as a rolling 60-point window.
+                        const numericVal = parseFloat(m.portfolio_value) || 0;
+                        if (typeof equityData !== 'undefined') {
+                            equityData.push({ value: numericVal });
+                            if (equityData.length > 60) equityData.shift();
+                        }
+                        window.__pulseGraphBuffer = (typeof equityData !== 'undefined') ? equityData : window.__pulseGraphBuffer;
+                        if (typeof buildPulse === 'function' && document.getElementById('pulse-svg')) {
+                            buildPulse(); // re-renders path from equityData
+                        }
+                        // ─────────────────────────────────────────────────────────────
                     }
                     if (m.daily_pnl !== undefined) {
                         const pnl = parseFloat(m.daily_pnl) || 0;
