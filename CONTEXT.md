@@ -324,3 +324,12 @@ strategy-engine/
 - `docs/` holds the architecture contract: README, VOCABULARY, ARCHITECTURE,
   DECISIONS, ROADMAP, CONTRIBUTING, STYLEGUIDE, AI_RULES, REFACTOR_PLAN.
 - `BACKLOG.md` (root) = bugreport tracking ledger.
+
+## Known deferred features (operator-flagged, do NOT implement without explicit go)
+- **Withdrawal/Deposit round-trip (BUG-11 + BUG-12, TASK-LIST.md BUGHUNT):** withdrawal is
+  BROKEN at `core/exchange.py:429` (`self._exchange.withdraw` → should be
+  `withdraw_from_bridge(amount, destination)`, SDK `withdraw3` action, mainnet already set).
+  Deposit has NO code path at all. Both deferred 2026-07-19 (live funds, not urgent).
+  T1-5 idempotency guard already in place. Full scope + verification plan in TASK-LIST BUGHUNT
+  and NOTES.md (2026-07-19 DEFERRED entry). Reuse T1-5 pattern when built. Explicit operator
+  re-open required before any live fund movement.

@@ -99,7 +99,25 @@
 
 ## BUGHUNT — Live Frontend (pre-beta, must actually use UI)
 - **BUG-1.** Visual verify `#pos-grid` (Z5) · **BUG-2.** engine_detail LIVE/PAPER tag (Z3) · **BUG-3.** backtest form→results (X3/Z7) · **BUG-4.** paper forward-test (Z1/Z2) · **BUG-5.** menu integrity (Z2) · **BUG-6.** PAPER/LIVE badge (D4) · **BUG-7.** dry-run toggle (D5) · **BUG-8.** `pytest tests/` pass/fail · **BUG-9.** console error sweep · **BUG-10.** [OPEN] Signup form end-to-end verify — `/signup` (`app/routes.py:60`) creates user + hashes password but never browser-tested. Verify: success→`/app/dashboard`, session cookie issued, login with new creds works, dup-user/email handled, pw<6 rejected. Note: `/login` form was broken until operator `password_hash` seeded 2026-07-19 (`get_or_seed_operator` now sets `hash_password("operator")`); signup path itself still unverified — test after Tier 0.
-- **BUG-11.** [CONFIRMED, DEFERRED] `withdraw_to_wallet()` is BROKEN — `core/exchange.py:429` calls `self._exchange.withdraw(target, amount)` but the `hyperliquid` SDK `Exchange` object has **no `.withdraw()` method** (AttributeError on live test 2026-07-19). Live test: balance 7.12 USDC, attempted 1 USDC withdraw → failed, no funds moved. Fix pointer: SDK exposes `withdraw_from_bridge(target, amount)` (and `usd_transfer` for internal). Repro: `HyperLiquidClient(private_key=..., account_address=...).withdraw_to_wallet(1.0, destination=addr)` → AttributeError. **Deferred per operator — withdrawal feature revisit later.** T1-5 idempotency guard already in place for when this is fixed.
+- **BUG-11 + BUG-12 — WITHDRAWAL/DEPOSIT ROUND-TRIP FEATURE [DEFERRED, full scope below].** Withdrawal is BROKEN; deposit has NO code path. Deferred per operator 2026-07-19. Detailed scope:
+
+  **BUG-11 (withdrawal broken — confirmed live 2026-07-19):**
+  - Symptom: `HyperLiquidClient.withdraw_to_wallet(amount, destination)` → `AttributeError: 'Exchange' object has no attribute 'withdraw'`. No funds moved. Live test: balance 7.12 USDC, attempted 1 USDC → failed.
+  - Root cause: `core/exchange.py:429` calls `self._exchange.withdraw(target, amount)` — method does not exist in `hyperliquid` SDK.
+  - Correct SDK call: `self._exchange.withdraw_from_bridge(amount, destination)` — signature `(amount: float, destination: str)`, action type `withdraw3` (bridge USDC HL unified account → L1 EVM). Client already uses `MAINNET_API_URL` (exchange.py:91) so network is correct. Arg ORDER differs from broken code (`amount, destination` not `target, amount`).
+  - Already-correct: client built mainnet+real account (88-91); `_query_address()` returns `ACCOUNT_ADDRESS` = MetaMask `0xA871D51A9D3Cf670c41FB53CDEe3822c51FD8078`; T1-5 idempotency guard in place; `withdraw3` is USDC-only (no token param).
+  - Minimal fix: line 429 → `self._exchange.withdraw_from_bridge(amount, target)`. Recommended add: validate destination is valid 0x + amount ≤ withdrawable before sending (current code has "advisory check" comment but no actual check).
+  - Risk: `withdraw3` is REAL on-chain L1 withdrawal (mainnet, real USDC, HL bridge fee ~$0-1, L1 arrival ~15-20 min). Irreversible by code.
+  - Verification when un-deferred: dry-run (`DRY_RUN=true`) first → no AttributeError; then live 1 USDC to `0xA871...8078`; poll `get_account_value()` + MetaMask; re-run same idempotency key → existing record, no double-send.
+
+  **BUG-12 (deposit — NO code path exists):**
+  - Finding: no `deposit` / `deposit_to_hl` / `transfer_to_exchange` function or route anywhere in `api/`, `instances/`, `withdrawal/`, `core/`. grep for "deposit" found only config/calc references, no execution path.
+  - HL reality: depositing USDC from an EVM wallet (MetaMask) INTO the HL unified account is done via the HL `usd_class_transfer` / `usd_transfer` SDK or the HL UI — it is a separate action from withdrawal (withdrawal = HL→L1; deposit = L1→HL). The SDK `Exchange` exposes `usd_transfer` / `usd_class_transfer` for internal/bridge transfers but a true L1→HL deposit (MetaMask → HL) requires the deposit action (`deposit` / `deposit3` type) which must be confirmed against SDK version.
+  - For the round-trip to work, deposit needs: (a) a `deposit_to_hl(amount, source_address)` method in `core/exchange.py` using the correct SDK deposit action; (b) an API route `POST /api/v2/deposit` (or similar) wired like the withdrawal endpoints; (c) idempotency key (mirror T1-5); (d) optional destination = HL account address (`ACCOUNT_ADDRESS`).
+  - Note: a "deposit 5 USDC" test means moving USDC from MetaMask back to the HL account — requires the deposit SDK action + the wallet to have USDC + gas.
+
+  **Deferred scope summary (do as one feature, not two):** Build `withdraw_to_wallet` fix (BUG-11) + `deposit_to_hl` method + matching API routes + idempotency on both + balance/address guards. Then live round-trip test: withdraw 1 USDC → confirm MetaMask → deposit 5 USDC → confirm HL. Reuse T1-5 idempotency pattern.
+  **Status: DEFERRED. Do NOT implement until operator re-opens. Live funds involved — explicit go required.**
 
 ## UI WALKTHROUGH QUEUE (HANDOVER, recon-only)
 Server PID 29567 :8792, login `operator`/`operator`, base `http://127.0.0.1:8792`.

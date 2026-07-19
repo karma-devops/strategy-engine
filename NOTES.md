@@ -1824,3 +1824,12 @@ Each strategy script is standalone and declares three ports:
 - Then BUG-9-A console exception capture + fix.
 - Then BUG-7 trades table, dashboard PnL mismatch.
 - Then re-run vision screenshots for full visual proof.
+
+## 2026-07-19 DEFERRED: Withdrawal/Deposit Round-Trip Feature (BUG-11 + BUG-12)
+- **Decision:** operator chose to DEFER the withdrawal+deposit round-trip feature (live funds, not urgent). Documented in TASK-LIST.md BUGHUNT as BUG-11 + BUG-12 with full scope. CONTEXT.md updated.
+- **Live test performed (real creds from .env):** balance 7.12 USDC confirmed via `HyperLiquidClient` (mainnet, ACCT `0xA871D51A9D3Cf670c41FB53CDEe3822c51FD8078` = operator MetaMask). Attempted 1 USDC withdraw → FAILED: `AttributeError: 'Exchange' object has no attribute 'withdraw'` at core/exchange.py:429. No funds moved.
+- **BUG-11 root cause:** line 429 calls `self._exchange.withdraw(target, amount)` — SDK has no `.withdraw()`. Correct: `self._exchange.withdraw_from_bridge(amount, destination)` (sig `(amount, destination)`, action `withdraw3`, USDC L1 bridge). Client already mainnet (exchange.py:91).
+- **BUG-12:** NO deposit code path exists anywhere (no `deposit`/`deposit_to_hl` route or method). HL deposit (MetaMask→HL) is a separate SDK action from withdrawal. Needs `deposit_to_hl` method + API route + idempotency (mirror T1-5).
+- **Reuse:** T1-5 idempotency guard (WithdrawalRecord.idempotency_key) already in place for when withdrawal is fixed.
+- **When re-opened:** fix line 429 (1-line + arg swap), add address/amount guards, build deposit method+route, dry-run verify, then live round-trip (withdraw 1 → confirm MetaMask → deposit 5 → confirm HL). Explicit operator go required (real funds).
+- **Git:** deferred doc-only, committed `f19a1e1` (BUG-11 log) then expanded in this session.
