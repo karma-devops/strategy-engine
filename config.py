@@ -31,9 +31,9 @@ class Config:
     FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY") or _secrets.token_hex(32)
 
     # Dashboard auth
-    # Username defaults to "operator" (not a secret). Password MUST be set
-    # via env — no default, fails fast at boot if missing.
-    DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "operator")
+    # Both username and password MUST be set via env — no defaults.
+    # Fails fast at boot if either is missing (prevents silent misconfig).
+    DASHBOARD_USERNAME = _require("DASHBOARD_USERNAME")
     DASHBOARD_PASSWORD = _require("DASHBOARD_PASSWORD")
 
     # API key for agent endpoints — mandatory, fails fast if unset
