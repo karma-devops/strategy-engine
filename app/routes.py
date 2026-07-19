@@ -47,10 +47,10 @@ async def login_post(request: Request, username: str = Form(...), password: str 
                 status_code=401,
             )
         # Success — issue session cookie (signed token)
-        import hashlib, base64, json, time
+        import hmac, hashlib, base64, json, time
         payload = {"user_id": user.id, "username": user.username, "exp": int(time.time()) + 86400}
         token = base64.b64encode(json.dumps(payload).encode()).decode()
-        sig = hashlib.sha256((token + config.INSTANCE_SECRET_KEY).encode()).hexdigest()
+        sig = hmac.new(config.INSTANCE_SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
         cookie_val = f"{token}.{sig}"
         response = RedirectResponse(url="/app/dashboard", status_code=303)
         response.set_cookie("pulsr_session", cookie_val, max_age=86400, httponly=True, samesite="lax")
@@ -113,10 +113,10 @@ async def signup_post(request: Request, username: str = Form(...), email: str = 
                 status_code=409,
             )
         # Issue session cookie and redirect
-        import hashlib, base64, json, time
+        import hmac, hashlib, base64, json, time
         payload = {"user_id": user.id, "username": user.username, "exp": int(time.time()) + 86400}
         token = base64.b64encode(json.dumps(payload).encode()).decode()
-        sig = hashlib.sha256((token + config.INSTANCE_SECRET_KEY).encode()).hexdigest()
+        sig = hmac.new(config.INSTANCE_SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
         cookie_val = f"{token}.{sig}"
         response = RedirectResponse(url="/app/dashboard", status_code=303)
         response.set_cookie("pulsr_session", cookie_val, max_age=86400, httponly=True, samesite="lax")

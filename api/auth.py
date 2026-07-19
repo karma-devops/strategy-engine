@@ -6,6 +6,11 @@ Authentication dependencies for strategy-engine.
 """
 
 import secrets
+import hmac
+import hashlib
+import base64
+import json
+import time
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -24,15 +29,13 @@ def verify_ui_credentials(request: Request, credentials: HTTPBasicCredentials = 
     if session:
         try:
             token, sig = session.split(".")
-            import hashlib, base64, json, time
-            expected_sig = hashlib.sha256((token + config.INSTANCE_SECRET_KEY).encode()).hexdigest()
+            expected_sig = hmac.new(config.INSTANCE_SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
             if secrets.compare_digest(sig, expected_sig):
                 payload = json.loads(base64.b64decode(token).decode())
                 if payload.get("exp", 0) > int(time.time()):
                     return payload.get("username")
         except Exception:
             pass
-    # Fall back to Basic auth (operator)
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
