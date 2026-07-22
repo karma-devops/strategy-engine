@@ -1052,6 +1052,7 @@ class InstanceRunner:
             self._last_good_account_value = account_value
         snap = AccountSnapshot(
             instance_id=self.id,
+            user_id=self.instance.user_id,
             account_value=account_value,
             withdrawable=withdrawable,
             dry_run=self.instance.dry_run,
