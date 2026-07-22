@@ -408,13 +408,19 @@ class InstanceRunner:
                     # X1/X2 FIX: set a synchronous PENDING sentinel BEFORE calling
                     # _execute_open so a subsequent non-blocking poll (3s interval)
                     # cannot re-enter on a stale signal before the first fill commits.
-                    # Also enforce: entry requires a valid pin/trigger flag from the
-                    # strategy result; if neither pin flag is set for the desired side,
-                    # skip entry (X2: no entry without pin condition met).
-                    pin_ok = (
-                        (desired_side == "LONG" and result.get("valid_trigger_bull"))
-                        or (desired_side == "SHORT" and result.get("valid_trigger_bear"))
-                    )
+                    # Universal entry gate: read the strategy's declared
+                    # entry_config.trigger (neutral receiver, same pattern as
+                    # exit_config). Falls back to legacy top-level
+                    # valid_trigger_* keys for engines not yet emitting
+                    # entry_config. No coupling to strategy-internal names.
+                    ec_entry = result.get("entry_config", {}) or {}
+                    pin_ok = bool(ec_entry.get("trigger"))
+                    if not pin_ok:
+                        # backward-compat: legacy engines emit valid_trigger_*
+                        pin_ok = bool(
+                            (desired_side == "LONG" and result.get("valid_trigger_bull"))
+                            or (desired_side == "SHORT" and result.get("valid_trigger_bear"))
+                        )
                     if not pin_ok:
                         if desired_side == "LONG":
                             add_log(f"[{self.instance.token}] ENTRY skipped — no bullish pin/trigger", "debug", dry_run=self.instance.dry_run)
