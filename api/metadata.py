@@ -3,6 +3,7 @@ Metadata API routes — token info, leverage limits, mintick, fees, system stats
 """
 
 import time
+import os
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,18 @@ from instances.models import get_db, Instance, Trade
 from config import config
 
 router = APIRouter()
+
+# Single source of truth: read from VERSION file (keeps /metadata in sync with main.py/FastAPI version)
+def _read_version() -> str:
+    try:
+        _here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (api/ -> .)
+        _vf = os.path.join(_here, "VERSION")
+        with open(_vf) as _f:
+            return _f.read().strip()
+    except Exception:
+        return "0.0.0"
+
+VERSION = _read_version()
 
 _start_time = time.time()
 
@@ -84,7 +97,7 @@ def get_stats(request: Request, db: Session = Depends(get_db)):
     return {
         "ok": True,
         "uptime": uptime_str,
-        "version": "0.095",
+        "version": VERSION,
         "dry_run": config.DRY_RUN,
         "running_instances": len(running),
         "total_instances": len(instances),
