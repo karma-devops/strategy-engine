@@ -704,12 +704,27 @@ class EngineV1_3Strategy(BaseStrategy):
             "medm_ema": float(round(medm_ema, 8)),
         }
 
+        # ── Entry contract: strategy declares its entry trigger, runner is a
+        # neutral receiver (same pattern as exit_config). Universal check:
+        # LONG triggers on valid_trigger_bull, SHORT on valid_trigger_bear.
+        # This decouples the runner from strategy-internal signal names. ──
+        entry_config = {
+            "side": direction,  # "BUY" / "SELL" / "NEUTRAL"
+            "valid_trigger_bull": bool(metadata.get("valid_trigger_bull")),
+            "valid_trigger_bear": bool(metadata.get("valid_trigger_bear")),
+            "trigger": bool(
+                (direction == "BUY" and metadata.get("valid_trigger_bull"))
+                or (direction == "SELL" and metadata.get("valid_trigger_bear"))
+            ),
+        }
+
         return {
             "token": symbol,
             "signal": signal,
             "direction": direction,
             "metadata": metadata,
             "exit_config": exit_config,
+            "entry_config": entry_config,
         }
 
 
