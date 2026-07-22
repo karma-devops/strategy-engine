@@ -275,10 +275,10 @@
 {% block scripts %}
 {% include 'chat_widget.html' %}
 <script>
-    const equityData = {{ equity_series | tojson | safe }};
-    const tradesData = {{ trades | tojson | safe }};
+    const equityData = {{ equity_series | default([]) | tojson | safe }};
+    const tradesData = {{ trades | default([]) | tojson | safe }};
     // Operator start balance (user setting) — PnL baseline for the dashboard.
-    const START_BALANCE = (typeof {{ start_balance | tojson | safe }} === 'number' && {{ start_balance | tojson | safe }} > 0) ? {{ start_balance | tojson | safe }} : 0.0;
+    const START_BALANCE = (typeof {{ start_balance | default(0.0) | tojson | safe }} === 'number' && {{ start_balance | default(0.0) | tojson | safe }} > 0) ? {{ start_balance | default(0.0) | tojson | safe }} : 0.0;
 
     // ── SVG Pulse Graph (original ai-trading-agent-hl style: absolute min/max
     //     scaling, shadow fills DOWNWARD only to the bottom edge, NO centerline) ──
@@ -402,6 +402,10 @@
         path.style.setProperty('--len', len.toFixed(0));
         path.style.animation = 'none'; void path.offsetWidth; path.style.animation = '';
     }
+    // Moved above the first buildPulse() call to avoid TDZ (fmtUsd referenced inside buildPulse)
+    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const fmtPct = n => ((parseFloat(n) || 0) >= 0 ? '+' : '') + (parseFloat(n) || 0).toFixed(2) + '%';
+    const sideClass = s => (s || 'FLAT').toLowerCase();
     buildPulse();
     function mirrorPulseToMobile() {
         const src = {
@@ -443,10 +447,6 @@
     // Paper and live data are never mixed in the same view.
     let currentMode = 'live';  // 'live', 'paper', or 'all'
     const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
-    const fmtUsd = n => '$' + (parseFloat(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const fmtPct = n => ((parseFloat(n) || 0) >= 0 ? '+' : '') + (parseFloat(n) || 0).toFixed(2) + '%';
-    const sideClass = s => (s || 'FLAT').toLowerCase();
-
     function ctrlBtn(label, cls, fn) {
         const b = document.createElement('button');
         b.className = 'fleet-btn ' + cls;
