@@ -429,6 +429,12 @@ class InstanceRunner:
                             entry_px = float(position.get("entryPx", 0)) if position else 0.0
                             # Detect mintick from HL API markPx precision (authoritative)
                             mintick = detect_mintick(df=df, token=self.instance.token)
+                            # BUG-A fix: `notional` was never assigned in _tick scope -> NameError
+                            # on first valid entry signal. Derive it here (same source as _execute_open/
+                            # reversal block) so size is computed from the actual account balance.
+                            notional = PositionSizer.notional_from_free_balance(
+                                account_value, self.instance.leverage, self.instance.max_position_pct
+                            ) if account_value and account_value > 0 else 0.0
                             self._active_trade = {
                                 "side": desired_side,
                                 "entry_signal_id": None,
