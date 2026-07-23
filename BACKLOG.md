@@ -53,7 +53,7 @@
 |------|----------|--------|------|
 | Kill switch closes positions | P0 | ✅ Already done | `kill_global` → `manager.close_all_positions()` verified |
 | Idempotency on signals | P0 | ⚠️ Partial | X1 PENDING sentinel blocks re-entry; full 60s window-check pending |
-| Circuit breaker | P0 | ❌ Open | add `error_consecutive` counter, trip at 5 |
+| Circuit breaker | P0 | ✅ Done | `instances/runner.py` trips at 5 consecutive tick errors (T1-1) |
 | Withdrawal method exists | P1 | ✅ Already done | `withdraw_to_wallet` at exchange.py:413 |
 | Clock drift check | P1 | ❌ Open | optional NTP sync on startup + hourly |
 | Thread-unsafe DB sessions | P1 | ⚠️ Mitigated | per-tick sessions + D2 retry/backoff |
@@ -69,19 +69,19 @@
 | # | Item | Status | Decision / Note |
 |---|------|--------|-----------------|
 | 32 | 6-engine fleet is actually 1 | ⚠️ **DECIDED: seed engine-1 only** | fix "6-Engine" copy/labels to accurate wording |
-| 41 | No kill-switch UI | ❌ Open | Safety UX — recommend topbar STOP ALL |
-| 42/43 | Two competing dashboards (/shell vs dashboard.html) | ⚠️ **Pending your call** | finish /shell OR delete it |
-| 44 | /dashboard 404 after login | ❌ Open | verify route (may be served at `/`) |
+| 41 | No kill-switch UI | ✅ Done | dashboard.html:543-550 EMERGENCY STOP → /api/v2/kill?reset=false |
+| 42/43 | Two competing dashboards (/shell vs dashboard.html) | ✅ Resolved | No /shell route or shell.html exists; only / and /app/dashboard, both dashboard.html (stale backlog) |
+| 44 | /dashboard 404 after login | 🟡 Stale | route is /app/dashboard, works; no 404 on real path |
 | 46 | monitoring.py redundant dep | ⚠️ Harmless | optional cleanup |
 | 48 | alerts helper unused | ❌ Open | minor |
 | 53 | DEFAULT_FLEET docstring mismatch | ⚠️ Tied to #32 | fix with #32 |
-| 54 | WithdrawalRecord idempotency | ❌ Open | money-movement safety |
-| 59 | landing.html auth broken | ❌ Open | concrete frontend bug |
-| 60 | sessionStorage dead code | ❌ Open | minor |
-| 61 | fake wallet-connect CTAs | ❌ Open | UX honesty |
-| 62 | sw.js dead /static/pages.js | ❌ Open | breaks PWA install (all-or-nothing cache) |
-| 63 | sw.js cache-first on / | ❌ Open | stale shell after deploy |
-| 64 | instance_form missing engine_v6_1 | ❌ Open | concrete |
+| 54 | WithdrawalRecord idempotency | ✅ Done | unique `idempotency_key` column (T1-5) |
+| 59 | landing.html auth broken | ✅ Resolved | T3-0 removed dangerous sessionStorage→Basic-Auth link; doLogin() correct |
+| 60 | sessionStorage dead code | ✅ Resolved | dead `pulsr_auth` removeItem removed (`cf6a1d4`) |
+| 61 | fake wallet-connect CTAs | ✅ Resolved | only legit HL-site wallet link remains (account_secrets.html) |
+| 62 | sw.js dead /static/pages.js | ✅ Resolved | T3-0 sw.js caches static only, never /app/* HTML |
+| 63 | sw.js cache-first on / | ✅ Resolved | T3-0 sw.js network-fetches authenticated HTML |
+| 64 | instance_form missing engine_v6_1 | ✅ Done | v6_1 present in dropdown (renamed strategy_v6_1) |
 | 65 | instance_form.js presets unwired | ❌ Open | dead code |
 | 66 | spec.html dead weight | ⚠️ Move out of templates | minor |
 | — | No fleet alerts badge | ❌ Open | UX backlog |
@@ -101,16 +101,16 @@
 - `9387cfc` — Bugreport batch 1: safety-critical #1/#2/#3/#6
 - `74b5a0e` — Bugreport batch 2: high+medium #4-#23
 
-## Open Work (not yet scheduled) — status as of 2026-07-23
+## Open Work (not yet scheduled) — reconciled 2026-07-23 (post-investigation)
 1. #32 copy fix (seed engine-1 only, correct "6-Engine" labels) — ✅ DONE (T2-1 `23ff458`)
-2. #41 kill-switch UI button (topbar) — ❌ OPEN
+2. #41 kill-switch UI button (topbar) — ✅ DONE (dashboard.html:543-550 EMERGENCY STOP → /api/v2/kill?reset=false)
 3. Circuit breaker (P0) — ✅ DONE (T1-1 `instances/runner.py`, trips at 5 consecutive errors)
-4. Idempotency full window-check (P0) — ⚠️ PARTIAL (X1 sentinel blocks re-entry; 60s window-check pending)
+4. Idempotency full window-check (P0) — 🟡 PARTIAL (X1 sentinel blocks re-entry; 60s window-check pending)
 5. Liquidation detection (P2) — ❌ OPEN (exit-reason tracking)
-6. Clock drift (P1, optional) — ❌ OPEN (NTP sync)
-7. Report 3 frontend bugs #44, #59-#66 — ❌ OPEN (see TASK-LIST §BUGHUNT + UI-WALKTHROUGH)
-8. #42/#43 architectural decision (finish /shell or delete) — ⚠️ PENDING operator call
-9. #54 WithdrawalRecord idempotency — ✅ DONE (T1-5)
+6. Clock drift (P1, optional) — ❌ OPEN (NTP sync; low priority)
+7. #42/#43 two competing dashboards — ✅ RESOLVED (only / → dashboard() and /app/dashboard → dashboard_app(), both render dashboard.html; no /shell route or shell.html exists — was stale backlog)
+8. #44 /dashboard 404 after login — 🟡 STALE (route is /app/dashboard, works; minor doc error, no 404 on the real path)
+9. #54 WithdrawalRecord idempotency — ✅ DONE (T1-5, unique idempotency_key column)
 10. T3-0 backtest `user` NameError — ✅ DONE (`98ca408`)
 11. BUG-7 `/app/trades` Active Positions — ✅ DONE (`4fe89df`)
 12. BUG-8 kill-switch API boundary — ✅ DONE (P0, `c88c669`, live-verified)
@@ -118,11 +118,13 @@
 14. BUG-11/BUG-12 withdrawal/deposit round-trip — ❌ DEFERRED (live funds, explicit go required)
 15. T3-8 onboarding popup — ❌ OPEN
 16. T3-9 email 2FA — ❌ OPEN (parked, no SMTP)
-17. D4 PAPER/LIVE badge per trade row — ❌ OPEN
+17. D4 PAPER/LIVE badge per trade row — ✅ DONE (dashboard.html:83 renders `paper` span when dry_run)
 18. D5 dry_run toggle end-to-end verify — ❌ OPEN
 19. B3 per-user log persistence — ❌ OPEN
 20. B9 drawdown >50% spike filter — ❌ OPEN
 21. B5/B6 schema hardening (NOT NULL + cascade) — ❌ OPEN
+22. #59 landing.html auth broken — ✅ RESOLVED (T3-0 removed dangerous sessionStorage→Basic-Auth link; doLogin() correct; was stale backlog)
+23. #60–#66 sessionStorage dead code / fake wallet CTAs / sw.js PWA — ✅ RESOLVED (T3-0; dead `pulsr_auth` removeItem removed 2026-07-23 `cf6a1d4`; only legit HL-site wallet link remains; sw.js caches static only, never /app/*)
 
 ## Decisions Locked
 - **#32:** No default fleet. Seed engine-1 only. Fix misleading copy.
