@@ -75,3 +75,7 @@ main/
 ## License
 
 [Specify]
+
+## Version
+
+Current: **v2.02** (see `VERSION` file; `api/metadata.py` reports it via `/api/v2/metadata`). Docs: `CONTEXT.md` (MAP), `NOTES.md` (LOG), `docs/TASK-LIST.md` (WORK), `BETA-ROADMAP.md` (PLAN).
