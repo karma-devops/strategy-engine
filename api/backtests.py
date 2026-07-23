@@ -34,7 +34,7 @@ class RunBacktestRequest(BaseModel):
     timeframe: str | None = None
     mode: str | None = None
     profile: str | None = None
-    activation: float | None = None
+    activation: int | None = None
     offset: int | None = None
     leverage: int | None = None
     tick_mode: int = Field(default=1, ge=1, le=28)  # 1=OHLC, 4=basic, 28=high

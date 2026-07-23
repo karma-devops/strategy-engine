@@ -91,7 +91,7 @@
             days: parseInt(document.getElementById('bt-days').value),
             leverage: parseInt(document.getElementById('bt-lev').value),
             mode: "Scalp",
-            profile: "balanced"
+            profile: "Scalp Default (10/4)"
         };
         try {
             const r = await fetch(API_BASE + '/api/v2/backtests/run', {

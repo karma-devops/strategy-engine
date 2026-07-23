@@ -487,7 +487,18 @@ class EngineV6_1Strategy(BaseStrategy):
             "medm_ema": float(round(medm_ema, 8)),
         }
 
-        return {"token": symbol, "signal": signal, "direction": direction, "metadata": metadata, "exit_config": exit_config}
+        # ── Entry contract: strategy declares its entry trigger ──
+        entry_config = {
+            "side": direction,
+            "valid_trigger_bull": bool(valid_trigger_bull),
+            "valid_trigger_bear": bool(valid_trigger_bear),
+            "trigger": bool(
+                (direction == "BUY" and valid_trigger_bull) or
+                (direction == "SELL" and valid_trigger_bear)
+            ),
+        }
+
+        return {"token": symbol, "signal": signal, "direction": direction, "metadata": metadata, "exit_config": exit_config, "entry_config": entry_config}
 
 
 if __name__ == "__main__":

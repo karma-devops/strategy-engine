@@ -628,12 +628,26 @@ class EngineV1Strategy(BaseStrategy):
             "medm_ema": float(round(float(medm_ema.iloc[-1]), 8)),
         }
 
+        # ── Entry contract: strategy declares its entry trigger ──
+        val_trigger_bull = bool(valid_trigger_bull.iloc[-1]) if hasattr(valid_trigger_bull, "iloc") else bool(valid_trigger_bull)
+        val_trigger_bear = bool(valid_trigger_bear.iloc[-1]) if hasattr(valid_trigger_bear, "iloc") else bool(valid_trigger_bear)
+        entry_config = {
+            "side": direction,
+            "valid_trigger_bull": val_trigger_bull,
+            "valid_trigger_bear": val_trigger_bear,
+            "trigger": bool(
+                (direction == "BUY" and val_trigger_bull) or
+                (direction == "SELL" and val_trigger_bear)
+            ),
+        }
+
         return {
             "token": symbol,
             "signal": round(float(signal), 4),
             "direction": direction,
             "metadata": metadata,
             "exit_config": exit_config,
+            "entry_config": entry_config,
         }
 
 

@@ -148,16 +148,16 @@ class TestP0_CriticalVulns:
     @pytest.mark.asyncio
     async def test_kill_switch_blocks_start(self, client, auth_headers, clean_engine):
         """With kill switch enabled, starting an engine must be blocked."""
-        await client.put("/api/v2/safety/killswitch", json={"enabled": True}, headers=auth_headers)
+        # Use actual global kill switch endpoint to enable
+        await client.post("/api/v2/kill/global", headers=auth_headers)
         try:
             r = await client.post(
                 f"/api/v2/instances/{clean_engine['slug']}/start", headers=auth_headers
             )
             assert r.status_code in (403, 409), f"kill switch did not block start: {r.status_code}"
         finally:
-            await client.put(
-                "/api/v2/safety/killswitch", json={"enabled": False}, headers=auth_headers
-            )
+            # Use actual global kill switch endpoint to disable
+            await client.post("/api/v2/kill/global/reset", headers=auth_headers)
 
     @pytest.mark.asyncio
     async def test_per_user_isolation_summary(self, client, auth_headers, test_user):
