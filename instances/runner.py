@@ -75,6 +75,7 @@ class InstanceRunner:
         self._prev_medm_ema: Optional[float] = None
         self._last_bar_time: Optional[object] = None  # track bar close for EMA cross
         self._last_entry_bar_time: Optional[object] = None  # Pine: bar_index > lastEntryBar
+        self._last_entry_attempt_ts: float = 0.0  # Idempotency P0: epoch sec of last entry attempt (60s cooldown)
         self._stale_position_retries: int = 0  # consecutive None ticks while in trade
         self._consecutive_errors: int = 0  # circuit breaker: consecutive tick exceptions
         self._hl = get_hyperliquid_client(instance)
@@ -408,29 +409,36 @@ class InstanceRunner:
                 # Pine: bar_index > lastEntryBar — one entry per bar
                 current_bar_time = df["timestamp"].iloc[-1] if "timestamp" in df.columns else None
                 if desired_side and (self._last_entry_bar_time is None or current_bar_time != self._last_entry_bar_time):
-                    # X1/X2 FIX: set a synchronous PENDING sentinel BEFORE calling
-                    # _execute_open so a subsequent non-blocking poll (3s interval)
-                    # cannot re-enter on a stale signal before the first fill commits.
-                    # Universal entry gate: read the strategy's declared
-                    # entry_config.trigger (neutral receiver, same pattern as
-                    # exit_config). Falls back to legacy top-level
-                    # valid_trigger_* keys for engines not yet emitting
-                    # entry_config. No coupling to strategy-internal names.
-                    ec_entry = result.get("entry_config", {}) or {}
-                    pin_ok = bool(ec_entry.get("trigger"))
-                    if not pin_ok:
-                        # backward-compat: legacy engines emit valid_trigger_*
-                        pin_ok = bool(
-                            (desired_side == "LONG" and result.get("valid_trigger_bull"))
-                            or (desired_side == "SHORT" and result.get("valid_trigger_bear"))
-                        )
-                    if not pin_ok:
-                        if desired_side == "LONG":
-                            add_log(f"[{self.instance.token}] ENTRY skipped — no bullish pin/trigger", "debug", dry_run=self.instance.dry_run)
-                        else:
-                            add_log(f"[{self.instance.token}] ENTRY skipped — no bearish pin/trigger", "debug", dry_run=self.instance.dry_run)
+                    # Idempotency P0: 60s cooldown after ANY entry attempt
+                    # (incl. failed/aborted opens) so a stalled HL fill or
+                    # API lag cannot trigger a duplicate entry on the next poll.
+                    if time.time() - self._last_entry_attempt_ts < 60.0:
+                        add_log(f"[{self.instance.token}] ENTRY skipped — {60.0 - (time.time() - self._last_entry_attempt_ts):.0f}s entry cooldown active", "debug", dry_run=self.instance.dry_run)
                     else:
-                        self._active_trade = "PENDING"  # X1 sentinel — blocks re-entry on next poll
+                        # X1/X2 FIX: set a synchronous PENDING sentinel BEFORE calling
+                        # _execute_open so a subsequent non-blocking poll (3s interval)
+                        # cannot re-enter on a stale signal before the first fill commits.
+                        # Universal entry gate: read the strategy's declared
+                        # entry_config.trigger (neutral receiver, same pattern as
+                        # exit_config). Falls back to legacy top-level
+                        # valid_trigger_* keys for engines not yet emitting
+                        # entry_config. No coupling to strategy-internal names.
+                        ec_entry = result.get("entry_config", {}) or {}
+                        pin_ok = bool(ec_entry.get("trigger"))
+                        if not pin_ok:
+                            # backward-compat: legacy engines emit valid_trigger_*
+                            pin_ok = bool(
+                                (desired_side == "LONG" and result.get("valid_trigger_bull"))
+                                or (desired_side == "SHORT" and result.get("valid_trigger_bear"))
+                            )
+                        if not pin_ok:
+                            if desired_side == "LONG":
+                                add_log(f"[{self.instance.token}] ENTRY skipped - no bullish pin/trigger", "debug", dry_run=self.instance.dry_run)
+                            else:
+                                add_log(f"[{self.instance.token}] ENTRY skipped - no bearish pin/trigger", "debug", dry_run=self.instance.dry_run)
+                        else:
+                            self._last_entry_attempt_ts = time.time()  # Idempotency P0: stamp attempt
+                            self._active_trade = "PENDING"  # X1 sentinel - blocks re-entry on next poll
                         executed, entry_cost = self._execute_open(db, hl, desired_side, account_value, position, result)
                         if executed:
                             # Strategy exit_config is read at exit time (neutral receiver)
@@ -496,6 +504,7 @@ class InstanceRunner:
                             # Refresh position — should be None after close
                             position = hl.get_position(self.instance.token)
                             if position is None:
+                                self._last_entry_attempt_ts = time.time()  # Idempotency P0: stamp reversal re-entry
                                 opened, entry_cost_rev = self._execute_open(db, hl, desired_side, account_value, position, result)
                                 if opened:
                                     entry_px = float(position.get("entryPx", 0)) if position else 0.0
