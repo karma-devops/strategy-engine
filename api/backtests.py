@@ -83,7 +83,7 @@ def run_backtest_endpoint(
     )
 
     # Z6/Z7: persist to ISOLATED store (data/backtest.db), never shared strategy_engine.db
-    from testing.backtest_store import BacktestRun, save_run, _trade_to_dict
+    from testing.backtest_store import BacktestRun, save_run, init_store, _trade_to_dict
     from datetime import datetime
     record = BacktestRun(
         id=result.id,
@@ -110,6 +110,7 @@ def run_backtest_endpoint(
         equity_curve_json=result.equity_curve,
         error_message=result.error_message,
     )
+    init_store()
     save_run(record)
 
     return {
@@ -225,7 +226,7 @@ def replay_backtest(
     )
     
     # Z6/Z7: persist to ISOLATED store (data/backtest.db), never shared strategy_engine.db
-    from testing.backtest_store import BacktestRun, save_run, _trade_to_dict
+    from testing.backtest_store import BacktestRun, save_run, init_store, _trade_to_dict
     from datetime import datetime
     record = BacktestRun(
         id=result.id,
@@ -252,6 +253,7 @@ def replay_backtest(
         equity_curve_json=result.equity_curve,
         error_message=result.error_message,
     )
+    init_store()
     save_run(record)
     
     return {

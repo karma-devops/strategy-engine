@@ -167,8 +167,44 @@ def _run_to_dict(r: BacktestRun) -> dict:
     }
 
 
+def _trade_to_dict(t) -> dict:
+    """Serialize a backtest trade (BacktestTrade dataclass or object) to JSON-safe dict.
+
+    Matches the trade shape emitted by backtests.runner.BacktestResult.to_dict so
+    the persisted trades_json is consistent with the live result payload.
+    Handles both dataclass instances and plain objects/attrs defensively.
+    """
+    def _iso(v):
+        return v.isoformat() if hasattr(v, "isoformat") else (v if v is not None else None)
+
+    def _get(attr, default=None):
+        return getattr(t, attr, default) if hasattr(t, attr) else default
+
+    return {
+        "entry_bar": _get("entry_bar"),
+        "entry_time": _iso(_get("entry_time")),
+        "entry_price": _get("entry_price", 0.0),
+        "side": _get("side", ""),
+        "exit_bar": _get("exit_bar"),
+        "exit_time": _iso(_get("exit_time")),
+        "exit_price": _get("exit_price"),
+        "pnl_pct": _get("pnl_pct", 0.0),
+        "pnl_usd": _get("pnl_usd", 0.0),
+        "bars_held": _get("bars_held", 0),
+        "qty": _get("qty", 0.0),
+        "position_size": _get("position_size", 0.0),
+        "stop_loss_price": _get("stop_loss_price"),
+        "trail_activation": _get("trail_activation", 0.0),
+        "trail_offset": _get("trail_offset", 0.0),
+        "best_price": _get("best_price", 0.0),
+        "trail_active": _get("trail_active", False),
+        "trail_stop_price": _get("trail_stop_price"),
+    }
+
+
 __all__ = [
     "Base", "Session", "init_store", "wipe_db",
     "BacktestRun", "BacktestTrade",
     "save_run", "update_run", "add_trade", "get_run", "list_runs",
+    "_run_to_dict", "_trade_to_dict",
 ]
