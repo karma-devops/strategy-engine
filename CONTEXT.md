@@ -3,7 +3,7 @@
 > **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
 > Companion docs (consolidated 2026-07-19): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/bugreport.md**, **docs/task-priorities.md**, **HANDOVER-UI-WALKTHROUGH.md**.
 > Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
-> Do not commit to GitHub (local-only). Version: **v1.98**.
+> Do not commit to GitHub (local-only). Version: **v2.02** (synced 2026-07-23; prior doc freeze was v1.98 @ 2026-07-19).
 
 ---
 
@@ -201,11 +201,17 @@ Three-port architecture: `strategy_config` (DB params, UI-editable) · `entry_co
 ## 10. Version & Audit State (reconciled 2026-07-18, end-of-day)
 
 ### Version
-- **Actual: v1.98** (VERSION file, git tags v1.94→v1.98).
-- **✅ FIXED (D1):** `main.py` now reads `version=VERSION` (was hardcoded `"0.095"`). `/openapi.json` correctly reports `"version":"v1.98"`. Resolved 2026-07-18.
-- Session 2026-07-18: full refactor execution — Z1–Z7 (route split, menu, engine detail, design-system, position card, backtest store, unified runner) + X1–X4 (bugreport fixes) + D2 (auto-restart) + A4 (liq enrichment) + B7 (kill-switch close). **NOT yet stable/beta** — see §13.
+- **Actual: v2.02** (VERSION file, synced 2026-07-22→07-23; `metadata.py` reads VERSION file so `/api/v2/metadata`/`/stats` report v2.02 — `041d83e`, `529a3b2`).
+- **✅ FIXED (D1):** `main.py` now reads `version=VERSION` (was hardcoded `"0.095"`). `/openapi.json` correctly reports the version. Resolved 2026-07-18; version-sync hardened 2026-07-22.
+- **Entry-gate UNIVERSAL repair (2026-07-22, `5cfcbf5` + `3805b2e`):** v1_3 now emits a strategy-agnostic `entry_config` (`.trigger = valid_trigger_bull` for LONG / `valid_trigger_bear` for SHORT). `instances/runner.py` gates entry on `entry_config.trigger` (neutral receiver) instead of strategy-internal signal names; legacy `valid_trigger_*` kept as fallback. Fixes the persistent `"ENTRY skipped - no bullish pin/trigger"` despite `pin=bull`+`pierce=bull`. Verified: entries now execute.
+- **BUG-A / BUG-B (2026-07-22, `ad2180b` + `fa9bac9`):** `notional` assigned before entry active-trade dict (NameError had blocked ALL entries); `AccountSnapshot.user_id` set so dashboard Pulse Graph seed is scoped (was always NULL → empty graph).
+- **TDZ fix (2026-07-22, `d9ef794`):** `dashboard.html` moved `fmtUsd`/`fmtPct`/`sideClass` consts above first `buildPulse()` call — resolved TDZ ReferenceError that aborted the page script before SSE/Console init.
+- **Trailing-stop PineScript parity (2026-07-23, `6a0d4e0`):** `_evaluate_exit` rewritten to match original PineScript `strategy.exit` semantics (trail_points = distance, trail_offset = activation move, track best_price from entry). Preserves original intent; closes P1 exit-audit (positions held too long / exits not firing).
+- **Paper route + backtest-import fixes (2026-07-23, `37701b1` + `ce645be`):** added missing `/app/testing/paper` route (paper UI 404); resolved 500 on `POST /api/v2/backtests/run` (ImportError `_trade_to_dict` in `api/backtests.py` → corrected symbol in `testing/backtest_store.py`).
+- **PR #1 merged (2026-07-23, `7b7ee11`):** `karma-devops/fix-strategies-and-paper-trading-simulation` — strategy execution engine fix, config standardization, paper-trading simulation fix. Local `main` == `origin/main`.
+- **Perp-account value UI (2026-07-23, `c9d630a`):** dashboard + account overview now show HL perp-only account value alongside total portfolio.
 
-### Live State (confirmed 2026-07-18, end-of-day)
+### Live State (confirmed 2026-07-23, end-of-day)
 - Server 8792 UP, `dry_run=false`.
 - engine-1: FARTCOIN Scalp v1.3, RUNNING LIVE, LONG ~390 @ ~$0.1296 (re-adopted from HL), liq=0.1228 (A4 live-enriched), account ~$5.1.
 - engine-2: HYPE Paper v1.3, STOPPED, FLAT, dry_run=true.
@@ -248,13 +254,19 @@ Global `.env` DRY_RUN=false → live-connected. Per-instance `dry_run=true` → 
 
 ---
 
-## 13. Stability Status (2026-07-18 end-of-day)
+## 13. Stability Status (synced 2026-07-23)
 
-**⚠️ NOT STABLE. NOT BETA.** All refactor tasks (Z1–Z7, X1–X4, A4, B7, D1, D2) are code-complete and live-verified at the route/import level, but:
-- **No test suite executed** — correctness is asserted via live probes + import checks, not unit/integration tests.
-- **UI wiring only partially verified** — `position-card.js` is wired to dashboard but `#pos-grid` population not visually confirmed with a live position render; `engine_detail.html` mode tag added but not visually checked.
-- **Bug surface unknown** — next phase is systematic bughunting (UI + wiring + data flow) before any stability claim.
-- **manager.py D2 patch** required a restore+re-apply cycle (class-structure corruption) — indicates edit discipline needs tighter verification before beta.
+**⚠️ NOT STABLE. NOT BETA.** Code-complete + live-verified at route/import level through 2026-07-23:
+- 2026-07-18: Z1–Z7 (route split, menu, engine detail, design-system, position card, backtest store, unified runner) + X1–X4 + D2 (auto-restart) + A4 (liq enrichment) + B7 (kill-switch close).
+- 2026-07-22: entry-gate UNIVERSAL repair (`entry_config.trigger`), BUG-A/B (notional NameError + AccountSnapshot.user_id), TDZ dashboard fix, version sync to v2.01/v2.02.
+- 2026-07-23: PR #1 merged, trailing-stop PineScript parity, paper route 404 fix, backtest-import 500 fix, perp-account-value UI, test-drift fixes (phase1/2/5).
+
+Outstanding before any beta claim:
+- **No `tests/` suite executed recently** — correctness asserted via live probes + import checks, not unit/integration runs. Phase1/2/5 test-drift fixed (07-23) but full suite not run green.
+- **UI wiring only partially verified** — `#pos-grid` population not visually confirmed with a live position; engine_detail mode tag not visually checked.
+- **Bug surface unknown** — systematic bughunting (UI + wiring + data flow) still pending (next phase after this doc sync).
+- **Open live-safety items:** BUG-11/BUG-12 withdrawal/deposit round-trip DEFERRED (live funds, explicit go required); D5 dry_run toggle end-to-end verify; B9 drawdown >50% spike filter; B3 per-user log persistence; B5/B6 schema hardening.
+- **Uncommitted on disk:** `engine/registry.py` carries a strategy/engine labeling-prep diff (terminology block + dual-namespace keys) from the 2026-07-23 session — NOT yet committed; flag for operator decision.
 
 **Next phase:** bughunting + UI frontend improvement + wiring verification. See docs/TASK-LIST.md (TIER 0/1/2 + BUGHUNT group) and BETA-ROADMAP.md.
 
