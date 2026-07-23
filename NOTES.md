@@ -2143,3 +2143,20 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - HEAD `ce645be` → doc-sync `ad43642` (CONTEXT.md v2.02 + fixes recorded).
 - engine-1 RUNNING LIVE (FARTCOIN), engine-2 STOPPED (paper), main UP :8792.
 - `tests/` phase1/2/5 drift fixed but full suite NOT run green. BUG-11/BUG-12 (withdrawal/deposit) DEFERRED (live funds). Bughunt pass pending (next phase).
+
+---
+
+## ═══ BUGHUNT PASS + B1 FIX (2026-07-23, Asia/Makassar) ═══
+
+**Scope:** read-only full-repo scan (128 Python files compile clean) + targeted live-capital path review, then B1 fix.
+
+### Findings
+- **B1 (HIGH, real defect — FIXED this pass):** `app/static/position-card.js:143` Close-position button sent `Authorization: Basic btoa('operator:operator')` instead of `X-API-Key`. For any non-operator session user this 401'd → position could not be closed from UI. Fixed → `X-API-Key: window.API_KEY || ''` (mirrors `hydratePositions` at line 266 which already did it right). Commit `f4fdaec`. JS structural-valid (brace/paren balanced), no hardcoded creds remain anywhere in `app/static`.
+- **B2 (DEFERRED, live funds — NOT touched):** `core/exchange.py:462` withdrawal uses `self._exchange.withdraw(target, amount)` (wrong method + arg order; correct is `withdraw_from_bridge(amount, destination)`). Per operator standing directive, withdrawal/deposit round-trip stays deferred until explicit go.
+- **EMA-exit claim (REFUTED):** Operator submitted a bash narrative asserting `runner.py` updates `_prev_fast_ema` to the *current* bar EMA before `_evaluate_exit`, so `prev_f == curr_f` and EMA crossunder "never fires." **Verified FALSE against actual code.** The assignment at `runner.py:260` is guarded by `if current_bar_time != self._last_bar_time` (line 257) — runs once per new bar, lags one bar. `_evaluate_exit` (line 476→1025) compares `prev_f = self._prev_fast_ema` (prior bar) vs `curr_f = ec.get("fast_ema")` (current bar) = correct Pine `ta.crossunder` bar-to-bar semantics. Crossunder DOES fire. Note: the submitted bash block read **no files** (it only printed the operator's own narrative) — conclusion rejected on code evidence. Recorded so it doesn't resurface.
+- **Verified OK (no action):** entry-gate universal (`entry_config.trigger`, `runner.py:419-434`); trailing-stop PineScript parity (`_evaluate_exit` + `engine/v1_3.py` emissions); circuit breaker trips at 5 (`runner.py:190-214`); SSE `/stream` auth mounted via `Depends(verify_ui_credentials)` at `main.py:219` (T2-7 "gap" was stale); `float(position.get(...,0))` paths default-safe; `_execute_flip` empty `{}` is intended reversal-within-signal.
+
+### BugHunt status
+- Genuine new defect from this pass: **B1 (fixed)**. Everything else verified-correct or already-deferred.
+- Code clean + compiles. Repo working tree now has ONLY the long-standing uncommitted `engine/registry.py` labeling-prep diff (operator decision pending).
+- **Stability still NOT STABLE / NOT BETA** — full `tests/` suite not run green; UI visual verification (BUGHUNT group) not closed. See CONTEXT §13 / BETA-ROADMAP §8.
