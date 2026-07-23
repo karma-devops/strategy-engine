@@ -27,7 +27,7 @@ def _make_instance(slug="engine-idem", token="MOCK"):
             slug=slug,
             name="Idem Test",
             token=token,
-            strategy_id="engine_v1_3",
+            strategy_id="strategy_v1_3",
             mode="Scalp",
             profile="aggressive_8_3",
             timeframe="15m",

@@ -29,7 +29,7 @@ def main():
         "slug": "engine-test",
         "name": "Test Engine",
         "token": "DOGE",
-        "strategy_id": "engine_v1_3",
+        "strategy_id": "strategy_v1_3",
     }
     create_resp = client.post("/api/v2/instances", json=create_payload, headers={"X-API-Key": "testkey"})
     print("POST /instances:", create_resp.status_code, create_resp.json())

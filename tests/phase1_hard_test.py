@@ -42,7 +42,7 @@ print("  OK:", len(files), "files compiled")
 # Fernet encryption
 print("[2/8] Fernet encrypt/decrypt per-instance key...")
 from instances.models import Instance
-inst = Instance(slug="t-fernet", name="Fernet Test", token="FARTCOIN", strategy_id="engine_v1_3")
+inst = Instance(slug="t-fernet", name="Fernet Test", token="FARTCOIN", strategy_id="strategy_v1_3")
 inst.set_private_key("0xdeadbeef")
 assert inst.get_private_key() == "0xdeadbeef"
 print("  OK")
@@ -135,7 +135,7 @@ form_data = {
     "slug": "manual-test",
     "name": "Manual Test Instance",
     "token": "BTC",
-    "strategy_id": "engine_v1_3",
+    "strategy_id": "strategy_v1_3",
     "mode": "Scalp",
     "profile": "aggressive_8_3",
     "timeframe": "15m",
@@ -161,7 +161,7 @@ form_data2 = {
     "slug": "cred-test",
     "name": "Cred Test",
     "token": "ETH",
-    "strategy_id": "engine_v1_3",
+    "strategy_id": "strategy_v1_3",
     "mode": "Scalp",
     "profile": "aggressive_8_3",
     "timeframe": "15m",

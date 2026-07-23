@@ -3,8 +3,8 @@
 Unified runner for strategy-engine backtesting and paper testing.
 
 Usage:
-    python testing/runner.py --mode backtest --strategy engine_v1_3 --symbol FARTCOIN --start 2026-07-10 --end 2026-07-17
-    python testing/runner.py --mode paper    --strategy engine_v1_3 --symbol FARTCOIN
+    python testing/runner.py --mode backtest --strategy strategy_v1_3 --symbol FARTCOIN --start 2026-07-10 --end 2026-07-17
+    python testing/runner.py --mode paper    --strategy strategy_v1_3 --symbol FARTCOIN
 
 Modes:
 - backtest: historical simulation (isolated store, no live orders)
@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description="Strategy-engine unified test runner")
     parser.add_argument("--mode", choices=["paper", "backtest"], required=True,
                         help="paper = forward-test (dry_run); backtest = historical sim")
-    parser.add_argument("--strategy", required=True, help="Strategy id (e.g. engine_v1_3)")
+    parser.add_argument("--strategy", required=True, help="Strategy id (e.g. strategy_v1_3)")
     parser.add_argument("--symbol", required=True, help="Token symbol (e.g. FARTCOIN)")
     parser.add_argument("--start", help="Backtest start date YYYY-MM-DD")
     parser.add_argument("--end", help="Backtest end date YYYY-MM-DD")
