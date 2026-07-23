@@ -983,31 +983,35 @@ class InstanceRunner:
             elif side == "SHORT" and bar_high >= float(sl):
                 return "Stop Loss"
 
-        # 2. Trailing stop (reads all params from exit_config)
-        # Pine: strategy.exit(trail_points=act, trail_offset=off) — no grace period
+        # 2. Trailing stop — EXACT PineScript semantics.
+        # Pine: strategy.exit(trail_points=activeActivation, trail_offset=activeOffset)
+        #   - trail_points  = TRAILING DISTANCE (stop sits trail_points ticks below running peak)
+        #   - trail_offset  = ACTIVATION MOVE (price must travel this far from entry before trailing engages)
+        # Pine trails from entry (calc_on_every_tick=true); no extra gate beyond trail_offset.
         mintick = float(active_trade.get("mintick", 0.00001))
-        trail_act = float(ec.get("trail_activation", 0))
-        trail_off = float(ec.get("trail_offset", 0))
-        if not active_trade.get("trail_active") and trail_act > 0:
-            if side == "LONG":
-                if bar_high >= active_trade["entry_price"] + trail_act * mintick:
-                    active_trade["trail_active"] = True
-            else:
-                if bar_low <= active_trade["entry_price"] - trail_act * mintick:
-                    active_trade["trail_active"] = True
-        if active_trade.get("trail_active"):
+        # NOTE: v1_3 emits exit_config.trail_activation == Pine's trail_points (distance)
+        #       and exit_config.trail_offset    == Pine's trail_offset (activation move).
+        trail_dist = float(ec.get("trail_activation", 0))   # distance (Pine trail_points)
+        trail_act_move = float(ec.get("trail_offset", 0))   # activation move (Pine trail_offset)
+        if trail_dist > 0:
+            # Track running peak from entry (Pine trails the highest-high since entry).
             if side == "LONG":
                 if bar_high > active_trade.get("best_price", 0):
                     active_trade["best_price"] = bar_high
-                trail_stop = active_trade["best_price"] - trail_off * mintick
-                if bar_low <= trail_stop:
-                    return "Trailing Stop"
-            else:
+                # Activation: price must move trail_act_move ticks beyond entry first.
+                activated = (bar_high >= active_trade["entry_price"] + trail_act_move * mintick)
+                if activated:
+                    trail_stop = active_trade["best_price"] - trail_dist * mintick
+                    if bar_low <= trail_stop:
+                        return "Trailing Stop"
+            else:  # SHORT
                 if bar_low < active_trade.get("best_price", float("inf")):
                     active_trade["best_price"] = bar_low
-                trail_stop = active_trade["best_price"] + trail_off * mintick
-                if bar_high >= trail_stop:
-                    return "Trailing Stop"
+                activated = (bar_low <= active_trade["entry_price"] - trail_act_move * mintick)
+                if activated:
+                    trail_stop = active_trade["best_price"] + trail_dist * mintick
+                    if bar_high >= trail_stop:
+                        return "Trailing Stop"
 
         # 3. Take-profit: candle high/low touches static entry take-profit level from active_trade
         tp = active_trade.get("take_profit")
