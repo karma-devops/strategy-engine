@@ -270,7 +270,7 @@ setInterval(() => {
         .then(r => r.json())
         .then(j => {
             if (!j || !j.ok) return;
-            const v = (j.account_value_equity !== undefined) ? j.account_value_equity : null;
+            const v = (j.account_value !== undefined) ? j.account_value : null;
             if (v == null) return;
             // Hide empty state on first live data
             if (_equityEmpty) _equityEmpty.style.display = 'none';

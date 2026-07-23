@@ -20,12 +20,18 @@ from typing import Optional
 
 @dataclass
 class ExecutionCostModel:
-    """Realistic cost calculation for crypto perps."""
+    """Realistic cost calculation for crypto perps.
+
+    IMPORTANT NOTE ON BPS FIELD NAMING:
+    The fields `slippage_bps` and `spread_bps` actually store DECIMAL FRACTIONS of notional,
+    not raw basis points. For example, Decimal("0.0005") is 5 bps (0.05% of notional).
+    Multiply directly by notional to get absolute cost. Do not pass raw values like '5.0' or '5'.
+    """
 
     maker_fee: Decimal = Decimal("0.0002")      # 0.02% (typical maker)
     taker_fee: Decimal = Decimal("0.0005")       # 0.05% (typical taker)
-    slippage_bps: Decimal = Decimal("0.0005")    # 5 bps (liquid meme)
-    spread_bps: Decimal = Decimal("0.0003")      # 3 bps typical
+    slippage_bps: Decimal = Decimal("0.0005")    # 5 bps (liquid meme) represented as decimal fraction
+    spread_bps: Decimal = Decimal("0.0003")      # 3 bps typical represented as decimal fraction
 
     def calculate_entry_cost(
         self,

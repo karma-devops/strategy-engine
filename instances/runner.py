@@ -75,10 +75,13 @@ class InstanceRunner:
         self._prev_medm_ema: Optional[float] = None
         self._last_bar_time: Optional[object] = None  # track bar close for EMA cross
         self._last_entry_bar_time: Optional[object] = None  # Pine: bar_index > lastEntryBar
-        self._equity_history: list = []  # closed-trade equity values for adaptive strategy
         self._stale_position_retries: int = 0  # consecutive None ticks while in trade
         self._consecutive_errors: int = 0  # circuit breaker: consecutive tick exceptions
         self._hl = get_hyperliquid_client(instance)
+
+        # Paper Trading state simulation
+        self._paper_balance = float(instance.start_balance) if (instance.start_balance and instance.start_balance > 0) else 1000.0
+        self._equity_history: list = [self._paper_balance] if instance.dry_run else []  # closed-trade equity values
 
     def _refresh_hl_client(self):
         """Create a fresh HyperLiquidClient using the instance's resolved credentials.
@@ -890,28 +893,42 @@ class InstanceRunner:
             pnl = 0.0
             pnl_pct = 0.0
 
-            # Query HL user_fills for the actual exit price and closed PnL
-            try:
-                from core.exchange import hl_client as _global_hl
-                fills = _global_hl._info.user_fills(_global_hl._query_address())
-                token_fills = [f for f in fills if f.get("coin") == self.instance.token]
-                if token_fills:
-                    last_fill = token_fills[-1]
-                    fill_px = float(last_fill.get("px", 0))
-                    fill_pnl = float(last_fill.get("closedPnl", 0))
-                    if fill_px > 0:
-                        mark_px = fill_px
-                    if fill_pnl != 0:
-                        pnl = fill_pnl
-                    add_log(
-                        f"[{self.instance.token}] Exit fill from HL: px={fill_px:.6f} pnl=${fill_pnl:.4f}",
-                        "info", dry_run=self.instance.dry_run,
-                    )
-            except Exception as e:
-                print(f"[WARN] Could not fetch exit fill from HL: {e}")
+            if self.instance.dry_run:
+                # Direct mathematical calculation for paper trading
+                raw_pnl = (mark_px - entry_px) / entry_px if entry_px > 0 else 0.0
+                if side == "SHORT":
+                    raw_pnl = -raw_pnl
+                pnl_pct = raw_pnl * self.instance.leverage * 100
+                pnl = (size * entry_px) * raw_pnl * self.instance.leverage - (entry_cost + exit_cost)
+            else:
+                # Query HL user_fills for the actual exit price and closed PnL
+                try:
+                    from core.exchange import hl_client as _global_hl
+                    fills = _global_hl._info.user_fills(_global_hl._query_address())
+                    token_fills = [f for f in fills if f.get("coin") == self.instance.token]
+                    if token_fills:
+                        last_fill = token_fills[-1]
+                        fill_px = float(last_fill.get("px", 0))
+                        fill_pnl = float(last_fill.get("closedPnl", 0))
+                        if fill_px > 0:
+                            mark_px = fill_px
+                        if fill_pnl != 0:
+                            pnl = fill_pnl
+                        add_log(
+                            f"[{self.instance.token}] Exit fill from HL: px={fill_px:.6f} pnl=${fill_pnl:.4f}",
+                            "info", dry_run=self.instance.dry_run,
+                        )
+                except Exception as e:
+                    print(f"[WARN] Could not fetch exit fill from HL: {e}")
         else:
             add_log(f"[{self.instance.token}] Trade closed: {reason} (no position data)", "info")
             return
+
+        if self.instance.dry_run:
+            self._paper_balance += pnl
+            self._equity_history.append(self._paper_balance)
+            if len(self._equity_history) > 100:
+                self._equity_history = self._equity_history[-100:]
 
         trade = Trade(
             instance_id=self.id,
@@ -958,14 +975,12 @@ class InstanceRunner:
         side = active_trade["side"]
         bars_in_trade = active_trade["bars_in_trade"]
 
-        # 1. Stop-loss: candle high/low touches strategy stop level
-        if side == "LONG":
-            sl = ec.get("stop_loss_long")
-            if sl is not None and bar_low <= float(sl):
+        # 1. Stop-loss: candle high/low touches static entry stop level from active_trade
+        sl = active_trade.get("stop_loss")
+        if sl is not None:
+            if side == "LONG" and bar_low <= float(sl):
                 return "Stop Loss"
-        elif side == "SHORT":
-            sl = ec.get("stop_loss_short")
-            if sl is not None and bar_high >= float(sl):
+            elif side == "SHORT" and bar_high >= float(sl):
                 return "Stop Loss"
 
         # 2. Trailing stop (reads all params from exit_config)
@@ -994,13 +1009,13 @@ class InstanceRunner:
                 if bar_high >= trail_stop:
                     return "Trailing Stop"
 
-        # 3. Take-profit (only if strategy declares it)
-        tp_long = ec.get("take_profit_long")
-        tp_short = ec.get("take_profit_short")
-        if side == "LONG" and tp_long is not None and bar_high >= float(tp_long):
-            return "Take Profit"
-        if side == "SHORT" and tp_short is not None and bar_low <= float(tp_short):
-            return "Take Profit"
+        # 3. Take-profit: candle high/low touches static entry take-profit level from active_trade
+        tp = active_trade.get("take_profit")
+        if tp is not None:
+            if side == "LONG" and bar_high >= float(tp):
+                return "Take Profit"
+            elif side == "SHORT" and bar_low <= float(tp):
+                return "Take Profit"
 
         # 4. EMA-cross trend reversal (bar-to-bar, not poll-to-poll)
         prev_f = self._prev_fast_ema
@@ -1041,10 +1056,14 @@ class InstanceRunner:
     # Account snapshot
     # ------------------------------------------------------------------
     def _record_account(self, db, account_value: float, withdrawable: float):
+        if self.instance.dry_run:
+            account_value = self._paper_balance
+            withdrawable = self._paper_balance
+
         # Filter anomalous snapshots: HL API can return wild values during
         # position transitions (margin held/released) that produce fake drawdowns.
         # Skip recording if value swings >50% from last known good value.
-        if hasattr(self, "_last_good_account_value") and self._last_good_account_value > 0:
+        if not self.instance.dry_run and hasattr(self, "_last_good_account_value") and self._last_good_account_value > 0:
             ratio = account_value / self._last_good_account_value
             if ratio < 0.5 or ratio > 2.0:
                 add_log(

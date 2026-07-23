@@ -22,6 +22,7 @@ from config import config
 from api.auth import verify_ui_credentials
 from instances.models import engine, Instance, AccountSnapshot, Trade, User, get_or_seed_operator
 from app._common import _instances_by_mode
+from app.routes import get_dashboard_api_key
 from sqlalchemy.orm import sessionmaker
 
 Session = sessionmaker(bind=engine)
@@ -46,11 +47,13 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
         # Resolve current user from session (not operator seed)
         user = db.query(User).filter(User.username == username).first()
         if not user:
-            # Fallback for legacy data where user_id may be NULL in older snapshots
-            user = db.query(User).filter(User.id == user_id).first() if 'user_id' in locals() else None
-        if not user:
-            # Fallback: create operator if no user found (should not happen in prod)
             user = get_or_seed_operator(db)
+
+        # Correctly query the paper instances for this user
+        instances = db.query(Instance).filter(
+            Instance.user_id == user.id, Instance.dry_run == True
+        ).all()
+
         inst_data, equity_series = [], []
         for i in instances:
             # P14d: paper-only snapshots (user_id may be NULL in older data)
@@ -79,7 +82,7 @@ def testing_paper(request: Request, username: str = Depends(verify_ui_credential
         return templates.TemplateResponse(
             request, "testing_paper.html",
             context={
-                "request": request, "api_key": config.AGENT_API_KEY or "",
+                "request": request, "api_key": get_dashboard_api_key(request),
                 "instances": inst_data, "equity_series": equity_series,
                 "paper_trades": paper_trade_data,
                 "active_engines": sum(1 for i in inst_data if i["status"] == "running"),

@@ -45,6 +45,7 @@ def _exit_cost(position_value: float, is_maker: bool = False) -> float:
     return float(position_value) * total_bps
 
 
+@dataclass
 class BacktestTrade:
     entry_bar: int
     entry_time: datetime
@@ -306,7 +307,7 @@ def _check_trailing_stop_on_ticks(position: BacktestTrade, ticks: list[float], m
             if position.trail_active:
                 trail_stop = position.best_price - position.trail_offset * mintick
                 position.trail_stop_price = trail_stop
-                if trail_stop > position.stop_loss_price and tick_price <= trail_stop:
+                if position.stop_loss_price is not None and trail_stop > position.stop_loss_price and tick_price <= trail_stop:
                     exit_cost = _exit_cost(position.qty * trail_stop)
                     raw_pnl = (trail_stop - position.entry_price) / position.entry_price
                     pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
@@ -327,7 +328,7 @@ def _check_trailing_stop_on_ticks(position: BacktestTrade, ticks: list[float], m
             if position.trail_active:
                 trail_stop = position.best_price + position.trail_offset * mintick
                 position.trail_stop_price = trail_stop
-                if trail_stop < position.stop_loss_price and tick_price >= trail_stop:
+                if position.stop_loss_price is not None and trail_stop < position.stop_loss_price and tick_price >= trail_stop:
                     exit_cost = _exit_cost(position.qty * trail_stop)
                     raw_pnl = (position.entry_price - trail_stop) / position.entry_price
                     pnl_usd = position.position_size * raw_pnl * leverage - exit_cost
@@ -576,7 +577,7 @@ def run_backtest(
                         trail_stop = position.best_price - position.trail_offset * tick_size
                         position.trail_stop_price = trail_stop
                         # Only exit if trail stop is above initial stop-loss
-                        if trail_stop > position.stop_loss_price and low <= trail_stop:
+                        if position.stop_loss_price is not None and trail_stop > position.stop_loss_price and low <= trail_stop:
                             exit_price = trail_stop
                             exit_cost = _exit_cost(position.qty * exit_price)
                             raw_pnl = (exit_price - position.entry_price) / position.entry_price
@@ -607,7 +608,7 @@ def run_backtest(
                         trail_stop = position.best_price + position.trail_offset * tick_size
                         position.trail_stop_price = trail_stop
                         # Only exit if trail stop is below initial stop-loss
-                        if trail_stop < position.stop_loss_price and high >= trail_stop:
+                        if position.stop_loss_price is not None and trail_stop < position.stop_loss_price and high >= trail_stop:
                             exit_price = trail_stop
                             exit_cost = _exit_cost(position.qty * exit_price)
                             raw_pnl = (position.entry_price - exit_price) / position.entry_price
@@ -659,7 +660,7 @@ def run_backtest(
                 qty = max(qty, 0)
 
                 position_size = qty * close
-                entry_cost = qty * close * TAKER_FEE
+                entry_cost = _entry_cost(qty * close)
 
                 position = BacktestTrade(
                     entry_bar=i,
