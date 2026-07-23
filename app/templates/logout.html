@@ -231,8 +231,8 @@
 
 <script>
 (function() {
-  // Clear session storage
-  try { sessionStorage.removeItem('pulsr_auth'); sessionStorage.removeItem('sidebar-collapsed'); } catch(_) {}
+  // Clear UI-only prefs (sessionStorage is per-tab, never held credentials)
+  try { sessionStorage.removeItem('sidebar-collapsed'); } catch(_) {}
 
   // Server-side data already rendered — no need for client-side fetch
   var balance = '{{ balance }}';
