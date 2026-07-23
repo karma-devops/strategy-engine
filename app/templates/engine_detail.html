@@ -205,11 +205,14 @@
             .then(r => r.json())
             .then(d => {
                 sel.innerHTML = '';
+                const instId = '{{ inst.strategy_id }}';
+                // Normalize legacy "engine_*" ids to canonical "strategy_*" for comparison
+                const norm = id => (id || '').replace(/^engine_/, 'strategy_');
                 (d.strategies || []).forEach(s => {
                     const opt = document.createElement('option');
                     opt.value = s.strategy_id || s;
                     opt.textContent = s.display_name || s.name || s.strategy_id || s;
-                    if (opt.value === '{{ inst.strategy_id }}') opt.selected = true;
+                    if (norm(opt.value) === norm(instId)) opt.selected = true;
                     sel.appendChild(opt);
                 });
             })
