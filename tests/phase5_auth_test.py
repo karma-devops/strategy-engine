@@ -28,8 +28,13 @@ r = client.get("/health")
 assert r.status_code == 200, r.status_code
 print("  OK")
 
-print("[2] UI routes require Basic Auth")
-for path in ["/", "/instances/new", "/withdrawals"]:
+print("[2] UI routes auth enforcement")
+# / is the PUBLIC landing page (no auth required)
+r = client.get("/")
+assert r.status_code == 200, f"/ should be public, got {r.status_code}"
+print("  / OK (public)")
+# These routes require Basic Auth
+for path in ["/instances/new", "/withdrawals"]:
     assert client.get(path).status_code == 401, path
     r = client.get(path, headers={"Authorization": f"Basic {BASIC}"})
     assert r.status_code == 200, f"{path} -> {r.status_code}"
