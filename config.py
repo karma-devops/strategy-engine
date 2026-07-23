@@ -77,7 +77,7 @@ class Config:
     DEFAULT_INSTANCE = {
         "name": "FARTCOIN Scalp v1.3",
         "token": "FARTCOIN",
-        "strategy_id": "engine_v1_3",
+        "strategy_id": "strategy_v1_3",
         "mode": "Scalp",
         "profile": "aggressive_8_3",
         "timeframe": "15m",

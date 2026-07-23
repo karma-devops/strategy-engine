@@ -30,7 +30,7 @@ os.environ["DRY_RUN"] = "false"  # Worker is always live — no dry run
 state = {
     "token": "WIF",
     "timeframe": "15m",
-    "strategy_id": "engine_v1_3",
+    "strategy_id": "strategy_v1_3",
     "leverage": 5,
     "running": False,
     "last_signal": None,
@@ -447,7 +447,7 @@ async def set_config(request: Request, username: str = Depends(auth_dep)):
 @app.get("/api/strategy-config")
 async def get_strategy_config(username: str = Depends(auth_dep)):
     """Return current strategy parameter overrides."""
-    strategy_id = state.get("strategy_id", "engine_v1_3")
+    strategy_id = state.get("strategy_id", "strategy_v1_3")
     config = state.get("strategy_config", {})
     # If config is empty, return defaults from the strategy class
     if not config:
@@ -558,7 +558,7 @@ h1 { font-size: 18px; margin-bottom: 16px; color: #089981; letter-spacing: -0.5p
 <div class="config-bar">
     <div class="field"><label>Token</label><input id="token" type="text" value="WIF" style="width:80px;"></div>
     <div class="field"><label>Timeframe</label><select id="timeframe" style="width:70px;"><option value="5m">5m</option><option value="15m" selected>15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="4h">4h</option></select></div>
-    <div class="field"><label>Strategy</label><select id="strategy" style="width:140px;"><option value="engine_v1_3">Scalp v1.3</option><option value="engine_v1">Swing v1</option><option value="engine_v6_1">PRO v6.1</option></select></div>
+    <div class="field"><label>Strategy</label><select id="strategy" style="width:140px;"><option value="strategy_v1_3">Scalp v1.3</option><option value="strategy_v1">Swing v1</option><option value="strategy_v6_1">PRO v6.1</option></select></div>
     <div class="field"><label>Leverage</label><input id="leverage" type="number" value="1" min="1" max="50" style="width:60px;"></div>
     <div class="field"><label>Max Pos %</label><input id="maxpos" type="number" value="97" min="1" max="100" step="0.1" style="width:70px;"></div>
     <button class="btn btn-save" onclick="saveConfig()">Save</button>

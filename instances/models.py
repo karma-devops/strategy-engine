@@ -687,7 +687,7 @@ def get_user_or_seed_user(db, username: str) -> "User":
 def seed_user_fleet(user: "User") -> list:
     """Seed a NEW user's starter fleet: exactly ONE engine — 'Engine HYPE v1'.
 
-    Engine HYPE v1: token HYPE, strategy engine_v1 (v1 strategy), 30m timeframe,
+    Engine HYPE v1: token HYPE, strategy strategy_v1 (v1 strategy), 30m timeframe,
     paper (dry_run) by default, owned by the user (user_id). No operator keys,
     no shared credentials. Called once at signup.
     """

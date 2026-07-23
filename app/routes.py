@@ -1227,19 +1227,19 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
 
 # ── Strategies section ──
 STRATEGY_FILES = {
-    "engine_v1_3": {
+    "strategy_v1_3": {
         "pine": "pinescript-tv/Eve_Engine_v1_3.pine",
         "python": "engine/v1_3.py",
         "name": "Scalp v1.3",
         "description": "Aggressive scalp strategy with adaptive ATR trailing stop, EMA fan alignment, and ADX trend filtering. Activation 8 / Offset 3.",
     },
-    "engine_v1": {
+    "strategy_v1": {
         "pine": "pinescript-tv/Eve_Engine_v1_Swing.pine",
         "python": "engine/v1.py",
         "name": "Swing v1",
         "description": "Swing strategy with sniper 36/12 profile. Longer timeframe, wider trailing stops for trend capture.",
     },
-    "engine_v6_1": {
+    "strategy_v6_1": {
         "pine": "pinescript-tv/Engine_v6_1.pine",
         "python": "engine/v6_1.py",
         "name": "PRO v6.1",
