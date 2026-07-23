@@ -437,7 +437,12 @@ def update_instance(
         elif hasattr(inst, key):
             setattr(inst, key, value)
     db.commit()
-    return {"ok": True, "message": f"Updated {inst.slug}"}
+
+    # If the instance is currently running, restart it to live-apply changes (leverage, timeframe, etc.)
+    if inst.status == "running":
+        manager.restart_instance(inst.slug)
+
+    return {"ok": True, "message": f"Updated {inst.slug} and live-applied changes."}
 
 
 @router.put("/instances/{instance_id}/strategy-config")
