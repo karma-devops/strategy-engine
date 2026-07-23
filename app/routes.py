@@ -1777,7 +1777,7 @@ async def strategy_save_api(strategy_id: str, request: Request, username: str = 
 @limiter.limit(READ_LIMIT)
 def live_page(request: Request, username: str = Depends(verify_ui_credentials)):
     """Live Trading engines (dry_run=False). Mirrors dashboard but Live-only context."""
-    return _instances_by_mode(request, live=True)
+    return _instances_by_mode(request, live=True, username=username)
 
 
 # Candles endpoint moved to api/instances.py (uses verify_api_key, not verify_ui_credentials)
@@ -1788,7 +1788,14 @@ def paper_redirect():
     return RedirectResponse(url="/app/testing/paper", status_code=301)
 
 
-def _instances_by_mode(request: Request, live: bool):
+@router.get("/app/testing/paper", response_class=HTMLResponse)
+@limiter.limit(READ_LIMIT)
+def testing_paper(request: Request, username: str = Depends(verify_ui_credentials)):
+    """Paper Trading — dry_run=True engines. Renders testing_paper.html."""
+    return _instances_by_mode(request, live=False, template="testing_paper.html", username=username)
+
+
+def _instances_by_mode(request: Request, live: bool, template: str = None, username: str = None):
     db = Session()
     try:
         user = get_user_or_seed_user(db, username)
@@ -1814,9 +1821,26 @@ def _instances_by_mode(request: Request, live: bool):
         equity_series.sort(key=lambda x: x["time"])
         total_pnl = sum((i["unrealized_pnl"] for i in inst_data), 0.0)
         active = sum(1 for i in inst_data if i["status"] == "running")
+        # Paper trades for the testing/paper view (dry_run == (not live)).
+        paper_rows = db.query(Trade).filter(
+            Trade.user_id == user.id, Trade.dry_run == (not live)
+        ).order_by(Trade.timestamp.desc()).limit(100).all()
+        paper_data = [{
+            "id": t.id,
+            "time": t.timestamp.strftime("%Y-%m-%d %H:%M") if t.timestamp else "",
+            "instance": t.instance_id,
+            "side": t.side,
+            "size": round(t.size, 4),
+            "entry_price": round(t.entry_price, 6) if t.entry_price else 0.0,
+            "exit_price": round(t.exit_price, 6) if t.exit_price else None,
+            "pnl_usd": round(t.pnl_usd, 2),
+            "pnl_pct": round(t.pnl_pct, 2),
+            "fees": round((t.entry_cost or 0.0) + (t.exit_cost or 0.0), 4),
+            "open": t.exit_price is None,
+        } for t in paper_rows]
         return templates.TemplateResponse(
             request,
-            "live_paper.html",
+            template or "live_paper.html",
             context={
                 "request": request,
                 "api_key": get_dashboard_api_key(request),
@@ -1824,6 +1848,7 @@ def _instances_by_mode(request: Request, live: bool):
                 "mode_label": "Live Trading" if live else "Paper Trading",
                 "instances": inst_data,
                 "equity_series": equity_series,
+                "paper_trades": paper_data,
                 "active_engines": active,
                 "total_engines": len(inst_data),
                 "total_pnl": round(total_pnl, 2),
