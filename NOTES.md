@@ -2112,3 +2112,34 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - `app/static/position-card.js:324` builds a fetch URL that includes embedded Basic-Auth creds (`operator:operator@.../api/v2/positions`) → `TypeError: Request cannot be constructed from a URL that includes credentials`. Breaks the live Position card render on engine_detail. Next turn: fix `API_BASE` construction in `position-card.js` (strip `user:pass@` before building fetch URLs, or build from `location.origin` + explicit path without creds). Engine detail's own `API_BASE` (line 263) already strips creds correctly — `position-card.js` does not.
 
 **NOTE ON PRIOR DOC CLAIMS:** Gemini's VERIFICATION-STATUS/UI-UX-SPRINT asserted Start/Stop/kill-switch/paper-live were "done." They were NOT functionally reachable from the operator's Basic-Auth session because of bug #2 (and bug #1 broke the whole page). Treat those docs' "DONE" marks on engine_detail controls as UNVERIFIED until re-tested through the actual operator session.
+
+---
+
+## ═══ SESSION LOG — 2026-07-22 → 2026-07-23 repair series (entry-gate universal, BUG-A/B, TDZ, version sync, PR#1, trailing-stop, paper/backtest fixes) ═══
+
+**Scope completed + pushed (all to `main`, Asia/Makassar):**
+
+### 2026-07-22 (entry-gate + BUG-A/B + TDZ + version)
+- **Entry-gate UNIVERSAL repair** (root cause: runner gated on strategy-INTERNAL signal names, so `"ENTRY skipped - no bullish pin/trigger"` fired even when `pin=bull`+`pierce=bull`):
+  - `engine/v1_3.py` (`5cfcbf5`) — v1_3 now emits a strategy-agnostic `entry_config` with `.trigger = valid_trigger_bull` (LONG) / `valid_trigger_bear` (SHORT). Decouples runner from strategy-internal signal names.
+  - `instances/runner.py` (`3805b2e`) — gates entry on `entry_config.trigger` (neutral receiver); legacy `valid_trigger_*` kept as fallback. Verified: entries now EXECUTE (no more skip).
+- **BUG-A** (`ad2180b`) — assign `notional` BEFORE building the entry active-trade dict in runner; a NameError had blocked ALL entries from ever opening.
+- **BUG-B** (`fa9bac9`) — set `AccountSnapshot.user_id` on creation so the dashboard Pulse Graph seed is user-scoped (was always NULL → empty graph).
+- **TDZ fix** (`d9ef794`) — `app/templates/dashboard.html`: moved `fmtUsd`/`fmtPct`/`sideClass` consts ABOVE the first `buildPulse()` call. Resolved a TDZ ReferenceError that aborted the whole page script before SSE/Console init.
+- **Version sync** (`041d83e` → v2.01, `529a3b2` → v2.02) — `api/metadata.py` now reads the `VERSION` file (removed hardcoded `0.095` drift); `/api/v2/metadata` + `/stats` report v2.02. `VERSION` file = v2.02.
+
+### 2026-07-23 (PR#1 merge + regression repairs + tests)
+- **PR #1 merged** (`7b7ee11`) — `karma-devops/fix-strategies-and-paper-trading-simulation-604940166369884520`: strategy execution engine fix, config standardization, paper-trading simulation fix. Local `main` == `origin/main` confirmed.
+- **Trailing-stop PineScript parity** (`6a0d4e0`) — `_evaluate_exit` (instances/runner.py) rewritten to match original PineScript `strategy.exit` semantics: `trail_points = distance`, `trail_offset = activation move`, track `best_price` from entry. Closes P1 exit-audit (positions held too long / exits not firing). Preserves original intent.
+- **Paper route 404 fix** (`37701b1`) — added missing `/app/testing/paper` route (paper UI returned 404). 28 insertions in app/routes.py.
+- **Backtest-import 500 fix** (`ce645be`) — `POST /api/v2/backtests/run` returned HTTP 500 (historical page `JSON.parse` error): ImportError `_trade_to_dict` in `api/backtests.py:86` → corrected the symbol reference in `testing/backtest_store.py` (+36 lines: correct `_trade_to_dict` export). Verified import error gone at HEAD.
+- **Perp-account value UI** (`c9d630a`) — dashboard + account overview now show HL perp-only account value alongside total portfolio (core/exchange.py +50 lines).
+- **Test-drift fixes** (verified via collect-only, NO live run — capital risk): `bf3ebbd` (phase1 fleet-size assertions → 2-engine DEFAULT_FLEET), `7b3e528` (phase2 inject X-API-Key headers + deferred-withdrawal assertion), `6afd1ac` (phase5 auth-route assertions for public landing page).
+
+### Uncommitted on disk (carried from this session — NOT committed)
+- `engine/registry.py` — strategy/engine labeling-prep: terminology block (STRATEGY = trading logic class; ENGINE = running Instance) + dual-namespace keys (`strategy_v1_3` preferred, `engine_v1_3` kept as legacy alias so existing Instances keep resolving without DB migration). Prepared for the "strategy vs engine clearly separated in code+UI" directive. **Flagged: commit or discard per operator decision.** Not part of the above commits.
+
+### Status at session end (2026-07-23)
+- HEAD `ce645be` → doc-sync `ad43642` (CONTEXT.md v2.02 + fixes recorded).
+- engine-1 RUNNING LIVE (FARTCOIN), engine-2 STOPPED (paper), main UP :8792.
+- `tests/` phase1/2/5 drift fixed but full suite NOT run green. BUG-11/BUG-12 (withdrawal/deposit) DEFERRED (live funds). Bughunt pass pending (next phase).
