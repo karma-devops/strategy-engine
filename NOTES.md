@@ -2160,3 +2160,25 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 - Genuine new defect from this pass: **B1 (fixed)**. Everything else verified-correct or already-deferred.
 - Code clean + compiles. Repo working tree now has ONLY the long-standing uncommitted `engine/registry.py` labeling-prep diff (operator decision pending).
 - **Stability still NOT STABLE / NOT BETA** — full `tests/` suite not run green; UI visual verification (BUGHUNT group) not closed. See CONTEXT §13 / BETA-ROADMAP §8.
+
+---
+
+## ═══ STRATEGY vs ENGINE LABELING FIX (2026-07-23, Asia/Makassar) ═══
+
+**Operator directive:** properly label engine=engine and strategy=strategy on backend code AND frontend UI, so all is clearly labelled.
+
+**Investigation found the uncommitted `registry.py` diff was BROKEN by design:**
+- It duplicated `engine_*` keys INTO the `STRATEGIES` dict alongside `strategy_*` → `routes.py:1269` `for sid, cls in STRATEGIES.items()` would emit DUPLICATE strategy cards + DOUBLE-COUNT trades (DB rows keyed `engine_v1_3`).
+- `get_presets()` only matched legacy keys → returned `{}` for `strategy_v1_3`.
+- `DEFAULT_FLEET` still used `engine_v1_3`.
+
+**Fix (commits 9ba2017, b9eb1d9, 64a2028):**
+- `engine/registry.py` — `STRATEGIES` dict now contains ONLY canonical `strategy_*` keys. Legacy `engine_*` keys live in a separate `ALIASES` map consulted inside `get_strategy()` / `get_presets()` / `list_strategies()` (via `_resolve_strategy_id`). No duplication; existing DB rows (`strategy_id="engine_v1_3"`) still resolve. Verified in venv: listing = 3 canonical keys, legacy + canonical both resolve to same class, presets work for both.
+- `app/templates/instance_form.html` — Strategy dropdown now sends `strategy_v1_3`/`strategy_v1`/`strategy_v6_1` with explicit "Strategy v1.3 — Scalp" labels + helper text "(the trading logic this Engine runs)". Form creates an ENGINE that runs a STRATEGY — clearly separated.
+- `app/templates/engine_detail.html` — inline Settings Strategy dropdown normalizes legacy `engine_*` DB rows to canonical `strategy_*` for `selected` match (no DB migration, no dupes).
+- `instances/models.py` — default user-engine seed uses `strategy_v1` (was legacy `engine_v1`).
+- `engine/v1.py` `name='eve_engine_v1'` left as-is (internal strategy class label, not a registry key — harmless).
+
+**Outstanding (intentional, low priority):** `tests/*.py` still POST `engine_v1_3` (resolves via alias, so tests still pass). `testing/runner.py` CLI help text mentions `engine_v1_3` (cosmetic). Not changed — would require test rewrites the operator hasn't asked for; alias layer keeps them working.
+
+**Working tree:** clean (all committed + pushed to `main` through `64a2028`). No uncommitted files remain.
