@@ -1,8 +1,8 @@
 # PULS·R Task List — Consolidated Work Inventory (single source of truth)
 
-**Consolidated:** 2026-07-19 (Asia/Makassar) · **Status:** ⚠️ NOT STABLE / NOT BETA
-**Live State:** engine-1 RUNNING LIVE (FARTCOIN LONG, liq enriched via A4) · engine-2 STOPPED (paper) · main app UP port 8792
-**Server:** supervisor-managed uvicorn on port 8792 (PID rotates per restart — currently ~65393), login `operator`/`operator`, DB `main/data/dev_test.db` (injected by supervisor; config default path also `data/strategy_engine.db`)
+**Consolidated:** 2026-07-23 (Asia/Makassar) · **Status:** ⚠️ NOT STABLE / NOT BETA
+**Live State (2026-07-23):** engine-1 RUNNING LIVE (FARTCOIN LONG, liq enriched via A4) · engine-2 STOPPED (paper) · main app UP port 8792 · **Version v2.02** (VERSION file + /metadata sync)
+**Server:** supervisor-managed uvicorn on port 8792 (PID rotates per restart), login `operator`/`operator`, DB `main/data/dev_test.db`
 **Sources merged:** TASK-LIST v1.98 + BUGREPORT.md (karma-devops) + HANDOVER-UI-WALKTHROUGH.md + TASK-PRIORITIES.md (3-tier companion)
 
 **4-FILE DOC TAXONOMY:** CONTEXT.md (MAP) · NOTES.md (LOG) · TASK-LIST.md (WORK) · BETA-ROADMAP.md (FORWARD)
@@ -36,7 +36,22 @@
 | T1-5 | `WithdrawalRecord` idempotency key | Money-movement double-exec risk | **DONE 2026-07-19** — `WithdrawalRecord.idempotency_key` column added (unique, indexed); `execute_manual_50`/`execute_manual_all` now accept `idempotency_key`, return existing record's outcome if key seen before (no re-exec); API endpoints read `Idempotency-Key` header (or auto-generate). Verified: same key → 2nd call idempotent=True, exactly 1 record; unique constraint blocks race. Live `dev_test.db` ALTERed to add column. |
 | T1-6 | `test_credential` — stop treating 401 as `ok:true` | Misleads users | **DONE 2026-07-19** — `api/credentials.py:190` now `r.status_code == 200` only (no 401 pass). Verified against `cd3a1a1`. (Earlier TASK-LIST marked OPEN in error.) |
 
-**⚠️ T0-3 REGRESSION (found in VERIFICATION-STATUS-1, 2026-07-19):** the paper half of T0-3 is DONE (`app/paper_routes.py:47` resolves session user). The **backtest half is BROKEN** — `app/backtest_routes.py:59` (`testing_historical`) references `user.id` but `user` is **never assigned** in that function → `NameError` → `/app/testing/historical` 500s on every load. The cross-tenant leak is gone only because the page can't load for anyone. **Fix (T3-0, 5-min, pattern already in `paper_routes.py`):** assign `user = db.query(User).filter(User.username == username).first()` (operator fallback) before the query. Tracked as T3-0 below.
+### TIER 1.5 — 2026-07-22/23 carry-forward (ALL DONE, pushed to `main`)
+| # | Task | Why / Effort | Status |
+|---|------|--------------|--------|
+| T1.5-1 | Entry-gate UNIVERSAL repair — `engine/v1_3.py` emits strategy-agnostic `entry_config.trigger` (`valid_trigger_bull` LONG / `valid_trigger_bear` SHORT); `instances/runner.py` gates entry on `entry_config.trigger` (neutral receiver), legacy `valid_trigger_*` fallback kept | Runner gated on strategy-INTERNAL signal names → persistent `"ENTRY skipped - no bullish pin/trigger"` despite `pin=bull`+`pierce=bull`. Live-blocking. | **DONE 2026-07-22** — `5cfcbf5` (emit) + `3805b2e` (gate). Verified: entries now EXECUTE. |
+| T1.5-2 | BUG-A — assign `notional` before building entry active-trade dict in `instances/runner.py` | NameError had blocked ALL entries from opening. | **DONE 2026-07-22** — `ad2180b` (6 lines). |
+| T1.5-3 | BUG-B — set `AccountSnapshot.user_id` on creation | Dashboard Pulse Graph seed unscoped (always NULL) → empty graph. | **DONE 2026-07-22** — `fa9bac9`. |
+| T1.5-4 | TDZ fix — `dashboard.html` move `fmtUsd`/`fmtPct`/`sideClass` consts above first `buildPulse()` call | TDZ ReferenceError aborted page script before SSE/Console init. | **DONE 2026-07-22** — `d9ef794`. |
+| T1.5-5 | Version sync — `api/metadata.py` reads `VERSION` file (remove hardcoded 0.095 drift); bump v2.01 → v2.02 | `/metadata` + `/stats` reported wrong version. | **DONE 2026-07-22/23** — `041d83e` (v2.01) + `529a3b2` (v2.02). `VERSION`=v2.02. |
+| T1.5-6 | Merge PR #1 (`karma-devops/fix-strategies-and-paper-trading-simulation`) | Strategy exec fix + config standardization + paper sim fix. | **DONE 2026-07-23** — `7b7ee11`. Local `main` == `origin/main`. |
+| T1.5-7 | Trailing-stop PineScript parity — `_evaluate_exit` matches `strategy.exit` (trail_points=distance, trail_offset=activation, best_price from entry) | Positions held too long; exits not firing (P1 exit audit). | **DONE 2026-07-23** — `6a0d4e0`. Preserves original intent. |
+| T1.5-8 | Paper route 404 fix — add missing `/app/testing/paper` route | Paper UI returned 404. | **DONE 2026-07-23** — `37701b1`. |
+| T1.5-9 | Backtest-import 500 fix — `POST /api/v2/backtests/run` ImportError `_trade_to_dict` (`api/backtests.py:86`) | Historical page `JSON.parse` error (HTTP 500). | **DONE 2026-07-23** — `ce645be` (correct symbol in `testing/backtest_store.py`). |
+| T1.5-10 | Perp-account value UI — show HL perp-only value alongside total portfolio | Dashboard/account only showed total. | **DONE 2026-07-23** — `c9d630a`. |
+| T1.5-11 | Test-drift fixes (phase1/2/5) — fleet-size assertions, X-API-Key headers, public-landing auth assertions | Tests mis-asserted pre-refactor state. | **DONE 2026-07-23** — `bf3ebbd`/`7b3e528`/`6afd1ac`. Verified collect-only (NO live run — capital risk). |
+
+**T0-3 backtest half — RESOLVED (T3-0, `98ca408`, 2026-07-19):** `app/backtest_routes.py:59` (`testing_historical`) `NameError` on `user.id` was fixed by assigning `user = db.query(User).filter(User.username == username).first()` (operator fallback) before the query. The earlier "BROKEN → 500s on every load" warning is superseded; this is now DONE and the cross-tenant leak remains closed. See T3-0 row below.
 
 ### TIER 2 — Cleanup, opportunistic
 - `#32` ✅ fix "6-Engine Default Fleet" copy → "Default Fleet" (T2-1, `23ff458`)
@@ -162,9 +177,10 @@ Per page: HTTP status, render, JS console, data population, auth, mobile, screen
 Discipline: one page/turn, screenshot+console, no code fixes unless trivial. Findings → `docs/UI-WALKTHROUGH-FINDINGS.md`.
 
 ## Execution Notes
-- engine-1 RUNNING LIVE (FARTCOIN LONG ~390, liq via A4, auto-resumed). Main app UP :8792 v1.98. Worker :9999 DOWN.
+- engine-1 RUNNING LIVE (FARTCOIN LONG ~390, liq via A4, auto-resumed). Main app UP :8792 **v2.02**. Worker :9999 DOWN.
 - ADIX: one file/turn, verify before next. Zero autonomous deletion.
-- Stability: NOT STABLE / NOT BETA until BUGHUNT closed + tests green + Tier 0 closed.
+- Stability: NOT STABLE / NOT BETA until BUGHUNT closed + tests green + Tier 0/1.5 closed.
+- **Uncommitted on disk:** `engine/registry.py` — strategy/engine labeling-prep diff (terminology + dual-namespace keys). Flagged for operator commit/discard decision.
 
 ---
 
