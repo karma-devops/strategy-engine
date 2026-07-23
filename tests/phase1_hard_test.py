@@ -53,9 +53,11 @@ from instances.manager import seed_default_fleet
 from instances.models import SessionLocal, Instance
 # Use the app's real DB path (import-time engine is already bound there)
 seeded = seed_default_fleet()
-assert len(seeded) == 6, f"expected 6 seeded, got {len(seeded)}"
+# DEFAULT_FLEET defines 2 engines (engine-1, engine-2) per the
+# "seed engine-1 only / 2-engine default fleet" decision (BACKLOG #32/#53).
+assert len(seeded) == 2, f"expected 2 seeded, got {len(seeded)}"
 slugs = [s for _, s in seeded]
-assert slugs == ["engine-1", "engine-2", "engine-3", "engine-4", "engine-5", "engine-6"], slugs
+assert slugs == ["engine-1", "engine-2"], slugs
 print("  OK:", slugs)
 
 # API tests via TestClient
@@ -70,7 +72,7 @@ print("  /health OK")
 
 r = client.get("/api/v2/instances", headers=API_HEADERS)
 assert r.status_code == 200
-assert len(r.json()["instances"]) == 6
+assert len(r.json()["instances"]) == 2
 print("  /api/v2/instances OK")
 
 r = client.get("/api/v2/instances/active", headers=API_HEADERS)
@@ -83,7 +85,7 @@ assert r.status_code == 200 and len(r.json()["strategies"]) >= 2
 print("  /api/v2/strategies OK")
 
 r = client.get("/api/v2/presets/fleet", headers=API_HEADERS)
-assert r.status_code == 200 and len(r.json()["fleet"]) == 6
+assert r.status_code == 200 and len(r.json()["fleet"]) == 2
 print("  /api/v2/presets/fleet OK")
 
 r = client.get("/api/v2/withdrawals/calculate", headers=API_HEADERS)
