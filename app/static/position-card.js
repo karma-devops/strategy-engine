@@ -140,7 +140,7 @@
         fetch(`/api/v2/instances/${instance.slug}/close`, {
           method: 'POST',
           headers: {
-            'Authorization': 'Basic ' + btoa('operator:operator'), // TODO: use proper auth
+            'X-API-Key': window.API_KEY || '',
             'Content-Type': 'application/json',
           },
         })
