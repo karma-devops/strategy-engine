@@ -1,7 +1,7 @@
 # BACKLOG.md — Bugreport Tracking Ledger
 
 > Consolidated tracking of all bug reports reviewed for the strategy-engine project.
-> Last updated: 2026-07-18 (Asia/Makassar)
+> Last updated: 2026-07-23 (Asia/Makassar) — synced with CONTEXT.md / TASK-LIST.md / NOTES.md.
 > Maintained so we don't re-do or lose track of applied vs. open items.
 
 ## Legend
@@ -101,18 +101,31 @@
 - `9387cfc` — Bugreport batch 1: safety-critical #1/#2/#3/#6
 - `74b5a0e` — Bugreport batch 2: high+medium #4-#23
 
-## Open Work (not yet scheduled)
-1. #32 copy fix (seed engine-1 only, correct "6-Engine" labels)
-2. #41 kill-switch UI button (topbar)
-3. Circuit breaker (P0)
-4. Idempotency full window-check (P0)
-5. Liquidation detection (P2)
-6. Clock drift (P1, optional)
-7. Report 3 frontend bugs #44, #59-#66
-8. #42/#43 architectural decision (finish /shell or delete)
-9. #54 WithdrawalRecord idempotency
+## Open Work (not yet scheduled) — status as of 2026-07-23
+1. #32 copy fix (seed engine-1 only, correct "6-Engine" labels) — ✅ DONE (T2-1 `23ff458`)
+2. #41 kill-switch UI button (topbar) — ❌ OPEN
+3. Circuit breaker (P0) — ✅ DONE (T1-1 `instances/runner.py`, trips at 5 consecutive errors)
+4. Idempotency full window-check (P0) — ⚠️ PARTIAL (X1 sentinel blocks re-entry; 60s window-check pending)
+5. Liquidation detection (P2) — ❌ OPEN (exit-reason tracking)
+6. Clock drift (P1, optional) — ❌ OPEN (NTP sync)
+7. Report 3 frontend bugs #44, #59-#66 — ❌ OPEN (see TASK-LIST §BUGHUNT + UI-WALKTHROUGH)
+8. #42/#43 architectural decision (finish /shell or delete) — ⚠️ PENDING operator call
+9. #54 WithdrawalRecord idempotency — ✅ DONE (T1-5)
+10. T3-0 backtest `user` NameError — ✅ DONE (`98ca408`)
+11. BUG-7 `/app/trades` Active Positions — ✅ DONE (`4fe89df`)
+12. BUG-8 kill-switch API boundary — ✅ DONE (P0, `c88c669`, live-verified)
+13. BUG-10 signup e2e — ✅ DONE (browser-verified)
+14. BUG-11/BUG-12 withdrawal/deposit round-trip — ❌ DEFERRED (live funds, explicit go required)
+15. T3-8 onboarding popup — ❌ OPEN
+16. T3-9 email 2FA — ❌ OPEN (parked, no SMTP)
+17. D4 PAPER/LIVE badge per trade row — ❌ OPEN
+18. D5 dry_run toggle end-to-end verify — ❌ OPEN
+19. B3 per-user log persistence — ❌ OPEN
+20. B9 drawdown >50% spike filter — ❌ OPEN
+21. B5/B6 schema hardening (NOT NULL + cascade) — ❌ OPEN
 
 ## Decisions Locked
 - **#32:** No default fleet. Seed engine-1 only. Fix misleading copy.
 - All applied fixes committed; working tree clean between batches.
 - Cookies, `.env`, `*.db` excluded via `.gitignore` (never committed).
+- **Note (2026-07-23):** `engine/registry.py` carries an UNCOMMITTED labeling-prep diff (terminology block + dual-namespace keys) — operator decision pending, not part of committed batches.
