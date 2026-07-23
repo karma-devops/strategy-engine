@@ -2196,3 +2196,33 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 **Verified:** compile OK; unit-logic sim — immediate retry blocked (False), 61s-later allowed (True), fresh init (ts=0) allowed (True). No money-path change; existing trades unaffected.
 
 **Remaining genuine opens:** T3-8 onboarding popup, T3-9 email 2FA (parked, no SMTP), D5 dry_run toggle e2e, B3/B5/B6/B9, liquidation exit-reason, clock drift (optional NTP). BUG-11/12 still DEFERRED (live funds).
+
+---
+
+## ═══ OUTSTANDING TODO SNAPSHOT (2026-07-23 23:53 Asia/Makassar) ═══
+
+**STATUS: working live dev server is UP. Operator launched a 24h LIVE test (starts ~now). CODE FROZEN during test — no edits to running server/code until test completes + reviewed.**
+
+### Genuine open items (not deferred, not done)
+| ID | Item | Priority | Note |
+|----|------|----------|------|
+| T3-8 | Onboarding popup (first-run walkthrough) | MED | no code yet |
+| T3-9 | Email 2FA | LOW | parked — no SMTP configured |
+| D5 | dry_run → LIVE toggle end-to-end verify | MED | toggle exists; full e2e verify pending |
+| B3 | per-user log persistence | MED | |
+| B5 | schema hardening: NOT NULL constraints | MED | |
+| B6 | schema hardening: cascade deletes | MED | |
+| B9 | drawdown >50% spike filter | MED | |
+| — | Liquidation exit-reason tracking | P2 | log reason on close |
+| — | Clock drift NTP sync | P1 optional | low priority, utc consistent already |
+
+### Deferred by operator (DO NOT touch without explicit go)
+| ID | Item | Why |
+|----|------|-----|
+| BUG-11 | Withdrawal round-trip (wrong SDK method `withdraw_to_wallet` → `exchange.withdraw(target, amount`) | live funds |
+| BUG-12 | Deposit path missing | live funds |
+
+### Done this session (for reference)
+- Docs sync v1.98→v2.02 (6 files) · B1 close-btn creds · bughunt (EMA claim refuted) · strategy/engine labeling (`strategy_*`) · legacy cleanup · #60 dead code · BACKLOG reconcile · idempotency 60s cooldown (`0122757`).
+
+**Next session reminder:** on 24h-test completion, verify (1) engine-1 still running/flat-or-closed cleanly, (2) no duplicate entries (idempotency held), (3) circuit breaker / kill-switch behavior, (4) then resume T3-8 / B-series from table above.
