@@ -118,13 +118,26 @@ class HyperLiquidClient:
         return 0.0
 
     @retry_with_backoff(max_attempts=3, base_delay=0.5, max_delay=5.0)
+    def _user_state(self, address: str = None) -> dict:
+        """Fetch HL user_state once. Caches for 1s to avoid back-to-back rate limits
+        when multiple value methods are called in the same tick (e.g. total + perp)."""
+        if address is None:
+            address = self._query_address()
+        now = time.time()
+        if getattr(self, "_user_state_cache", None) and \
+           self._user_state_cache[0] == address and (now - self._user_state_cache[1]) < 1.0:
+            return self._user_state_cache[2]
+        state = self._info.user_state(address)
+        self._user_state_cache = (address, now, state)
+        return state
+
     def get_account_value(self) -> float:
         """Return total portfolio value in USDC (perps accountValue + available spot USDC)."""
         if not self.has_credentials:
             return 0.0
         try:
             address = self._query_address()
-            state = self._info.user_state(address)
+            state = self._user_state(address)
             perps_value = float(state.get("marginSummary", {}).get("accountValue", 0))
             spot_available = self._spot_usdc_available(address)
             value = perps_value + spot_available
@@ -133,6 +146,26 @@ class HyperLiquidClient:
             return value
         except Exception as e:
             print(f"[ERROR] get_account_value failed: {e}")
+            return 0.0
+
+    def get_perp_account_value(self) -> float:
+        """Return HL-native perp account value ONLY (marginSummary.accountValue).
+
+        Matches the figure HyperLiquid's own perp dashboard displays: it excludes
+        idle spot USDC sitting in the spot clearinghouse. Kept separate from
+        get_account_value() (which adds spot) so the UI can show both:
+        total portfolio vs. HL's perp-only "account value".
+        Shares the cached _user_state() call with get_account_value() so both
+        values derive from the same snapshot (no duplicate rate-limited call).
+        """
+        if not self.has_credentials:
+            return 0.0
+        try:
+            address = self._query_address()
+            state = self._user_state(address)
+            return float(state.get("marginSummary", {}).get("accountValue", 0))
+        except Exception as e:
+            print(f"[ERROR] get_perp_account_value failed: {e}")
             return 0.0
 
     @retry_with_backoff(max_attempts=3, base_delay=0.5, max_delay=5.0)

@@ -21,6 +21,10 @@
         <div class="kpi-value">${{ portfolio_value }}</div>
     </div>
     <div class="kpi">
+        <div class="kpi-label" title="HyperLiquid perp-only account value (excludes idle spot USDC)">Perp Account (HL)</div>
+        <div class="kpi-value" style="color:var(--text-muted);">{{ perp_value | format_usd }}</div>
+    </div>
+    <div class="kpi">
         <div class="kpi-label">Start Balance</div>
         <div class="kpi-value">${{ start_balance }}</div>
     </div>

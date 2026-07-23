@@ -356,6 +356,7 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
         user_me = db.query(User).filter(User.username == username).first() if username else None
         start_balance = user_me.start_balance if user_me and user_me.start_balance > 0 else 0.0
         account_value = latest.account_value if latest else 0.0
+        perp_account_value = latest.account_value if latest else 0.0
         has_hl_credentials = False
         # Live exchange value fallback: OPERATOR ONLY (T3-0). Non-operator users have no
         # HL creds of their own and must never see the operator's exchange balance.
@@ -368,6 +369,9 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
                     live_val = hl.get_account_value()
                     if live_val > 0:
                         account_value = round(live_val, 2)
+                    live_perp = hl.get_perp_account_value()
+                    if live_perp > 0:
+                        perp_account_value = round(live_perp, 2)
             except Exception:
                 pass
 
@@ -378,6 +382,7 @@ def dashboard_app(request: Request, username: str = Depends(verify_ui_credential
                 "request": request,
                 "api_key": get_dashboard_api_key(request),
                 "account_value": account_value,
+                "perp_account_value": perp_account_value,
                 "realized_pnl": realized_pnl,
                 "best_engine": best_engine,
                 "best_engine_pnl": best_engine_pnl,
@@ -983,12 +988,14 @@ def account_overview(request: Request, username: str = Depends(verify_ui_credent
         # Non-operator users seed with no HL key, so we must NOT call the operator's
         # global client (that would leak operator's live $ value). Show 0 / "connect".
         portfolio_value = 0.0
+        perp_value = 0.0
         withdrawable = 0.0
         has_exchange = False
         if user.username == "operator":
             from core.exchange import get_hyperliquid_client
             hl = get_hyperliquid_client()
             portfolio_value = hl.get_account_value()
+            perp_value = hl.get_perp_account_value()
             withdrawable = hl.get_withdrawable()
             has_exchange = True
         else:
@@ -1033,6 +1040,7 @@ def account_overview(request: Request, username: str = Depends(verify_ui_credent
                     "default_dry_run": user.default_dry_run,
                 },
                 "portfolio_value": round(portfolio_value, 2),
+                "perp_value": round(perp_value, 2),
                 "withdrawable": round(withdrawable or 0, 2),
                 "start_balance": user.start_balance,
                 "total_pnl": round(total_pnl, 2),

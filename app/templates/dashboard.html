@@ -202,6 +202,10 @@
                         <div class="kpi-value" id="kpi-account" style="font-size:var(--text-lg);font-family:var(--font-display);">{{ account_value | format_usd }}</div>
                     </div>
                     <div class="kpi-compact">
+                        <div class="kpi-label" style="font-size:9px;" title="HyperLiquid perp-only account value (excludes idle spot USDC)">PERP ACCT (HL)</div>
+                        <div class="kpi-value" id="kpi-perp-account" style="font-size:var(--text-lg);font-family:var(--font-display);color:var(--text-muted);">{{ perp_account_value | format_usd }}</div>
+                    </div>
+                    <div class="kpi-compact">
                         <div class="kpi-label" style="font-size:9px;">PNL</div>
                         <div class="kpi-value {% if realized_pnl is defined and realized_pnl >= 0 %}pos{% elif realized_pnl is defined %}neg{% endif %}" id="kpi-realized" style="font-size:var(--text-lg);font-family:var(--font-display);">{{ realized_pnl | default(0.0) | format_usd }}</div>
                     </div>
