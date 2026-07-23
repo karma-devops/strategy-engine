@@ -2182,3 +2182,17 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 **Outstanding (intentional, low priority):** `tests/*.py` still POST `engine_v1_3` (resolves via alias, so tests still pass). `testing/runner.py` CLI help text mentions `engine_v1_3` (cosmetic). Not changed — would require test rewrites the operator hasn't asked for; alias layer keeps them working.
 
 **Working tree:** clean (all committed + pushed to `main` through `64a2028`). No uncommitted files remain.
+
+---
+
+## ═══ IDEMPOTENCY 60s WINDOW-CHECK (2026-07-23, Asia/Makassar) ═══
+
+**Backlog row #4 (P0) — now DONE (`0122757`).**
+
+**Gap:** X1 sentinel (`_active_trade="PENDING"`) + bar-time gate (`_last_entry_bar_time`) prevented same-bar re-entry, but a FAILED/aborted open (line 462 resets `_active_trade=None`) left NO time-based cooldown. A stalled HL fill or API lag on the next 3s poll (new bar) could re-enter.
+
+**Fix:** added `self._last_entry_attempt_ts` (epoch sec, init 0.0). Flat-entry gate now also requires `time.time() - _last_entry_attempt_ts >= 60.0`. Stamped on BOTH entry paths: (1) main PENDING sentinel (line ~441), (2) reversal re-entry after close (line ~507).
+
+**Verified:** compile OK; unit-logic sim — immediate retry blocked (False), 61s-later allowed (True), fresh init (ts=0) allowed (True). No money-path change; existing trades unaffected.
+
+**Remaining genuine opens:** T3-8 onboarding popup, T3-9 email 2FA (parked, no SMTP), D5 dry_run toggle e2e, B3/B5/B6/B9, liquidation exit-reason, clock drift (optional NTP). BUG-11/12 still DEFERRED (live funds).

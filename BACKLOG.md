@@ -52,7 +52,7 @@
 | Item | Priority | Status | Note |
 |------|----------|--------|------|
 | Kill switch closes positions | P0 | ✅ Already done | `kill_global` → `manager.close_all_positions()` verified |
-| Idempotency on signals | P0 | ⚠️ Partial | X1 PENDING sentinel blocks re-entry; full 60s window-check pending |
+| Idempotency on signals | P0 | ✅ Done | X1 PENDING sentinel + 60s cooldown (`_last_entry_attempt_ts`, `0122757`) |
 | Circuit breaker | P0 | ✅ Done | `instances/runner.py` trips at 5 consecutive tick errors (T1-1) |
 | Withdrawal method exists | P1 | ✅ Already done | `withdraw_to_wallet` at exchange.py:413 |
 | Clock drift check | P1 | ❌ Open | optional NTP sync on startup + hourly |
@@ -105,7 +105,7 @@
 1. #32 copy fix (seed engine-1 only, correct "6-Engine" labels) — ✅ DONE (T2-1 `23ff458`)
 2. #41 kill-switch UI button (topbar) — ✅ DONE (dashboard.html:543-550 EMERGENCY STOP → /api/v2/kill?reset=false)
 3. Circuit breaker (P0) — ✅ DONE (T1-1 `instances/runner.py`, trips at 5 consecutive errors)
-4. Idempotency full window-check (P0) — 🟡 PARTIAL (X1 sentinel blocks re-entry; 60s window-check pending)
+4. Idempotency full window-check (P0) — ✅ DONE (2026-07-23 `0122757` — 60s entry cooldown via `_last_entry_attempt_ts` on both entry paths; X1 sentinel + bar gate retained)
 5. Liquidation detection (P2) — ❌ OPEN (exit-reason tracking)
 6. Clock drift (P1, optional) — ❌ OPEN (NTP sync; low priority)
 7. #42/#43 two competing dashboards — ✅ RESOLVED (only / → dashboard() and /app/dashboard → dashboard_app(), both render dashboard.html; no /shell route or shell.html exists — was stale backlog)
