@@ -1,9 +1,9 @@
 # BETA-ROADMAP.md — strategy-engine (PULS·R) Beta Readiness Plan
 
-> **THE PLAN.** Forward action items for a beta version bump (target: v1.99-beta or v2.0-beta).
+> **THE PLAN.** Forward action items for a beta version bump (target: v2.0-beta or v2.1-beta).
 > Pairs with: CONTEXT.md (MAP), NOTES.md (LOG), TASK-LIST.md (WORK).
-> Status 2026-07-18 end-of-day: Z1–Z7 + X1–X4 + A4 + B7 + D1 + D2 ALL code-complete + live-verified (routes/imports). **NOT STABLE / NOT BETA** — next phase = live frontend testing + bughunt (TASK-LIST §BUGHUNT).
-> Live state: engine-1 LIVE (FARTCOIN, liq enriched via A4, auto-resumed via D2), engine-2 stopped (paper), worker 9999 down (standalone).
+> Status 2026-07-23: Z1–Z7 + X1–X4 + A4 + B7 + D1 + D2 code-complete + live-verified. 2026-07-22/23 added entry-gate UNIVERSAL repair, BUG-A/B, TDZ fix, version sync to v2.02, PR#1 merge, trailing-stop PineScript parity, paper-route 404 fix, backtest-import 500 fix, perp-account-value UI, test-drift fixes. **NOT STABLE / NOT BETA** — systematic bughunt + full `tests/` run still pending (next phase).
+> Live state: engine-1 LIVE (FARTCOIN, liq enriched via A4, auto-resumed via D2), engine-2 stopped (paper), worker 9999 down (standalone). Version **v2.02**.
 
 ---
 
@@ -17,7 +17,7 @@ Beta = operator can invite external testers to trade paper + view live, with no 
 3. Kill switch closes open positions before stopping (B7).
 4. Server survives restart (D2 — systemd/supervisor).
 5. Every UI route returns 200 (the deferred `routes.py` `_safe_tojson` fix deployed — D0).
-6. `main.py` version string corrected to v1.98/v1.99 (D1).
+6. `main.py` version string corrected to v2.02 (`metadata.py` reads VERSION file — `041d83e`/`529a3b2`).
 7. **Live frontend practical test passes** — operator/tester actually uses the UI in browser: Dashboard `#pos-grid` renders live position card (HL spine), engine_detail shows correct LIVE/PAPER tag, Backtest form submits + renders results, Paper flow runs dry-run, no 404s in menu. (TASK-LIST §BUGHUNT BUG-1→BUG-5)
 8. **Visual verification complete** — position-card.js output matches `design-system/position-card-spec.md` via browser screenshot; console error sweep clean on all authenticated pages (BUG-1, BUG-2, BUG-9).
 
@@ -40,7 +40,7 @@ Beta = operator can invite external testers to trade paper + view live, with no 
 
 | ID | Severity | Item | Plan | Verify |
 |----|----------|------|------|--------|
-| H1 | MED | B7 kill switch closes positions | `market_close()` before thread stop in `killswitch.py` per-engine path | Kill engine-1 → position flattened on HL, trade row closed |
+| H1 | MED | B7 kill switch closes positions | DONE 2026-07-18 (`stop_instance` + `killswitch.py` call `market_close()` before halt; kill-switch closes all). Live-verified (FARTCOIN flattened on HL). | N/A — closed |
 | H2 | MED | B9 drawdown spike filter | Confirm >50% swing filter holds on running engine-1 (no fake 97% DD) | AccountSnapshot max swing < 50% over 24h |
 | H3 | MED | B3 per-user log persistence | Write `data/logs/{user_id}.jsonl`, rotate >200 lines, load on startup | Log file exists post-restart, user-scoped |
 | H4 | MED | D2 auto-restart | systemd unit or supervisor conf for `main:app` on 8792 | `kill -9` uvicorn → auto-respawn, engine-1 reconnects |
@@ -125,7 +125,7 @@ Bar-replay endpoint, intra-bar tick UI, backtest date picker, local candle cache
 
 ## 8. BugHunt & Stability Phase (NEXT — pre-beta, HARD gate 7-8)
 
-> **Status:** NOT STARTED. Code is complete (Z1–Z7, X1–X4, A4, B7, D1, D2) but **NOT STABLE** until this phase closes.
+> **Status:** Code-complete through 2026-07-23 (Z1–Z7, X1–X4, A4, B7, D1, D2, entry-gate universal repair, BUG-A/B, TDZ, trailing-stop parity, PR#1, paper/backtest fixes). **Systematic bughunting (UI + wiring + data flow) still PENDING** — the next phase after the 2026-07-23 doc sync. NOT STABLE until BUGHUNT group + full `tests/` run close.
 > Operator directive: "We need to actually front end practical testing live with it before we can assume that."
 
 ### 8.1 Live Frontend Practical Test (gate 7)
