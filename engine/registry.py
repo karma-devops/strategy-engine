@@ -1,5 +1,18 @@
 """
 Strategy registry for strategy-engine.
+
+TERMINOLOGY (keep these distinct):
+  - STRATEGY  = the trading logic/signal class (e.g. v1.3, v1, v6.1). Lives in engine/*.py.
+  - ENGINE    = a running Instance that executes a Strategy against HyperLiquid
+                (see instances/runner.py). An Instance has a strategy_id.
+
+Naming:
+  - Canonical registry keys use the "strategy_*" namespace (e.g. "strategy_v1_3").
+  - Legacy "engine_*" keys (e.g. "engine_v1_3") are kept ONLY as backward-compat
+    ALIASES so existing Instances whose strategy_id was seeded as "engine_v1_3"
+    continue to resolve without a DB migration. ALIASES is consulted inside
+    get_strategy() / get_presets() — the STRATEGIES dict itself contains ONLY
+    canonical "strategy_*" keys, so iteration and listing never produce duplicates.
 """
 
 from engine.v1_3 import EngineV1_3Strategy
@@ -7,10 +20,18 @@ from engine.v1 import EngineV1Strategy
 from engine.v6_1 import EngineV6_1Strategy
 
 
+# Canonical strategy registry — "strategy_*" keys only.
 STRATEGIES = {
-    "engine_v1_3": EngineV1_3Strategy,
-    "engine_v1": EngineV1Strategy,
-    "engine_v6_1": EngineV6_1Strategy,
+    "strategy_v1_3": EngineV1_3Strategy,
+    "strategy_v1": EngineV1Strategy,
+    "strategy_v6_1": EngineV6_1Strategy,
+}
+
+# Backward-compat aliases → canonical key. DO NOT remove (existing DB rows use these).
+ALIASES = {
+    "engine_v1_3": "strategy_v1_3",
+    "engine_v1": "strategy_v1",
+    "engine_v6_1": "strategy_v6_1",
 }
 
 
@@ -19,7 +40,7 @@ DEFAULT_FLEET = [
         "slug": "engine-1",
         "name": "FARTCOIN Scalp v1.3",
         "token": "FARTCOIN",
-        "strategy_id": "engine_v1_3",
+        "strategy_id": "strategy_v1_3",
         "mode": "Scalp",
         "profile": "aggressive_8_3",
         "timeframe": "15m",
@@ -31,7 +52,7 @@ DEFAULT_FLEET = [
         "slug": "engine-2",
         "name": "HYPE Paper v1.3",
         "token": "HYPE",
-        "strategy_id": "engine_v1_3",
+        "strategy_id": "strategy_v1_3",
         "mode": "Scalp",
         "profile": "aggressive_8_3",
         "timeframe": "15m",
@@ -43,15 +64,24 @@ DEFAULT_FLEET = [
 
 
 def list_strategies() -> list:
+    # Canonical keys only — no alias duplicates.
     return list(STRATEGIES.keys())
 
 
+def _resolve_strategy_id(strategy_id: str) -> str:
+    """Map a (possibly legacy) strategy_id to its canonical registry key."""
+    if strategy_id in STRATEGIES:
+        return strategy_id
+    return ALIASES.get(strategy_id, strategy_id)
+
+
 def get_strategy(strategy_id: str):
-    return STRATEGIES.get(strategy_id)
+    return STRATEGIES.get(_resolve_strategy_id(strategy_id))
 
 
 def get_presets(strategy_id: str) -> dict:
-    if strategy_id == "engine_v1_3":
+    canonical = _resolve_strategy_id(strategy_id)
+    if canonical == "strategy_v1_3":
         return {
             "default": {
                 "mode": "Scalp",
@@ -61,7 +91,7 @@ def get_presets(strategy_id: str) -> dict:
                 "offset": 3,
             }
         }
-    if strategy_id == "engine_v1":
+    if canonical == "strategy_v1":
         return {
             "sniper_36_12": {
                 "mode": "Swing",
@@ -71,7 +101,7 @@ def get_presets(strategy_id: str) -> dict:
                 "offset": 12,
             }
         }
-    if strategy_id == "engine_v6_1":
+    if canonical == "strategy_v6_1":
         return {
             "default": {
                 "mode": "Scalp",
@@ -96,8 +126,9 @@ def register_uploaded_strategy(strategy_id: str, strategy_cls) -> None:
 
 def unregister_uploaded_strategy(strategy_id: str) -> None:
     """Remove an uploaded/cloned strategy from the runtime registry."""
-    if strategy_id in STRATEGIES and strategy_id not in ("engine_v1_3", "engine_v1", "engine_v6_1"):
-        del STRATEGIES[strategy_id]
+    canonical = _resolve_strategy_id(strategy_id)
+    if canonical in STRATEGIES and canonical not in ("strategy_v1_3", "strategy_v1", "strategy_v6_1"):
+        del STRATEGIES[canonical]
 
 
 def detect_mintick(df=None, token: str = None) -> float:
