@@ -701,7 +701,7 @@ def seed_user_fleet(user: "User") -> list:
             user_id=user.id,
             name="Engine HYPE v1",
             token="HYPE",
-            strategy_id="engine_v1",
+            strategy_id="strategy_v1",
             mode="Scalp",
             profile="aggressive_8_3",
             timeframe="30m",
