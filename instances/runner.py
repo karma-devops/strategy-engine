@@ -820,6 +820,29 @@ class InstanceRunner:
                 "notional": notional,
             }
         )
+        # D2(a): record a dedicated OPEN row so the trades table has the entry
+        # lifecycle (entry time/size/side) before close. exit_price NULL until
+        # _close_active_trade writes its own close-row. user_id for multi-tenant.
+        # size/entry_price are filled by the close-row (D1) once HL returns the
+        # real fill; this row captures the open event + side + entry cost.
+        if open_result is not None:
+            open_trade = Trade(
+                instance_id=self.id,
+                user_id=self.instance.user_id,
+                side=desired_side,
+                size=0.0,
+                entry_price=None,
+                exit_price=None,
+                pnl_usd=0.0,
+                pnl_pct=0.0,
+                entry_cost=entry_cost,
+                exit_cost=0.0,
+                price_diff=0.0,
+                signal_id=None,
+                dry_run=self.instance.dry_run,
+            )
+            db.add(open_trade)
+            db.commit()
         return open_result is not None, entry_cost
 
     def _execute_close(
