@@ -2310,3 +2310,11 @@ Sprint code complete: A,B,C,D,E + ref-CSS. G (live-test) deferred to operator en
 **Phase 7 (test repair):** all 8 test files' legacy-slug refs → `translation-test` (commits 2424f7c, c4df719, 2d2b1e9, 993731f, 45625a0, fdae51e, e3b7f66, 41f7ac0). 3 run green post-fix; 5 have PRE-EXISTING harness breaks from `main/`→repo-root restructure (`ModuleNotFoundError: main`/`instances`, per-user API-key 403 gate) — out-of-scope, need separate harness fix.
 
 **Frontend note (operator):** user should be able to set model + provider from the frontend (writes to Account > Secrets / ai_provider cred). Strategy Studio currently reads backend default only — no selector UI yet. Belongs to `docs/UI-PARITY-REFERENCE-SPEC.md`.
+
+---
+## 2026-07-24 — Strategy lifecycle repair + full re-proof (session c7bb8058f145)
+- **Bug found (TURN-37 follow-up):** POST /api/v2/strategies/upload created DB row plus in-memory register but NEVER wrote strategies/{id}/strategy.py (python) or {id}.pine (pine) to disk. Cascaded: detail page Python/Pine tabs empty; /duplicate failed "source strategy dir missing".
+- **Fix (surgical, app/routes.py strategy_upload_api ~1513 and ~1546):** materialize source to disk mirroring strategy_save_api save_dir.mkdir + write_text. No signature/endpoint change. Backup: backups/v2.03.007_pre-upload-diskfix_STABLE_2026-07-24_1617.tar.gz plus VERSIONING.md entry.
+- **Verify gate:** py_compile clean on tree; restart (kill child via process.kill, relaunch terminal background proc_986866e59961); landing/dashboard 200.
+- **Full lifecycle PROVEN:** API create/copy/edit/delete all write/read disk correctly. UI create via Upload form writes disk plus DB; copy via Duplicate btn works; delete via Delete btn works (native confirm dialog blocks test harness clicks, override window.confirm to prove; not an app bug).
+- **Cleanup:** removed ui-proof-python, ui-proof-python-copy, lifecycle test strategies. Only translation-test remains.

@@ -1513,6 +1513,15 @@ async def strategy_upload_api(request: Request, username: str = Depends(verify_u
         # Get default config
         parameters = strategy_cls.get_default_config() if hasattr(strategy_cls, 'get_default_config') else {}
 
+        # Materialize source to disk so the dynamic loader + engines can use it
+        # without a process restart, and so detail/duplicate paths find the dir.
+        # Mirrors /save (strategy_save_api) behaviour.
+        from pathlib import Path as _Path
+        _root = _Path(__file__).resolve().parent.parent
+        _save_dir = _root / "strategies" / strategy_id
+        _save_dir.mkdir(parents=True, exist_ok=True)
+        _save_dir.joinpath("strategy.py").write_text(python_source)
+
         db = DBSession()
         try:
             existing = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
@@ -1537,6 +1546,13 @@ async def strategy_upload_api(request: Request, username: str = Depends(verify_u
     else:  # pine
         if not pine_source:
             return {"ok": False, "message": "pine_source is required when source_type=pine"}
+        # Materialize PineScript source to disk so the detail page PineScript tab
+        # and the /duplicate path can find it (get_strategy_file_info globs *.pine).
+        from pathlib import Path as _Path
+        _root = _Path(__file__).resolve().parent.parent
+        _save_dir = _root / "strategies" / strategy_id
+        _save_dir.mkdir(parents=True, exist_ok=True)
+        _save_dir.joinpath(f"{strategy_id}.pine").write_text(pine_source)
         db = DBSession()
         try:
             existing = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
