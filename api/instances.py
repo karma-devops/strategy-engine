@@ -303,7 +303,7 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
             hl = get_hyperliquid_client()
             has_hl_credentials = getattr(hl, 'has_credentials', False)
             if has_hl_credentials:
-                live_val = hl.get_account_value()
+                live_val = hl.get_perp_account_value()  # C1: HL-native perp-only, matches B4 source='perp' pulse/KPI
                 if live_val > 0:
                     account_value = round(live_val, 2)
         except Exception:
