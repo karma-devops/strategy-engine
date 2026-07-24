@@ -1,7 +1,7 @@
 # CONTEXT.md — strategy-engine (PULS·R) — THE MAP
 
 > **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
-> Companion docs (consolidated 2026-07-19): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/bugreport.md**, **docs/task-priorities.md**, **docs/HANDOVER-UI-WALKTHROUGH.md**.
+> Companion docs (consolidated 2026-07-19, REFRESHED 2026-07-24): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/HANDOVER-UI-WALKTHROUGH.md**. Living PWA docs: **docs/DOCUMENTATION.md**, **docs/FAQ.md**, **docs/VOCABULARY.md**. (All other historical docs archived to `backups/deprecated-docs_2026-07-24/` — see Track 2.6.)
 > Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
 > Do not commit to GitHub (local-only). Version: **v2.02** (synced 2026-07-23; prior doc freeze was v1.98 @ 2026-07-19).
 
@@ -354,10 +354,10 @@ strategy-engine/
 - ADIX: filesystem is the state machine; every directory is a processing node.
 - Keep worker (9999) standalone — do not integrate into main app.
 
-## Doc pointer (2026-07-18)
+## Doc pointer (REFRESHED 2026-07-24 — Track 2.6)
 - `docs/TASK-LIST.md` is the single consolidated work/status tracker (TIER 0/1/2). ROOT `TASK-LIST.md` no longer exists — all work now lives in `docs/`.
-- `docs/` holds the architecture contract: README, VOCABULARY, ARCHITECTURE,
-  DECISIONS, ROADMAP, CONTRIBUTING, STYLEGUIDE, AI_RULES, REFACTOR_PLAN.
+- `docs/` KEEP set (authoritative, living): `TASK-LIST.md`, `IMPLEMENTATION-CHECKLIST-cleanup.md`, `PLANNED-EDITS-24-7-2026.md`, `HANDOVER-UI-WALKTHROUGH.md`, `DOCUMENTATION.md`, `FAQ.md`, `VOCABULARY.md`. All others (ARCHITECTURE, ROADMAP, REFACTOR_PLAN, bugreport, DECISIONS, STYLEGUIDE, AI_RULES, UI-TODO-1, etc.) archived to `backups/deprecated-docs_2026-07-24/`. `wiki/` removed (overlapped docs/).
+- `DOCUMENTATION.md` / `FAQ.md` / `VOCABULARY.md` = living PWA docs; must reflect ACTUAL implemented frontend (LIVE+STABLE). Refresh pending (Track 2.7).
 - `BACKLOG.md` (root) = bugreport tracking ledger.
 
 ## Known deferred features (operator-flagged, do NOT implement without explicit go)

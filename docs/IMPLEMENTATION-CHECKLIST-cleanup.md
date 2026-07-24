@@ -49,9 +49,54 @@ The `strategies/` split touches the same source files the repair touched — so 
 | 2.2 | `._env_example` (underscore dup of `.env.example`) | consolidate: `mv` underscore copy to `backups/`, keep `.env.example` | one canonical | ✅ DONE (file did NOT exist at root; only `.env.example` present — no dup to move) |
 | 2.3 | `backups/` (84 dirs, gitignored) | **leave untouched** per standing rule; flag for cold-tar, not delete | — | N/A |
 | 2.4 | `venv/`, `data/` | confirmed gitignored; no action | — | N/A |
-| 2.5 | Root `HANDOVER-UI-WALKTHROUGH.md` | consider `mv` to `docs/` (CONTEXT references it as companion) | operator call | ☐ |
+| 2.5 | Root `HANDOVER-UI-WALKTHROUGH.md` | `mv` to `docs/` (CONTEXT references it as companion) | done (commit 7a2aa7b) | ✅ DONE |
 
 ---
+
+## Track 2.6 — docs/ + wiki/ sweep (operator addendum 2026-07-24)
+
+**Inventory:** 27 files in `docs/` + 5 in `wiki/` = 32 docs. Most stale/overlapping. Rule: **NO REMOVER** — archive = `mv` to `backups/deprecated-docs_2026-07-24/`, never delete. Each item logged for ADIX self-doc.
+
+**Authoritative set (KEEP, do not touch):** CONTEXT.md / NOTES.md / BACKLOG.md / BETA-ROADMAP.md (repo root), `docs/TASK-LIST.md` (work), `docs/IMPLEMENTATION-CHECKLIST-cleanup.md` (active), `docs/PLANNED-EDITS-24-7-2026.md` (repair history), `docs/HANDOVER-UI-WALKTHROUGH.md` (CONTEXT-referenced).
+
+| # | File | Size | Decision | Reason |
+|---|------|------|----------|--------|
+| 2.6.1 | `docs/AI_RULES.md` | 1.5K | ARCHIVE | stale rules, superseded by CONTEXT |
+| 2.6.2 | `docs/ARCHITECTURE.md` | 3.6K | ARCHIVE | overlaps CONTEXT §2 (Track 3.3) |
+| 2.6.3 | `docs/BUGREPORT-1.md` | 18K | ARCHIVE | merged into TASK-LIST |
+| 2.6.4 | `docs/CONTRIBUTING.md` | 1.4K | ARCHIVE | boilerplate, stale |
+| 2.6.5 | `docs/DECISIONS.md` | 2.1K | ARCHIVE | historical, stale |
+| 2.6.6 | `docs/DOCUMENTATION.md` | 28K | **KEEP + REFRESH** | operator 2026-07-24: living PWA doc, same level as FAQ/VOCABULARY. Must reflect ACTUAL implemented frontend code (LIVE+STABLE). Refresh in 2.7. |
+| 2.6.7 | `docs/FAQ.md` | 8.4K | **KEEP + REFRESH** | operator: KEEP, make accurate to live PWA. Refresh in 2.7. |
+| 2.6.8 | `docs/REFACTOR_PLAN.md` | 2.3K | ARCHIVE | superseded by CONTEXT §11 (Track 3.3) |
+| 2.6.9 | `docs/ROADMAP.md` | 13K | ARCHIVE | false "61/61 pass" (Track 3.3) |
+| 2.6.10 | `docs/STYLEGUIDE.md` | 1.5K | ARCHIVE | stale |
+| 2.6.11 | `docs/UI-TODO-1.md` | 7.6K | ARCHIVE | merged into TASK-LIST |
+| 2.6.12 | `docs/UI-WALKTHROUGH-FINDINGS.md` | 14K | ARCHIVE | historical findings |
+| 2.6.13 | `docs/VERIFICATION-STATUS-1.md` | 14K | ARCHIVE | historical |
+| 2.6.14 | `docs/VOCABULARY.md` | 3.3K | **KEEP + REFRESH** | operator: KEEP, make accurate to live PWA. Refresh in 2.7. |
+| 2.6.15 | `docs/bugreport.md` | 14.9K | ARCHIVE | merged into TASK-LIST |
+| 2.6.16 | `docs/design-audit-findings-v1.md` | 23.6K | ARCHIVE | historical audit |
+| 2.6.17 | `docs/full-ui-ux-redesign-plan.md` | 13K | ARCHIVE | historical plan |
+| 2.6.18 | `docs/paper-trading-upgrade-plan.md` | 7K | ARCHIVE | historical plan |
+| 2.6.19 | `docs/project-map.html` | 33.6K | ARCHIVE | stale visual map |
+| 2.6.20 | `docs/sprint-plan-v2.md` | 10K | ARCHIVE | historical sprint |
+| 2.6.21 | `docs/task-priorities.md` | 5.9K | ARCHIVE | 3-tier companion, merged into TASK-LIST |
+| 2.6.22 | `docs/HANDOVER-T1-7.md` | 4.9K | ARCHIVE | historical handover |
+| 2.6.23 | `docs/README.md` | 2.6K | ARCHIVE | duplicate of root README.md |
+| 2.6.24 | `wiki/README.md` | 1.7K | ARCHIVE | overlaps docs/ (Track 3.3) |
+| 2.6.25 | `wiki/api-reference.md` | 3.9K | ARCHIVE | overlaps docs/ |
+| 2.6.26 | `wiki/data-models.md` | 6.0K | ARCHIVE | overlaps docs/ |
+| 2.6.27 | `wiki/setup.md` | 1.9K | ARCHIVE | overlaps docs/ |
+| 2.6.28 | `wiki/ui-components.md` | 4.4K | ARCHIVE | overlaps docs/ |
+
+**Summary:** KEEP 7 (TASK-LIST, IMPLEMENTATION-CHECKLIST, PLANNED-EDITS, HANDOVER-UI-WALKTHROUGH, DOCUMENTATION, FAQ, VOCABULARY) + root authoritative 4 (CONTEXT, NOTES, BACKLOG, BETA-ROADMAP). ARCHIVE 25 (all other 2.6.x) → `backups/deprecated-docs_2026-07-24/`. KEEP trio refreshed to live frontend in 2.7.
+
+| 2.7 | Refresh KEEP trio (DOCUMENTATION.md, FAQ.md, VOCABULARY.md) to ACTUAL implemented frontend code | read front-end source, fix drift, LIVE+STABLE only | pending (next) |
+
+**Execution plan (per file, one mv + verify each, backup v2.03.004 pre-sweep):** batch the `mv` as one directory move (`mkdir backups/deprecated-docs_2026-07-24 && git mv <each> backups/...`), verify `docs/` contains only the 7 KEEP files + `wiki/` gone, update CONTEXT.md §2/§12 doc-taxonomy reference if it lists any archived name, commit. NO deletions. Mirror new taxonomy into CONTEXT.md + NOTES.md (ADIX self-doc). Then 2.7 refresh KEEP trio to live frontend.
+
+
 
 ## Track 3 — Doc clarification & simplification (cross-refs attached plan Tier 3.5)
 

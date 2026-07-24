@@ -2280,3 +2280,12 @@ All six F-items verified NO-OP on disk (attached analysis stale, like F1/AEE/exp
 - F6 activation int api/backtests.py:37: already typed int
 Sprint code complete: A,B,C,D,E + ref-CSS. G (live-test) deferred to operator engine restart.
 **Server:** running on 8792, healthy. Engines halted (no live capital risk).
+
+---
+## 2026-07-24 — Track 2.6 docs/ + wiki/ sweep (ADIX self-doc)
+**Doc taxonomy now authoritative (mirrors CONTEXT.md Doc pointer):**
+- KEEP (living, in `docs/`): `TASK-LIST.md`, `IMPLEMENTATION-CHECKLIST-cleanup.md`, `PLANNED-EDITS-24-7-2026.md`, `HANDOVER-UI-WALKTHROUGH.md` (moved root→docs/ this session), `DOCUMENTATION.md`, `FAQ.md`, `VOCABULARY.md`.
+- KEEP (root authoritative): `CONTEXT.md`, `NOTES.md`, `BACKLOG.md`, `BETA-ROADMAP.md`.
+- ARCHIVED (25 files) → `backups/deprecated-docs_2026-07-24/`: AI_RULES, ARCHITECTURE, BUGREPORT-1, CONTRIBUTING, DECISIONS, REFACTOR_PLAN, ROADMAP, STYLEGUIDE, UI-TODO-1, UI-WALKTHROUGH-FINDINGS, VERIFICATION-STATUS-1, bugreport, design-audit-findings-v1, full-ui-ux-redesign-plan, paper-trading-upgrade-plan, project-map.html, sprint-plan-v2, task-priorities, HANDOVER-T1-7, README (docs dup), + `wiki/` 5 files (README/api-reference/data-models/setup/ui-components). NO deletions — relocate only.
+- `DOCUMENTATION.md`/`FAQ.md`/`VOCABULARY.md` = living PWA docs, must reflect ACTUAL implemented frontend (LIVE+STABLE). Refresh pending = Track 2.7.
+- `wiki/` dir removed (overlapped docs/).
