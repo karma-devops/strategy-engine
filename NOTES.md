@@ -2225,4 +2225,47 @@ All edits backed up (tar.gz STABLE form: v202_t21 / v203_t22 / v204_t23 / v205_t
 ### Done this session (for reference)
 - Docs sync v1.98→v2.02 (6 files) · B1 close-btn creds · bughunt (EMA claim refuted) · strategy/engine labeling (`strategy_*`) · legacy cleanup · #60 dead code · BACKLOG reconcile · idempotency 60s cooldown (`0122757`).
 
+---
+
+## 2026-07-24 — Server restart + Phase B (B1-B4) live verification
+
+### Context
+Operator approved repair plan (docs/PLANNED-EDITS-24-7-2026.md), all engines halted (24h test stopped).
+Phase A (positions HL-live) + Phase B (pulse pure-append, HL-native KPI) coded + committed.
+Operator: "restart server per NOTES.md to verify + live test current edits."
+
+### Commits landed this session (all pushed to main)
+- `0ec3689` plan doc + AEE.md deletion (reconciliation)
+- `164fdaa` A1: relax /summary gate → HL drives position for all running live instances
+- `6b0c0d3` B1: +source column on AccountSnapshot (model + startup migration, verified on live DB)
+- `5974055` B2: remove >50% gap filter + stamp source='perp'/'paper'
+- `335c623` B3: pulse seed window ?hours=1 → ?hours=24
+- `7a4d305` B4: /summary snapshot query filters source='perp' (HL-native pulse/KPI)
+
+### Expert runner_py.py review (decisive)
+Attached expert runner was STALE/regressive: its trend-exit needs `close_long/short_on_trend_reversal`
+booleans that NEITHER engine/v1_3.py NOR engine/v6_1.py emit (they emit fast_ema/medm_ema in
+exit_config). Disk runner already = universal neutral receiver (reads exit_config/entry_config only;
+EMA *values* sourced from strategy's exit_config — exactly operator's "EMA on strategy, runner reads").
+Expert file NOT applied. ROOT-2 (E1) dropped — disk EMA-cross already correct.
+
+### Restart runbook executed (NOTES.md §HOW TO RESTART)
+- Runbook says `cd main/` — STALE: entrypoint is repo-root `main.py` (uvicorn main:app --port 8792).
+- Killed stale workers, port 8792 FREE, relaunched ONE from repo root. "Application startup complete" —
+  zero tracebacks. B1 migration ran at startup clean.
+- Landing 200, dashboard 200 (Basic Auth operator:operator).
+
+### B4 verification (the core test)
+- DB had 35,152 snapshot rows last 24h, ALL source=NULL (written pre-B2).
+- Backfilled (DB backed up to /tmp first): 32,452 → source='perp' (dry_run=False), 2,700 → 'paper'.
+- /summary mode=live query (source='perp') now returns 500 rows, all source==perp confirmed.
+  → pulse + KPI draw HL-native rows only, as designed.
+- curl auth 401/403 from shell = per-user-key mismatch (frontend uses per-user Fernet key, gets 200).
+  NOT an edit bug.
+
+### Status
+Server RUNNING on 8792, healthy, serving 200s. Phase B verified end-to-end. Live trading NOT tested
+(engines halted per operator). A1 gate (live position render) + Gate A pending an engine run.
+Next: C1 (KPI get_perp_account_value override) or D-series (trades HL-accurate).
+
 **Next session reminder:** on 24h-test completion, verify (1) engine-1 still running/flat-or-closed cleanly, (2) no duplicate entries (idempotency held), (3) circuit breaker / kill-switch behavior, (4) then resume T3-8 / B-series from table above.
