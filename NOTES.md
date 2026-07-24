@@ -38,9 +38,9 @@
   grep -qi ':2268' /proc/net/tcp && echo "PORT STILL LISTENING" || echo "PORT 8792 FREE"
   ```
   If any survive, `kill -9` them. DO NOT relaunch until the port is FREE.
-- Relaunch ONE server in background from `main/`:
+- Relaunch ONE server in background from the **REPO ROOT** (NOT `cd main/` — the `main/` subdir was renamed/absent in the restructure; `main.py` lives at repo root):
   ```bash
-  cd /workspace/projects/strategy-engine/main
+  cd /workspace/projects/strategy-engine
   /workspace/projects/strategy-engine/venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8792
   ```
   (Run via Hermes `terminal(background=true)` so the process is tracked. Or `nohup ... &` if shell-only.)
@@ -2289,3 +2289,24 @@ Sprint code complete: A,B,C,D,E + ref-CSS. G (live-test) deferred to operator en
 - ARCHIVED (25 files) → `backups/deprecated-docs_2026-07-24/`: AI_RULES, ARCHITECTURE, BUGREPORT-1, CONTRIBUTING, DECISIONS, REFACTOR_PLAN, ROADMAP, STYLEGUIDE, UI-TODO-1, UI-WALKTHROUGH-FINDINGS, VERIFICATION-STATUS-1, bugreport, design-audit-findings-v1, full-ui-ux-redesign-plan, paper-trading-upgrade-plan, project-map.html, sprint-plan-v2, task-priorities, HANDOVER-T1-7, README (docs dup), + `wiki/` 5 files (README/api-reference/data-models/setup/ui-components). NO deletions — relocate only.
 - `DOCUMENTATION.md`/`FAQ.md`/`VOCABULARY.md` = living PWA docs, must reflect ACTUAL implemented frontend (LIVE+STABLE). Refresh pending = Track 2.7.
 - `wiki/` dir removed (overlapped docs/).
+
+## 2026-07-24 — Track 5 Legacy Removal + Translation-Test Slot (ADIX verified)
+**Goal:** repurpose the empty strategy slot to test Pine→Python translation; remove 3 legacy dirs (strategy_v1, strategy_v1_3, strategy_v6_1).
+
+**Phases (one-change/turn, backup-before-mutation, commit+push each):**
+- P0 STABLE backup → `backups/v2.03.014_pre-legacy-removal_STABLE_20260724_103848.tar.gz` (20.3MB; legacy dirs inside).
+- P1 pynescript 0.3.0 confirmed importable via venv (was shell-vs-venv mismatch).
+- P2 `core/llm.py` converter gains `save_path` + `retries` (bd8ad7c).
+- P3 registry seed neutralized: `_SEED_STRATEGIES={}`, `STRATEGIES=_discover_subdir_strategies()`, `ALIASES`/hardcoded `get_presets` removed (59ca6d3).
+- P4 legacy dirs moved → `backups/legacy-strategies/` (NO rm) (f59eb9d).
+- P5b `/api/v2/strategies/{id}/convert` gains `save_slug` → writes `strategies/{slug}/strategy.py` (2501004).
+- P5c live server relaunched from **repo root** (NOT `cd main/` — stale runbook fixed this session; `main/` absent post-restructure).
+- db-fix: `/convert` route `db`→`db0` UnboundLocalError (61ac2e4).
+- P5d gated converter: system prompt adds GATES (import/super/init/vectorized/return-shape) + code-enforced `_gate_check` (syntax/contract) + `_smoke_test` (import+call generate_signals on toy df) loop feeds errors back to model for self-correction up to retries. Scoped to `convert_pine_to_python` ONLY (8f80057).
+- Result: `strategies/translation-test/strategy.py` generated (Eve_Engine_v1_3.pine → `EveEngineV13Strategy(BaseStrategy)`), loads, `generate_signals` returns `{direction, metadata, exit_config}`. Live `/api/v2/strategies` → `["translation-test"]` verified. UI Strategy Studio screenshot confirms Provider: ollama · Model: glm-5.1 defaults.
+
+**Defaults (operator directive):** Ollama + `glm-5.1` as code defaults. NOTE: this key's Ollama account gates `glm-5.1`/`deepseek-v4-flash` (403 subscription); `gpt-oss:20b`/`nemotron-3-nano:30b`/`minimax-m2.5` are callable free. Live conversion via API needs a callable model — deferred to frontend test.
+
+**Phase 7 (test repair):** all 8 test files' legacy-slug refs → `translation-test` (commits 2424f7c, c4df719, 2d2b1e9, 993731f, 45625a0, fdae51e, e3b7f66, 41f7ac0). 3 run green post-fix; 5 have PRE-EXISTING harness breaks from `main/`→repo-root restructure (`ModuleNotFoundError: main`/`instances`, per-user API-key 403 gate) — out-of-scope, need separate harness fix.
+
+**Frontend note (operator):** user should be able to set model + provider from the frontend (writes to Account > Secrets / ai_provider cred). Strategy Studio currently reads backend default only — no selector UI yet. Belongs to `docs/UI-PARITY-REFERENCE-SPEC.md`.

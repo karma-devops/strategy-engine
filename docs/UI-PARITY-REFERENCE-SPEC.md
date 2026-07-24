@@ -12,6 +12,41 @@ execute one item at a time, verify per item (see §H).
 **Live reference (for visual check):** `https://hermes-core-engine-v1.6cdzen.easypanel.host/`
 login `operator / operator` (read-only inspection).
 
+---
+
+## STATUS (as of 2026-07-24, session 347db389f0c5 — Turn 15)
+
+**Phase:** Investigation + spec authoring ONLY. **Zero code changes made to the app.**
+Repo HEAD at `53633df` (unrelated Track 5.x work). All bugs below are **root-cause
+confirmed** by direct live API calls + source inspection, but **none are fixed yet**.
+
+| Item | What it is | Status | Evidence |
+|---|---|---|---|
+| §A KPI (Equity + Balance) | Collapse to 2 KPIs, brand tokens | 🔍 Confirmed, not built | dashboard.html:198-217 current 4-card layout |
+| §B Pulse graph | Match reference SVG curve | 🔍 Confirmed, not built | dashboard.html:289-408 current builder |
+| §C Open Positions | De-engine-depend + ref layout | 🔍 Confirmed, not built | position-card.js:69,194 + dashboard.html:462 dup |
+| §D Agent Console | Ref level-colored log | 🔍 Confirmed, not built | dashboard.html:264 |
+| §E Candles 401 | Backtest chart stuck | 🔍 Confirmed, not built | testing_historical.html:293 missing key |
+| §F Portfolio value | Double-count + stale snap | 🔍 Confirmed, not built | exchange.py:134 ; routes.py:358 |
+| §G Data plumbing | Engine-independent poller | 🔍 Confirmed, not built | positions.py:37 running-only |
+| §H Verify gate | ADIX per-item | ✅ Defined | §H in this doc |
+| §I1 Wrong-DB read | Backtest list empty | 🔍 **Confirmed live**, not built | API run returned `done`+673pt curve, but `GET /backtests` → `[]` (api/backtests.py:123 reads main DB; save_run → data/backtest.db) |
+| §I2 Candles auth | Token-price stuck | 🔍 Confirmed, not built | 401 without key, 200 with key |
+| §I3 Equity renders | Auto after I1+I2 | ⏳ Blocked by I1+I2 | renderer exists testing_historical.html:184-189 |
+| §I4 Hard-test | Re-prove fix | ✅ Procedure defined | §I4 in this doc |
+
+**Live environment notes (read this before testing):**
+- Prod app: `https://puls-r-engine.6cdzen.easypanel.host/` (external). Login `operator / operator`.
+- The repo's `.env` `AGENT_API_KEY` returns **403** on `/api/v2/summary` (key mismatch between
+  this checkout and the deploy). This means direct curl comparison of dashboard values isn't
+  possible from here — but `POST /api/v2/backtests/run` with that same key returned **HTTP 200 +
+  `status: done`** (real run, 76 trades, +199%, 673-pt equity curve). So the backend works; the
+  read-path (`list_backtests`) is the only blocker for the UI.
+- Backtest run test was **safe** (historical replay, no capital).
+- **Next action:** pick an item, build one file at a time, verify per §H, commit+push per step.
+  Recommended order: §I1 → §I2 (unblocks the backtest graph fastest, highest visual payoff),
+  then §C (positions, your original complaint), then §A/§B/§D (reference parity).
+
 **Our brand tokens (MUST be used instead of reference's raw colors):** see §0.
 
 ---
@@ -235,3 +270,117 @@ After EACH item (not at the end):
 | Reference positions | `ai-trading-agent-hl/.../index.html:100-115` ; `app.js:243-301` ; `style.css:456-641` |
 | Reference pulse | `ai-trading-agent-hl/.../app.js:1455-1544` |
 | Reference console | `ai-trading-agent-hl/.../index.html:121-134` ; `app.js:391-423` ; `style.css:646-688` |
+| Backtest list reads wrong DB | `api/backtests.py:21,123-140,143-154` (uses `instances.models.Backtest`/`get_db`) vs `testing/backtest_store.py:28,87,101` (writes `data/backtest.db`) |
+| Backtest save path | `api/backtests.py:86-114` (`save_run`) ; `testing/backtest_store.py:101-106` |
+| Equity chart renderer (exists, starved) | `app/templates/testing_historical.html:184-189` (`PulsRChart.createEquityBarChart` on `#equityChart`) |
+| Token-price candles fetch (401) | `app/templates/testing_historical.html:293` (no `X-API-Key`) |
+| Run endpoint returns equity_curve | `api/backtests.py:110,116-120` (`equity_curve_json` in response) |
+
+---
+
+## §I — Backtest graph does not render (HARD-TESTED, root cause confirmed)
+
+**Context (verified live 2026-07-24):** Ran a real backtest via API
+(`FARTCOIN / strategy_v1_3 / 15m / 7d / 5x`) → `status: done`, 76 trades, +199% return,
+`equity_curve` = **673 points** `{time, equity}`. The backend is correct. The FRONT END
+shows **nothing**: "No backtests yet", empty equity box, stuck token-price loader.
+Two independent bugs, both confirmed by direct inspection + API calls.
+
+### I1 — `list_backtests` / `get_backtest` read the WRONG database (primary killer)
+
+**Symptom:** `GET /api/v2/backtests` always returns `{"backtests":[]}` even after a successful
+run. The "Backtest Runs" table is permanently empty and the equity chart never gets data.
+
+**Root cause:**
+- `api/backtests.py:21` imports `from instances.models import Backtest, get_db, Instance`.
+- `api/backtests.py:123-140` `list_backtests` does `db.query(Backtest)` with `db = Depends(get_db)`
+  → the **main `strategy_engine.db`**.
+- But the run endpoint saves to the **isolated `data/backtest.db`**:
+  `api/backtests.py:86,114` calls `save_run(record)` from `testing/backtest_store.py`,
+  where `_DB_PATH = data/backtest.db` (`testing/backtest_store.py:28`) and `save_run` commits
+  via that engine's `Session()` (`testing/backtest_store.py:101-106`).
+- The main DB has **no backtest tables** (verified: `data/backtest.db` has `backtest_runs`/
+  `backtest_trades`; `strategy_engine.db` has neither). So reads return empty.
+
+**Fix (one import + session swap, no logic change):**
+- In `api/backtests.py`, stop using `instances.models.Backtest` / `get_db` for the read paths.
+- Import the isolated store: `from testing.backtest_store import BacktestRun, list_runs, get_run`
+  (functions already exist at `testing/backtest_store.py:128-141` `get_run`, `:134-140` `list_runs`).
+- Rewrite `list_backtests` (`:123-140`) to call `list_runs(mode=instance_slug or None, limit=limit)`
+  and `get_backtest` (`:143-154`) to call `get_run(backtest_id)`, returning their dicts.
+- Keep `_row_to_dict` or switch the response to the store's `_run_to_dict` shape
+  (`testing/backtest_store.py:143+`) — the front end consumes `equity_curve`, `total_return_pct`,
+  `total_trades`, etc., which both dicts already expose.
+- **Do NOT** change `run_backtest_endpoint` (`:43-120`) — its `save_run` path is correct.
+
+**Verify (per §H):**
+- `curl -s -H "X-API-Key: $KEY" http://127.0.0.1:8792/api/v2/backtests` → now returns the run
+  (count ≥ 1), with `equity_curve` array of 673+ points.
+- `curl -s -H "X-API-Key: $KEY" http://127.0.0.1:8792/api/v2/backtests/<id>` → 200 + full dict.
+
+### I2 — Token-price candle fetch missing auth (stuck loader)
+
+**Symptom:** "TOKEN PRICE CHART" shows "Loading token price data / Fetching candles from
+HyperLiquid…" forever.
+
+**Root cause:** `app/templates/testing_historical.html:293` fetches `/api/v2/candles/{token}`
+with **no `X-API-Key` header**. That route requires it (`api/instances.py:835` mounted under
+`Depends(verify_api_key)` at `main.py:205`). Unauthenticated → 401 → loader never clears.
+(Confirmed: with key → HTTP 200 + candles; without → 401.)
+
+**Fix (two options, pick A):**
+- **A (preferred):** add `headers: { 'X-API-Key': API_KEY }` to the fetch at
+  `app/templates/testing_historical.html:293` (pattern already correct at
+  `app/templates/backtests.html:99`). `API_KEY` is injected on this page
+  (see dashboard.html `window.API_KEY` wiring / `app/routes.py` context).
+- **B (alt):** relax the candles route to `require_ui_or_api` (`api/auth.py:111`) so Basic-auth
+  sessions work — edit the router dependency at `main.py:205`. More invasive; prefer A.
+
+**Verify:** browser reload of `/app/testing/historical` → token-price chart draws candles (no
+longer stuck). Cross-check: `curl -s -H "X-API-Key: $KEY" "http://127.0.0.1:8792/api/v2/candles/FARTCOIN?tf=15m&bars=200"` → 200.
+
+### I3 — After I1+I2, the equity graph renders automatically
+
+The renderer already exists and is correct: `app/templates/testing_historical.html:184-189`
+`const btChart = PulsRChart.createEquityBarChart('equityChart', { height: 280 })` fed by
+`latestEquity` / the run's `equity_curve`. Once I1 supplies the curve and I2 unblocks the page,
+the "beautiful" equity graph (the one referenced in the operator's early memory) will draw
+with **no further chart code changes**. If the operator wants the *early* styling exactly, port
+the reference pulse-graph SVG treatment (§B) onto `#equityChart` — but functionally it works as-is.
+
+**Note on the "early beautiful graph":** the early commit `7bbb4ec` was backend/engine-only
+(zero HTML templates). The equity-graph code has always lived in `testing_historical.html`;
+it was never removed — it was just starved of data by bug I1. No historical recovery needed.
+
+### I5 — Strategy Studio: user-selectable model + provider (operator directive 2026-07-24)
+
+**Current state:** `app/routes.py` `/api/v2/strategies/{id}/convert` resolves the AI
+provider from `config.get_credential("ai_provider", user_id)` (DB, then env fallback).
+The **frontend Strategy Studio** (`/app/strategy-studio`, the "PINE → PYTHON CONVERTER"
+panel) currently *reads* the backend default (Provider: ollama · Model: glm-5.1) and
+offers no selector — the user cannot set model/provider from the UI.
+
+**Required (operator: "user should be able to set model + provider from the frontend"):**
+1. Add a **Provider** + **Model** dropdown (or free-text model) to the Strategy Studio
+   convert panel, pre-filled from the operator's stored `ai_provider` credential.
+2. On Convert, POST the selected provider/model alongside `pine_source` + `save_slug`
+   so `core/llm.convert_pine_to_python` receives `model_override` (already supported)
+   + a provider URL/key override that writes to `Account > Secrets` (ai_provider cred).
+3. The `/convert` route must accept + persist the selection (currently `user_id` resolves the
+   DB cred; the UI should let the user *edit* that cred, not just send per-call overrides).
+4. GATES (system prompt + `_gate_check`/`_smoke_test` loop in `core/llm.py`) stay
+   scoped to `convert_pine_to_python` only — unaffected by this UI change.
+
+**Verify:** screenshot the Studio panel showing the provider/model selectors populated from
+the operator's Secrets; confirm a Convert with a non-default model reaches `core/llm.chat`
+with the chosen `model_override`.
+
+
+1. Login `operator/operator` at the app, open `/app/testing/historical`.
+2. Fill: TOKEN=FARTCOIN, STRATEGY=translation-test, TF=15m, START BALANCE=100, DAYS=7, LEVERAGE=5.
+3. Click **Run Backtest** (button `e25`). Wait ~5-15s (page reloads on success per
+   `backtests.html:106` `setTimeout(()=>location.reload(),1500)`).
+4. Expect: "Backtest Runs" table shows the row; EQUITY & TRADES draws the curve; token-price
+   chart shows candles; LATEST RETURN etc. populate (≠ "—").
+5. API cross-check: `curl -s -H "X-API-Key: $KEY" .../api/v2/backtests` returns the run with
+   `equity_curve` length > 0.
