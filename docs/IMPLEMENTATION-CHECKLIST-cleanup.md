@@ -169,8 +169,8 @@ strategies/{slug}/
 | 5.1 | Confirm 3-registry layout + `engine/`→`strategies/` order (this table) | consent | go | ☐ PENDING |
 | 5.2 | Track 1 first (`engine/`→`strategies/` via git mv). Then create NEW `engines/` dir + `engines/registry.py` | structural | imports clean | ☐ |
 | 5.3 | `strategies/registry.py`: dynamic `importlib` loader scanning `strategies/{slug}/strategy-name.py`; expose STRATEGIES/list_strategies/get_strategy/register/unregister + get_presets (pulled from strategy class per 1.7) | code | loader test passes | ☐ |
-| 5.4 | `engines/registry.py`: saved engine definitions (execution-code ref + config schema); persist + copy-able | code | engine list returns | ☐ |
-| 5.5 | `instances/registry.py`: instance = engine+strategy+config; create/manage/delete; absorbs `DEFAULT_FLEET` from `instances/manager.py` | code | instance CRUD works | ☐ |
+| 5.4 | `engines/registry.py`: saved engine definitions (execution-code ref + config schema); persist + copy-able | code | engine list returns | ✅ DONE (built in Track 5.2, commit 487d154; re-confirmed live 5.3 phase) |
+| 5.5 | `instances/registry.py`: instance = engine+strategy+config; config catalog layer (per-instance config.yaml read/write/clone); DB runtime stays in `instances/manager.py` | code | instance config read/write/clone works (live-verified 2026-07-24, commit follows) | ⚠️ BASE done — clone DB-row half + full CRUD deferred to 5.13 (clone_instance) |
 | 5.6 | Seed existing strategies into subdirs: `engine/v1.py`→`strategies/strategy_v1/strategy-name.py`, `v1_3.py`→`strategy_v1_3/`, `v6_1.py`→`strategy_v6_1/`; write `{slug}-doc.md` (fidelity TBD) + origin files | code | 3 subdirs import | ☐ |
 | 5.7 | `detect_mintick` → `core/` (strategy helper, not registry concern) | code | import clean | ☐ |
 | 5.8 | Add `pynescript` to `requirements.txt`; verify it imports + supports the pine version in use (python 3.12 venv) BEFORE relying on it for translation | verify | pip install + import OK | ☐ |

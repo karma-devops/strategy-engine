@@ -53,7 +53,7 @@ strategy-engine/
 │   │           pulsr-chart.js (SVG+JS charts — lightweight-charts RETIRED)
 │   └── charts.js          # REMOVED — retired; charts now in app/static/pulsr-chart.js
 ├── core/                  # HyperLiquid layer: exchange.py, llm.py, market_data.py, position_sizer.py
-├── instances/             # models.py, manager.py, runner.py, events.py
+├── instances/             # models.py, manager.py (DB runtime/start-stop), runner.py, events.py, registry.py (config catalog: per-instance config.yaml read/write/clone — Track 5.5)
 ├── withdrawal/            # calculator.py, scheduler.py, manual.py
 ├── monitoring/            # tracker.py, rotator.py, testing_pool.py, alerts.py
 ├── backtests/             # runner.py (bar-by-bar sim, trailing stop, tick simulation)
@@ -61,7 +61,7 @@ strategy-engine/
 │                          #   Operator directive: KEEP as standalone testing wrapper, NOT integrated.
 ├── pinescript-tv/         # Original PineScript source-of-truth
 ├── engines/              # engine.registry: saved ENGINE DEFINITIONS (user-facing var/param layer). registry.py (ENGINE_DEFS + get_engine_defs/get_engine_def/get_default_fleet). Net-new saved-definition layer (Track 5.2, 2026-07-24); seed fleet migrated here from strategies/registry.
-├── strategies/            # strategy.catalog: base.py (BaseStrategy + detect_mintick), registry.py (strategy.registry: STRATEGIES dict + get_strategy/get_presets), v1.py, v1_3.py, v6_1.py
+├── strategies/            # strategy.catalog: base.py (BaseStrategy only), registry.py (strategy.registry: DYNAMIC loader scanning strategies/{slug}/, exposes STRATEGIES + get_strategy/get_presets), strategy_v1_3/ strategy_v1/ strategy_v6_1/ (per-strategy subdirs, Track 5.3/5.6). detect_mintick moved to core/detect_mintick.py (Track 5.7).
 └── data/                  # SQLite DBs + backups (template_empty_STABLE.db, dev_test.db, backups/)
 ```
 
