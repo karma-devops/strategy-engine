@@ -525,6 +525,15 @@ def update_strategy_config(
     inst.strategy_config = validated
     db.commit()
 
+    # Persist the authoritative per-instance config.yaml (5.12) so the file
+    # layer matches the DB row — the engine reads config.yaml at runtime.
+    try:
+        from instances.registry import save_instance_config
+        save_instance_config(inst.slug, validated)
+    except Exception as e:
+        # Non-fatal: DB is the runtime source of truth; log but don't fail.
+        print(f"[warn] config.yaml write failed for {inst.slug}: {e}", flush=True)
+
     # Restart so the live engine re-reads strategy_config at _run_once start.
     restarted = manager.restart_instance(inst.slug)
 
