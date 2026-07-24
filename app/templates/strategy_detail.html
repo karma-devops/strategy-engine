@@ -60,14 +60,13 @@
         <div class="chart-card" style="margin-bottom:0;">
             <h2>Parameters</h2>
             <div class="params-grid">
-                <div class="param-row"><span class="label">Mode</span><span class="val">{{ preset.mode }}</span></div>
-                <div class="param-row"><span class="label">Profile</span><span class="val">{{ preset.profile }}</span></div>
-                <div class="param-row"><span class="label">Timeframe</span><span class="val">{{ preset.timeframe }}</span></div>
-                <div class="param-row"><span class="label">Activation</span><span class="val">{{ preset.activation }}</span></div>
-                <div class="param-row"><span class="label">Offset</span><span class="val">{{ preset.offset }}</span></div>
-                <div class="param-row"><span class="label">Wins</span><span class="val positive">{{ wins }}</span></div>
-                <div class="param-row"><span class="label">Losses</span><span class="val negative">{{ losses }}</span></div>
-                <div class="param-row"><span class="label">Win Rate</span><span class="val">{{ win_rate }}%</span></div>
+                {% if params %}
+                {% for p in params %}
+                <div class="param-row"><span class="label">{{ p.label }}</span><span class="val">{{ config.get(p.name, p.default) }}</span></div>
+                {% endfor %}
+                {% else %}
+                <div class="muted" style="padding:var(--space-3);">No parameters declared for this strategy.</div>
+                {% endif %}
             </div>
         </div>
         <div class="chart-card" style="margin-bottom:0;">
@@ -143,8 +142,14 @@
         <h2>Documentation</h2>
         <div style="padding:var(--space-3);color:var(--text-secondary);line-height:1.6;">
             <p><strong>{{ name }}</strong> — {{ description }}</p>
-            <p style="margin-top:var(--space-2);">Mode: <code>{{ preset.mode }}</code> · Profile: <code>{{ preset.profile }}</code> · Timeframe: <code>{{ preset.timeframe }}</code></p>
-            <p style="margin-top:var(--space-2);">Activation: <code>{{ preset.activation }}</code> ticks · Offset: <code>{{ preset.offset }}</code> ticks</p>
+            {% if params %}
+            <p style="margin-top:var(--space-2);">Parameters:</p>
+            <ul style="margin-top:var(--space-1);color:var(--text-secondary);">
+            {% for p in params %}
+                <li><code>{{ p.name }}</code> ({{ p.label }}): <code>{{ config.get(p.name, p.default) }}</code></li>
+            {% endfor %}
+            </ul>
+            {% endif %}
             <p style="margin-top:var(--space-2);color:var(--text-muted);font-size:var(--text-sm);">Full documentation will be generated from the strategy docstring and PineScript comments.</p>
         </div>
     </div>

@@ -3,8 +3,27 @@ import numpy as np
 from strategies.base import BaseStrategy
 
 class EveEngineV13Strategy(BaseStrategy):
+    # One-line About shown on the strategy card + detail page.
+    description = "EMA-fan trend strategy with ADX filter, pin-bar detection, and ATR trailing stop."
+
     def __init__(self):
         super().__init__("EveEngineV13Strategy")
+
+    @classmethod
+    def get_parameters(cls) -> list[dict]:
+        """Tunable parameters surfaced in the UI Parameters card.
+
+        Mirrors the real constants used in generate_signals so the card
+        shows actual, editable values (not blanks)."""
+        return [
+            {"name": "fast_ema", "label": "Fast EMA", "type": "int", "default": 6, "group": "trend"},
+            {"name": "medm_ema", "label": "Medium EMA", "type": "int", "default": 18, "group": "trend"},
+            {"name": "slow_sma", "label": "Slow SMA", "type": "int", "default": 50, "group": "trend"},
+            {"name": "atr_period", "label": "ATR Period", "type": "int", "default": 14, "group": "risk"},
+            {"name": "atr_mult", "label": "ATR Stop Multiplier", "type": "float", "default": 1.8, "group": "risk"},
+            {"name": "momentum_thresh", "label": "ADX Trend Threshold", "type": "int", "default": 18, "group": "trend"},
+            {"name": "engine_mode", "label": "Engine Mode", "type": "select", "options": ["Swing", "Scalp"], "default": "Swing", "group": "mode"},
+        ]
 
     def _calculate_atr(self, df, period=14):
         high = df['high']

@@ -1226,26 +1226,48 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
 
 
 # ── Strategies section ──
-STRATEGY_FILES = {
-    "strategy_v1_3": {
-        "pine": "pinescript-tv/Eve_Engine_v1_3.pine",
-        "python": "engine/v1_3.py",
-        "name": "Scalp v1.3",
-        "description": "Aggressive scalp strategy with adaptive ATR trailing stop, EMA fan alignment, and ADX trend filtering. Activation 8 / Offset 3.",
-    },
-    "strategy_v1": {
-        "pine": "pinescript-tv/Eve_Engine_v1_Swing.pine",
-        "python": "engine/v1.py",
-        "name": "Swing v1",
-        "description": "Swing strategy with sniper 36/12 profile. Longer timeframe, wider trailing stops for trend capture.",
-    },
-    "strategy_v6_1": {
-        "pine": "pinescript-tv/Engine_v6_1.pine",
-        "python": "engine/v6_1.py",
-        "name": "PRO v6.1",
-        "description": "Professional strategy with manual 18/6 activation/offset. Balanced between scalp and swing.",
-    },
-}
+# STRATEGY_FILES is no longer a static dict. Legacy hardcoded entries
+# (strategy_v1_3 / strategy_v1 / strategy_v6_1) were removed with the legacy
+# strategies. Strategy metadata is now DERIVED from the on-disk subdir +
+# the live registry class, so a newly saved strategy appears automatically
+# and a deleted one disappears — no manual dict edits. Kept as empty for
+# any caller that still indexes it (returns {} → helper used instead).
+STRATEGY_FILES = {}
+
+
+def get_strategy_file_info(strategy_id: str) -> dict:
+    """Derive {pine, python, name, description} for a strategy from disk + registry.
+
+    This replaces the static STRATEGY_FILES dict: a strategy's source files
+    live in strategies/{slug}/ and its name/description come from the live
+    class (or the subdir slug as fallback). New saves self-register; deletes
+    self-remove — the metadata always tracks the registry.
+    """
+    info: dict = {}
+    import pathlib as _pl
+    root = _pl.Path(__file__).resolve().parent.parent
+    strat_dir = root / "strategies" / strategy_id
+    if strat_dir.is_dir():
+        pines = sorted(strat_dir.glob("*.pine"))
+        pys = sorted(strat_dir.glob("strategy.py"))
+        if pines:
+            info["pine"] = str(pines[0].relative_to(root))
+        if pys:
+            info["python"] = str(pys[0].relative_to(root))
+    info["name"] = strategy_id
+    info["description"] = ""
+    # Pull name/description from the live class if it exposes them.
+    try:
+        from strategies.registry import get_strategy
+        cls = get_strategy(strategy_id)
+        if cls is not None:
+            info["name"] = getattr(cls, "name", strategy_id) or strategy_id
+            if hasattr(cls, "description"):
+                info["description"] = cls.description or ""
+    except Exception:
+        pass
+    return info
+
 
 
 def _read_source(path):
@@ -1264,12 +1286,17 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
     """Strategies overview — grid of all registered strategies."""
     db = Session()
     try:
-        from strategies.registry import STRATEGIES, get_presets
+        from strategies.registry import STRATEGIES, get_presets, get_strategy
         strategies_data = []
         for sid, cls in STRATEGIES.items():
-            info = STRATEGY_FILES.get(sid, {})
+            info = get_strategy_file_info(sid)
             presets = get_presets(sid)
             preset = list(presets.values())[0] if presets else {}
+            if not preset:
+                try:
+                    preset = cls.get_default_config()
+                except Exception:
+                    preset = {}
             # Aggregate trades using this strategy
             trades = db.query(Trade).filter(Trade.instance_id.in_(
                 [i.slug for i in db.query(Instance).filter(Instance.strategy_id == sid).all()]
@@ -1280,15 +1307,28 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
             win_rate = round(wins / len(closed) * 100, 1) if closed else 0.0
             # Engines running this strategy
             engines = db.query(Instance).filter(Instance.strategy_id == sid).all()
+            cfg = cls.get_default_config() if cls is not None else {}
+            # Saved/last-edit date from the on-disk strategy file mtime.
+            from pathlib import Path as _Pl
+            _sd = _Pl(__file__).resolve().parent.parent / "strategies" / sid
+            _sp = _sd / "strategy.py" if _sd.is_dir() else None
+            saved_date = _sp.stat().st_mtime if (_sp and _sp.exists()) else None
+            saved_date_str = (
+                __import__("datetime").datetime.fromtimestamp(saved_date).strftime("%Y-%m-%d")
+                if saved_date else None
+            )
             strategies_data.append({
                 "strategy_id": sid,
                 "name": info.get("name", sid),
                 "description": info.get("description", ""),
                 "status": "active",
-                "activation": preset.get("activation", "?"),
-                "offset": preset.get("offset", "?"),
-                "timeframe": preset.get("timeframe", "?"),
-                "mode": preset.get("mode", "?"),
+                "activation": preset.get("activation", cfg.get("momentum_thresh", "?")),
+                "offset": preset.get("offset", cfg.get("atr_period", "?")),
+                "timeframe": preset.get("timeframe", cfg.get("slow_sma", "?")),
+                "mode": preset.get("mode", cfg.get("engine_mode", "?")),
+                "params": cls.get_parameters() if cls is not None else [],
+                "config": cfg,
+                "saved_date": saved_date_str,
                 "win_rate": win_rate,
                 "total_pnl": total_pnl,
                 "total_trades": len(closed),
@@ -1355,20 +1395,9 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
             return templates.TemplateResponse(request, "error.html", context={
                 "request": request, "error": f"Strategy '{strategy_id}' not found", "active": "strategies",
             }, status_code=404)
-        # Derive file paths directly from the on-disk strategy subdir so a
-        # saved/translated strategy (e.g. translation-test) shows its real
-        # PineScript / Python source even when not listed in STRATEGY_FILES.
-        import pathlib as _pl
-        _strat_dir = _pl.Path(__file__).resolve().parent.parent / "strategies" / strategy_id
-        info = dict(STRATEGY_FILES.get(strategy_id, {}))
-        _pines = sorted(_strat_dir.glob("*.pine")) if _strat_dir.is_dir() else []
-        _pys = sorted(_strat_dir.glob("strategy.py")) if _strat_dir.is_dir() else []
-        if _pines:
-            info.setdefault("pine", str(_pines[0].relative_to(_pl.Path(__file__).resolve().parent.parent)))
-        if _pys:
-            info.setdefault("python", str(_pys[0].relative_to(_pl.Path(__file__).resolve().parent.parent)))
-        if not info.get("name"):
-            info["name"] = strategy_id
+        # Derive file paths + name/description dynamically from disk + registry
+        # (no static STRATEGY_FILES dict) so new saves show and deletes vanish.
+        info = get_strategy_file_info(strategy_id)
         presets = get_presets(strategy_id)
         preset = list(presets.values())[0] if presets else {}
         if not preset:
@@ -1407,6 +1436,8 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
                 "name": info.get("name", strategy_id),
                 "description": info.get("description", ""),
                 "preset": preset,
+                "params": cls.get_parameters() if cls is not None else [],
+                "config": cls.get_default_config() if cls is not None else {},
                 "pine_source": pine_source,
                 "python_source": python_source,
                 "engines": engines_data,
@@ -1706,7 +1737,7 @@ async def strategy_generate_api(strategy_id: str, request: Request, username: st
 
 @router.delete("/api/v2/strategies/{strategy_id}")
 @limiter.limit(WRITE_LIMIT)
-async def strategy_delete_api(strategy_id: str, request: Request, username: str = Depends(verify_ui_credentials)):
+async def strategy_delete_api(strategy_id: str, request: Request, username: str = Depends(require_ui_or_api)):
     """API: delete a strategy. Removes it from the live registry, the
     on-disk strategies/{slug}/ dir, and the DB Strategy row — so it is
     fully removed (not just hidden)."""
@@ -1742,6 +1773,34 @@ async def strategy_delete_api(strategy_id: str, request: Request, username: str 
         db.close()
 
     return {"ok": True, "strategy_id": strategy_id, "removed_dir": removed_dir}
+
+
+@router.post("/api/v2/strategies/{strategy_id}/duplicate")
+@limiter.limit(WRITE_LIMIT)
+async def strategy_clone_api(strategy_id: str, request: Request, username: str = Depends(require_ui_or_api)):
+    """API: duplicate a strategy. Copies the on-disk strategies/{slug}/ dir
+    to a new slug, rewrites the class slug, and registers it live."""
+    from strategies.registry import STRATEGIES, clone_strategy
+    from pathlib import Path
+
+    if strategy_id not in STRATEGIES:
+        return {"ok": False, "error": f"Strategy '{strategy_id}' not found"}
+
+    # Derive a unique new slug.
+    import re as _re
+    base = _re.sub(r"[^a-z0-9]+", "-", strategy_id.lower()).strip("-")
+    new_slug = f"{base}-copy"
+    n = 2
+    while new_slug in STRATEGIES or (Path(__file__).resolve().parent.parent / "strategies" / new_slug).is_dir():
+        new_slug = f"{base}-copy-{n}"
+        n += 1
+
+    try:
+        clone_strategy(strategy_id, new_slug)
+    except Exception as e:
+        return {"ok": False, "error": f"Clone failed: {e}"}
+
+    return {"ok": True, "source": strategy_id, "new_slug": new_slug}
 
 
 @router.post("/api/v2/chat")

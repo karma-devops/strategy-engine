@@ -6,6 +6,17 @@
   .strat-mode { display:inline-flex; align-items:center; gap:var(--space-1); font-size:var(--text-xs); color:var(--text-secondary); }
   .strat-mode .dot { width:6px; height:6px; border-radius:50%; background:var(--color-success,var(--color-positive,#34d399)); }
   .strat-mode .dot.inactive { background:var(--text-muted); }
+  .fleet-btn-wide { flex:1; font-size:var(--text-xs); padding:0 10px; }
+  .fleet-actions { display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+  .fleet-actions-top { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+  .fleet-btn-details {
+    flex:1; text-decoration:none; display:flex; align-items:center; justify-content:flex-start;
+    padding:8px 12px; margin-top:2px; border-radius:var(--radius-sm);
+    background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.35);
+    color:#34d399; font-size:var(--text-xs); font-weight:var(--weight-semibold);
+    transition:background .15s ease;
+  }
+  .fleet-btn-details:hover { background:rgba(52,211,153,0.22); }
 </style>
 {% endblock %}
 {% block heading %}Strategies{% endblock %}
@@ -45,18 +56,22 @@
                 <span class="tag" style="background:var(--surface-inset);color:var(--text-muted);">idle</span>
                 {% endif %}
             </div>
-            <div class="strat-mode">{{ s.strategy_id }} · {{ s.mode }} · {{ s.timeframe }}</div>
-            {% if s.description %}
-            <div class="strat-desc">{{ s.description }}</div>
-            {% endif %}
-            <div class="fleet-row"><span class="label">Activation</span><span class="mono">{{ s.activation }}</span></div>
-            <div class="fleet-row"><span class="label">Offset</span><span class="mono">{{ s.offset }}</span></div>
+            <div class="fleet-sub">{{ s.strategy_id }}</div>
+            {% if s.saved_date %}<div class="strat-mode">Saved {{ s.saved_date }}</div>{% endif %}
             <div class="fleet-row"><span class="label">Win Rate</span><span class="mono">{{ s.win_rate }}%</span></div>
             <div class="fleet-row"><span class="label">Total PnL</span><span class="mono {% if s.total_pnl >= 0 %}positive{% else %}negative{% endif %}">{{ s.total_pnl | format_usd }}</span></div>
             <div class="fleet-row"><span class="label">Trades</span><span class="mono">{{ s.total_trades }}</span></div>
             <div class="fleet-row"><span class="label">Engines</span><span class="mono">{{ s.running_count }} / {{ s.engine_count }}</span></div>
-            <div class="fleet-actions">
-                <a href="/app/strategies/{{ s.strategy_id }}" class="fleet-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;background:var(--surface-inset);border:1px solid var(--border-default);color:var(--text-secondary);">View details →</a>
+            <div class="fleet-actions" onclick="event.stopPropagation()">
+                <div class="fleet-actions-top">
+                    <button class="fleet-btn" title="Duplicate strategy" onclick="apiPost('/api/v2/strategies/{{ s.strategy_id }}/duplicate')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                    </button>
+                    <button class="fleet-btn btn-close" title="Delete strategy" onclick="if(confirm('Delete strategy {{ s.strategy_id }}?')) apiPost('/api/v2/strategies/{{ s.strategy_id }}', 'DELETE')">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+                <a href="/app/strategies/{{ s.strategy_id }}" class="fleet-btn-details">View details →</a>
             </div>
         </div>
         {% endfor %}
