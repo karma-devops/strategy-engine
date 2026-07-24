@@ -1506,6 +1506,18 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
     body = await request.json()
     pine_source = (body.get("pine_source") or "").strip()
     name = (body.get("name") or "").strip()
+    save_slug = (body.get("save_slug") or "").strip()
+    save_path = None
+    if save_slug:
+        # sanitize: slug chars only, no path traversal
+        if not all(c.isalnum() or c in "-_" for c in save_slug):
+            return {"ok": False, "message": "save_slug must match [a-z0-9_-]+"}
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        save_dir = root / "strategies" / save_slug
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = str(save_dir / "strategy.py")
 
     # Phase 9: resolve operator user so the converter uses the DB-stored AI provider
     # (credential manager), falling back to env for operator.
@@ -1533,15 +1545,26 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
 
     try:
         from core.llm import convert_pine_to_python
-        python_source = convert_pine_to_python(pine_source, name or strategy_id, user_id=user_id)
+
+        python_source = convert_pine_to_python(
+            pine_source, name or strategy_id, user_id=user_id,
+            save_path=save_path,
+        )
     except Exception as e:
         return {"ok": False, "message": f"Conversion failed: {e}"}
-    return {
+    resp = {
         "ok": True,
-        "strategy_id": strategy_id,
+        "strategy_id": save_slug or strategy_id,
         "python_source": python_source,
-        "message": "Conversion complete — review then Save to activate.",
+        "message": (
+            f"Conversion complete — saved to strategies/{save_slug}/strategy.py"
+            if save_path
+            else "Conversion complete — review then Save to activate."
+        ),
     }
+    if save_path:
+        resp["saved_path"] = save_path
+    return resp
 
 
 @router.post("/api/v2/chat")
