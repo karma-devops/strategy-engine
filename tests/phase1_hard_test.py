@@ -42,7 +42,7 @@ print("  OK:", len(files), "files compiled")
 # Fernet encryption
 print("[2/8] Fernet encrypt/decrypt per-instance key...")
 from instances.models import Instance
-inst = Instance(slug="t-fernet", name="Fernet Test", token="FARTCOIN", strategy_id="strategy_v1_3")
+inst = Instance(slug="t-fernet", name="Fernet Test", token="FARTCOIN", strategy_id="translation-test")
 inst.set_private_key("0xdeadbeef")
 assert inst.get_private_key() == "0xdeadbeef"
 print("  OK")
@@ -81,7 +81,7 @@ assert len(r.json()["instances"]) == 0
 print("  /api/v2/instances/active OK (empty)")
 
 r = client.get("/api/v2/strategies", headers=API_HEADERS)
-assert r.status_code == 200 and len(r.json()["strategies"]) >= 2
+assert r.status_code == 200 and len(r.json()["strategies"]) >= 1
 print("  /api/v2/strategies OK")
 
 r = client.get("/api/v2/presets/fleet", headers=API_HEADERS)
@@ -135,7 +135,7 @@ form_data = {
     "slug": "manual-test",
     "name": "Manual Test Instance",
     "token": "BTC",
-    "strategy_id": "strategy_v1_3",
+    "strategy_id": "translation-test",
     "mode": "Scalp",
     "profile": "aggressive_8_3",
     "timeframe": "15m",
@@ -161,7 +161,7 @@ form_data2 = {
     "slug": "cred-test",
     "name": "Cred Test",
     "token": "ETH",
-    "strategy_id": "strategy_v1_3",
+    "strategy_id": "translation-test",
     "mode": "Scalp",
     "profile": "aggressive_8_3",
     "timeframe": "15m",
