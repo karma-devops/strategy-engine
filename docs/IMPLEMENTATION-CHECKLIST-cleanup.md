@@ -92,7 +92,7 @@ The `strategies/` split touches the same source files the repair touched — so 
 
 **Summary:** KEEP 7 (TASK-LIST, IMPLEMENTATION-CHECKLIST, PLANNED-EDITS, HANDOVER-UI-WALKTHROUGH, DOCUMENTATION, FAQ, VOCABULARY) + root authoritative 4 (CONTEXT, NOTES, BACKLOG, BETA-ROADMAP). ARCHIVE 25 (all other 2.6.x) → `backups/deprecated-docs_2026-07-24/`. KEEP trio refreshed to live frontend in 2.7.
 
-| 2.7 | Refresh KEEP trio (DOCUMENTATION.md, FAQ.md, VOCABULARY.md) to ACTUAL implemented frontend code | read front-end source, fix drift, LIVE+STABLE only | pending (next) |
+| 2.7 | Refresh KEEP trio (DOCUMENTATION.md, FAQ.md, VOCABULARY.md) to ACTUAL implemented frontend code | read front-end source, fix drift, LIVE+STABLE only | done (commit b7864d5) | ✅ DONE |
 
 **Execution plan (per file, one mv + verify each, backup v2.03.004 pre-sweep):** batch the `mv` as one directory move (`mkdir backups/deprecated-docs_2026-07-24 && git mv <each> backups/...`), verify `docs/` contains only the 7 KEEP files + `wiki/` gone, update CONTEXT.md §2/§12 doc-taxonomy reference if it lists any archived name, commit. NO deletions. Mirror new taxonomy into CONTEXT.md + NOTES.md (ADIX self-doc). Then 2.7 refresh KEEP trio to live frontend.
 
