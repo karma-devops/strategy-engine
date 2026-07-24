@@ -3,7 +3,7 @@
 > **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
 > Companion docs (consolidated 2026-07-19, REFRESHED 2026-07-24): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/HANDOVER-UI-WALKTHROUGH.md**. Living PWA docs: **docs/DOCUMENTATION.md**, **docs/FAQ.md**, **docs/VOCABULARY.md**. (All other historical docs archived to `backups/deprecated-docs_2026-07-24/` — see Track 2.6.)
 > Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
-> Do not commit to GitHub (local-only). Version: **v2.02** (synced 2026-07-23; prior doc freeze was v1.98 @ 2026-07-19).
+> Do not commit to GitHub (local-only). Version: **v2.03** (synced 2026-07-24; `VERSION` file = v2.03, `api/metadata.py` reads it; `/api/v2/metadata` reports v2.03). Prior doc freeze v2.02 @ 2026-07-23; v1.98 @ 2026-07-19.
 
 ---
 
@@ -23,7 +23,7 @@
 
 ```
 strategy-engine/
-├── main.py                 # FastAPI app, route registration, lifespan (REPORTS version 0.095 — STALE, see §10)
+├── main.py                 # FastAPI app, route registration, lifespan (REPORTS version from VERSION file — see §10)
 ├── config.py              # Env config: port, DB, global creds, LLM defaults
 ├── requirements.txt
 ├── Dockerfile / docker-compose.yml
@@ -50,7 +50,8 @@ strategy-engine/
 │   │   ├── instance_form.html error.html (404 splash)
 │   │   └── backtests.html withdrawals.html settings.html  # legacy redirects
 │   ├── static/  tokens.css (design tokens) style.css chat_widget.* manifest.json sw.js
-│   └── charts.js          # LEGACY lightweight-charts — RETIRED (charts now pure SVG+JS)
+│   │           pulsr-chart.js (SVG+JS charts — lightweight-charts RETIRED)
+│   └── charts.js          # REMOVED — retired; charts now in app/static/pulsr-chart.js
 ├── core/                  # HyperLiquid layer: exchange.py, llm.py, market_data.py, position_sizer.py
 ├── instances/             # models.py, manager.py, runner.py, events.py
 ├── withdrawal/            # calculator.py, scheduler.py, manual.py
@@ -59,7 +60,7 @@ strategy-engine/
 ├── scripts/worker.py      # Live strategy worker — port 9999, STANDALONE tester, no DB.
 │                          #   Operator directive: KEEP as standalone testing wrapper, NOT integrated.
 ├── pinescript-tv/         # Original PineScript source-of-truth
-├── strategies/            # engine_v1, engine_v1_3, engine_v6_1
+├── strategies/            # strategy.catalog: base.py (BaseStrategy + detect_mintick), registry.py (strategy.registry: STRATEGIES dict + get_strategy/get_presets), v1.py, v1_3.py, v6_1.py
 └── data/                  # SQLite DBs + backups (template_empty_STABLE.db, dev_test.db, backups/)
 ```
 
@@ -289,7 +290,6 @@ Outstanding before any beta claim:
 - **UI wiring only partially verified** — `#pos-grid` population not visually confirmed with a live position; engine_detail mode tag not visually checked.
 - **Bug surface unknown** — systematic bughunting (UI + wiring + data flow) still pending (next phase after this doc sync).
 - **Open live-safety items:** BUG-11/BUG-12 withdrawal/deposit round-trip DEFERRED (live funds, explicit go required); D5 dry_run toggle end-to-end verify; B9 drawdown >50% spike filter; B3 per-user log persistence; B5/B6 schema hardening.
-- **Uncommitted on disk:** `engine/registry.py` carries a strategy/engine labeling-prep diff (terminology block + dual-namespace keys) from the 2026-07-23 session — NOT yet committed; flag for operator decision.
 
 **Next phase:** bughunting + UI frontend improvement + wiring verification. See docs/TASK-LIST.md (TIER 0/1/2 + BUGHUNT group) and BETA-ROADMAP.md.
 
