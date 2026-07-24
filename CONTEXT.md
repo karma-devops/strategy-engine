@@ -201,7 +201,7 @@ Three-port architecture: `strategy_config` (DB params, UI-editable) · `entry_co
 ## 10. Version & Audit State (reconciled 2026-07-18, end-of-day)
 
 ### Version
-- **Actual: v2.02** (VERSION file, synced 2026-07-22→07-23; `metadata.py` reads VERSION file so `/api/v2/metadata`/`/stats` report v2.02 — `041d83e`, `529a3b2`).
+- **Actual: v2.03** (VERSION file, bumped 2026-07-24 post-sprint; `metadata.py` reads VERSION file so `/api/v2/metadata`/`/stats` report v2.03).
 - **✅ FIXED (D1):** `main.py` now reads `version=VERSION` (was hardcoded `"0.095"`). `/openapi.json` correctly reports the version. Resolved 2026-07-18; version-sync hardened 2026-07-22.
 - **Entry-gate UNIVERSAL repair (2026-07-22, `5cfcbf5` + `3805b2e`):** v1_3 now emits a strategy-agnostic `entry_config` (`.trigger = valid_trigger_bull` for LONG / `valid_trigger_bear` for SHORT). `instances/runner.py` gates entry on `entry_config.trigger` (neutral receiver) instead of strategy-internal signal names; legacy `valid_trigger_*` kept as fallback. Fixes the persistent `"ENTRY skipped - no bullish pin/trigger"` despite `pin=bull`+`pierce=bull`. Verified: entries now execute.
 - **BUG-A / BUG-B (2026-07-22, `ad2180b` + `fa9bac9`):** `notional` assigned before entry active-trade dict (NameError had blocked ALL entries); `AccountSnapshot.user_id` set so dashboard Pulse Graph seed is scoped (was always NULL → empty graph).
