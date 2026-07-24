@@ -941,6 +941,7 @@ class InstanceRunner:
 
         trade = Trade(
             instance_id=self.id,
+            user_id=self.instance.user_id,  # D1/FE-1: attribute trade to owning user (multi-tenant)
             side=side,
             size=size,
             entry_price=entry_px,
