@@ -104,7 +104,7 @@ async def clean_engine(client, auth_headers, test_user):
     payload = {
         "slug": slug,
         "token": "FARTCOIN",
-        "strategy_id": "strategy_v1_3",
+        "strategy_id": "translation-test",
         "timeframe": "15m",
         "leverage": 3,
         "dry_run": True,
