@@ -641,7 +641,7 @@ class EngineV1_3Strategy(BaseStrategy):
 
         metadata = {
             "engine_mode": self.engine_mode,
-            "risk_profile": "Scalp Aggressive (8/3)",
+            "risk_profile": self.risk_profile,  # E3: report actual resolved profile, not hardcoded literal
             "active_activation": self.active_activation,
             "active_offset": self.active_offset,
             "fast_ema": float(round(fast_ema, 8)),
