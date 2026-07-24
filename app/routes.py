@@ -1350,14 +1350,36 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
     """Strategy detail — Overview / PineScript / Python / Documentation tabs."""
     db = Session()
     try:
-        from strategies.registry import STRATEGIES, get_presets
+        from strategies.registry import STRATEGIES, get_presets, get_strategy
         if strategy_id not in STRATEGIES:
             return templates.TemplateResponse(request, "error.html", context={
                 "request": request, "error": f"Strategy '{strategy_id}' not found", "active": "strategies",
             }, status_code=404)
-        info = STRATEGY_FILES.get(strategy_id, {})
+        # Derive file paths directly from the on-disk strategy subdir so a
+        # saved/translated strategy (e.g. translation-test) shows its real
+        # PineScript / Python source even when not listed in STRATEGY_FILES.
+        import pathlib as _pl
+        _strat_dir = _pl.Path(__file__).resolve().parent.parent / "strategies" / strategy_id
+        info = dict(STRATEGY_FILES.get(strategy_id, {}))
+        _pines = sorted(_strat_dir.glob("*.pine")) if _strat_dir.is_dir() else []
+        _pys = sorted(_strat_dir.glob("strategy.py")) if _strat_dir.is_dir() else []
+        if _pines:
+            info.setdefault("pine", str(_pines[0].relative_to(_pl.Path(__file__).resolve().parent.parent)))
+        if _pys:
+            info.setdefault("python", str(_pys[0].relative_to(_pl.Path(__file__).resolve().parent.parent)))
+        if not info.get("name"):
+            info["name"] = strategy_id
         presets = get_presets(strategy_id)
         preset = list(presets.values())[0] if presets else {}
+        if not preset:
+            # Fallback: derive params from the live strategy class so the
+            # Overview tab renders real, editable parameters.
+            cls = get_strategy(strategy_id)
+            if cls is not None:
+                try:
+                    preset = cls.get_default_config()
+                except Exception:
+                    preset = {}
         pine_source = _read_source(info.get("pine", ""))
         python_source = _read_source(info.get("python", ""))
         # Engines using this strategy
@@ -1680,6 +1702,46 @@ async def strategy_generate_api(strategy_id: str, request: Request, username: st
             "surface": struct,
         },
     }
+
+
+@router.delete("/api/v2/strategies/{strategy_id}")
+@limiter.limit(WRITE_LIMIT)
+async def strategy_delete_api(strategy_id: str, request: Request, username: str = Depends(verify_ui_credentials)):
+    """API: delete a strategy. Removes it from the live registry, the
+    on-disk strategies/{slug}/ dir, and the DB Strategy row — so it is
+    fully removed (not just hidden)."""
+    from pathlib import Path
+    from strategies.registry import STRATEGIES, unregister_uploaded_strategy
+
+    if strategy_id not in STRATEGIES:
+        return {"ok": False, "error": f"Strategy '{strategy_id}' not found"}
+
+    # 1) Unregister from the live runtime registry.
+    try:
+        unregister_uploaded_strategy(strategy_id)
+    except Exception:
+        pass
+
+    # 2) Remove the on-disk strategy dir (the dynamic loader's source of truth).
+    root = Path(__file__).resolve().parent.parent
+    strat_dir = root / "strategies" / strategy_id
+    removed_dir = False
+    if strat_dir.is_dir():
+        import shutil
+        shutil.rmtree(strat_dir, ignore_errors=True)
+        removed_dir = True
+
+    # 3) Delete the DB Strategy row if present.
+    db = Session()
+    try:
+        strat = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if strat:
+            db.delete(strat)
+            db.commit()
+    finally:
+        db.close()
+
+    return {"ok": True, "strategy_id": strategy_id, "removed_dir": removed_dir}
 
 
 @router.post("/api/v2/chat")
