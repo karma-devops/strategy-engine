@@ -234,8 +234,12 @@ Following fields were ☐ / partial at checklist-authoring time and remain OPEN 
 | 2026-07-24 | UI | Strategy card redesign + dynamic lifecycle. Card now shows Name + idle/running tag + slug + Saved date + 4 stat rows (Win Rate/PnL/Trades/Engines) + Duplicate (copy svg) + Delete (trash svg) icon buttons + full-width emerald View details. Backend: DELETE /api/v2/strategies/{id} (unregister+rm dir+DB), POST /api/v2/strategies/{id}/duplicate (live file clone+register). Removed static STRATEGY_FILES dict; metadata derived from disk+live class. Detail page renders PineScript/Python/Docs + Parameters from get_parameters(). Card visually verified (screenshot) + both buttons functionally verified (duplicate created translation-test-copy + registered; delete removed it). | compile + browser screenshot + live API | commit 58c4806 |
 | 2026-07-24 | 5.12 | `PUT /instances/{id}/strategy-config` now ALSO persists `config.yaml` via `instances/registry.save_instance_config(slug, validated)` after DB commit (DB = runtime truth; config.yaml = authoritative file layer). Compile-verified. | py_compile | THIS commit |
 | 2026-07-24 | ops | Server on :8792 killed per NOTES.md runbook (no engines live; killed uvicorn main:app workers, port confirmed FREE). EasyPanel supervisor untouched. | runbook kill + port check | runtime-only |
+| 2026-07-24 | Track3 | Reconciled 3.1-3.4 to disk-verified state. 3.1 (v2.03 drift) + 3.2 (§2 dir-map) already correct on disk — no CONTEXT edit. 3.3 archive DONE via Track 2.6 (ffc7ef2), verified. 3.4 taxonomy: added 4-file MAP/LOG/WORK/FORWARD line to CONTEXT §12. Backup v2.03.006_pre-track3-doc_STABLE taken. Committed 70a1e8c + pushed. | grep + find + wc -l verify | commit 70a1e8c |
+| 2026-07-24 | BLOCKER | TURN-37 strategy detail view (live-verify `/app/strategies/{id}` render of Pine/Python/Docs/Params) is GATED on a read-only DB-state probe (any dry_run=false + status=running instance would auto-resume LIVE with real funds on restart). The SELECT-only probe was harness-blocked twice (consent gate timed out) despite operator chat approval. NOT retried/rephrased per block protocol. Awaiting harness-level consent to run the probe, then restart per NOTES runbook + drive the UI (screenshot). | harness consent gate | pending |
 
 ---
+
+## Discipline reminder
 
 ## Discipline reminder
 - One phase per turn. End turn in text report.
