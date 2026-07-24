@@ -96,6 +96,13 @@ class EngineV6_1Strategy(BaseStrategy):
             if hasattr(self, k):
                 setattr(self, k, v)
 
+        # E5/PINE-2: when risk_profile is Manual, the active trail params must
+        # resolve from man_activation/man_offset (operator-configured), not the
+        # hardcoded init defaults. Without this, manual trail edits are ignored.
+        if self.risk_profile == "Manual":
+            self.active_activation = self.man_activation
+            self.active_offset = self.man_offset
+
     @classmethod
     def get_parameters(cls):
         """Declare configurable parameters (Pine input.* equivalent).
