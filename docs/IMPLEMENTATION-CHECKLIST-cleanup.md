@@ -111,12 +111,12 @@ The `strategies/` split touches the same source files the repair touched — so 
 
 ## Track 4 — Code-layer simplification (propose only, low-risk; overlaps attached plan Tier 1.5/2.5)
 
-Listed as *propose* items — NOT executed in this cleanup unless operator approves separately. **Disk-verified 2026-07-24 reconciliation:**
-- **Root `/` public-vs-auth drift:** `public_router` serves `/login` + `/signup` + public landing (routes.py:235 `public_login_page`); dashboard routes (`/app/dashboard`) gated by `verify_ui_credentials` (routes.py:258). CONTEXT says `/` = public landing; the app redirects unauthenticated `/app/*` → login. The literal `@router.get("/")` root handler was NOT found in routes.py — likely served via `public_router` include or static. **Still a product decision (public landing vs auth-gated root) — OPEN, propose-only.**
-- **Withdrawals route:** only `/app/withdrawals` exists (routes.py:638, current). Legacy `/withdrawals` (no `/app` prefix) is GONE from routes. This sub-item is effectively RESOLVED (legacy removed); the route is consistent. **No action needed unless operator wants legacy alias back.**
-- **Test split-brain:** CONFIRMED. `tests/test_hardening.py:29` hits live `http://127.0.0.1:8792` (`SE_TEST_URL` env override available); `tests/test_g7_integration.py` also references 8792. `phase1_hard_test.py` / `phase2_killswitch_test.py` / `phase5_*` stale contract tests coexist. Per attached Tier 0, repair = convert to in-process ASGI `TestClient` or classify as external-only. **OPEN, propose-only — needs operator approval to execute.**
+Listed as *propose* items — NOT executed in this cleanup unless operator approves separately. **Disk-verified 2026-07-24 reconciliation (Turn 11):**
+- **Root `/` public-vs-auth drift:** RESOLVED — no drift. `main.py:114 @app.get("/")` serves `landing.html` (public, no auth, `page="home"`); `/app/dashboard` is gated by `verify_ui_credentials`. CONTEXT's "drift" claim was stale — root is correctly public, dashboard correctly auth-gated. No change needed (optional UX: redirect `/`→`/app/dashboard` when already authenticated — out of scope).
+- **Withdrawals route:** RESOLVED — only `/app/withdrawals` exists (routes.py:638); legacy `/withdrawals` gone from routes. Route consistent. No action needed.
+- **Test split-brain (4c):** OPEN, PROPOSE-ONLY. `tests/test_hardening.py:29` (`BASE_URL = SE_TEST_URL or http://127.0.0.1:8792`) and `tests/test_g7_integration.py:10` (`BASE = http://localhost:8792`) hit a LIVE port via `requests`. They are external integration tests, not unit tests, but pytest collects them by default and they fail/hang when no server is running. Repair plan (Tier 0): classify as external-only — add `@pytest.mark.external` + a root `conftest.py` that skips them unless `--run-external` (or `SE_TEST_URL` set + server up). Minimal blast radius (test files only). **Awaiting operator consent to execute.**
 
-**Status:** Track 4 remains PROPOSE-ONLY (no code executed). One sub-item (withdrawals) already resolved on disk; two (root auth, test split-brain) still need a decision/approval.
+**Status:** 4a + 4b resolved on disk (no code). 4c is the only remaining Track 4 item — propose-only, plan ready, halted for consent.
 
 ---
 
