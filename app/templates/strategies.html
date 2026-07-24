@@ -78,3 +78,16 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+    const API_KEY = "{{ api_key }}";
+    const API_BASE = (location.origin || 'http://localhost:8792').replace(/^https?:\/\/[^@/]+@/, 'http://');
+    function apiPost(path, method) {
+        fetch(API_BASE + path, { method: method || 'POST', headers: { 'X-API-Key': API_KEY } })
+            .then(r => r.json())
+            .then(j => { setTimeout(() => location.reload(), 500); })
+            .catch(e => console.error('POST ' + path + ' failed:', e));
+    }
+</script>
+{% endblock %}

@@ -1411,6 +1411,16 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
                     preset = {}
         pine_source = _read_source(info.get("pine", ""))
         python_source = _read_source(info.get("python", ""))
+        # Truncate very long sources so the page stays usable (operator ask).
+        def _trunc(src, limit=400):
+            if not src:
+                return src
+            lines = src.splitlines()
+            if len(lines) <= limit:
+                return src
+            return "\n".join(lines[:limit]) + f"\n\n# ... truncated ({len(lines) - limit} more lines)"
+        pine_source = _trunc(pine_source)
+        python_source = _trunc(python_source)
         # Engines using this strategy
         engines = db.query(Instance).filter(Instance.strategy_id == strategy_id).all()
         engines_data = [{
