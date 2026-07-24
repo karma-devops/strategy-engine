@@ -13,3 +13,4 @@ python-multipart>=0.0.9
 cryptography>=42.0.0
 slowapi>=0.1.10
 limits>=5.8.0
+pynescript>=0.3.0
