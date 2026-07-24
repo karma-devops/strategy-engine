@@ -2343,3 +2343,12 @@ Captured live screenshots of Dashboard / Strategies list / Strategy detail and v
 - Checklist updated: IMPLEMENTATION-CHECKLIST-cleanup.md now includes TURN-37 verification + blocker entry; NOTES.md contains comprehensive repair notes.
 
 --- END OF UX ANALYSIS ---
+
+---
+## 2026-07-24 (Turn 10) — Track 1.8 guardrail test + remaining-work sweep
+- Built `tests/test_receiver_decoupling.py` (4 tests) per Track 1.8. Asserts: (a) no `engine.` strategy-module imports in live source; (b) no concrete trading-strategy class name leaks outside `strategies/`; (c) receivers import strategy symbols only via `strategies.*`/`engines.*`/`instances.models`; (d) no glob import of removed module.
+- Investigation note: earlier grep showing `from engine.registry` in api/instances/testing/backtests/scripts was FALSE POSITIVE — all hits were in `backups/` old snapshots. Live code is clean. Track 1.4 was genuinely complete.
+- Test refined to avoid false positives: exempted `ConvertedStrategy`/`Strategy`/`BaseStrategy` (non-trading class names); permitted `strategies.base` etc. as legitimate package surface. Result: 4 passed.
+- Track 1 (1.1–1.8) now FULLY CLOSED.
+- Remaining (need operator decision / deploy, NOT executed): Track 4 (root `/` auth product call; test split-brain repair — test_hardening.py:29 + test_g7_integration.py hit live 8792; withdrawals legacy already gone); UI-1/2/3 (live-host easypanel deploy-gated — separate box).
+- Backup: v2.03.009_pre-1.8-guardrail-test_STABLE_2026-07-24_1738.tar.gz (7.4MB). Committed + pushed. Local=remote (0/0).
