@@ -1073,27 +1073,17 @@ class InstanceRunner:
             account_value = self._paper_balance
             withdrawable = self._paper_balance
 
-        # Filter anomalous snapshots: HL API can return wild values during
-        # position transitions (margin held/released) that produce fake drawdowns.
-        # Skip recording if value swings >50% from last known good value.
-        if not self.instance.dry_run and hasattr(self, "_last_good_account_value") and self._last_good_account_value > 0:
-            ratio = account_value / self._last_good_account_value
-            if ratio < 0.5 or ratio > 2.0:
-                add_log(
-                    f"[{self.instance.token}] Skipping anomalous account snapshot: "
-                    f"${account_value:.2f} vs last ${self._last_good_account_value:.2f} (ratio={ratio:.2f})",
-                    "warn", dry_run=self.instance.dry_run,
-                )
-                return
-        # Record good values
-        if account_value > 0:
-            self._last_good_account_value = account_value
+        # B2: record every tick (no anomaly filter). The >50% swing skip
+        # created visual gaps in the pulse graph — operator directive: gaps are
+        # the bug, not the wild value. source stamps this row so the pulse/KPI
+        # (B4) can filter perp-native vs total consistently.
         snap = AccountSnapshot(
             instance_id=self.id,
             user_id=self.instance.user_id,
             account_value=account_value,
             withdrawable=withdrawable,
             dry_run=self.instance.dry_run,
+            source="paper" if self.instance.dry_run else "perp",
         )
         db.add(snap)
         db.commit()
