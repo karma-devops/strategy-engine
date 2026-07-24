@@ -2,26 +2,43 @@
 Strategy registry for strategy-engine.
 
 TERMINOLOGY (keep these distinct):
-  - STRATEGY  = the trading logic/signal class (e.g. v1.3, v1, v6.1). Lives in engine/*.py.
+  - STRATEGY  = the trading logic/signal class (e.g. v1.3, v1, v6.1). Lives in
+                strategies/{slug}/<file>.py.
   - ENGINE    = a running Instance that executes a Strategy against HyperLiquid
                 (see instances/runner.py). An Instance has a strategy_id.
 
-Naming:
-  - Canonical registry keys use the "strategy_*" namespace (e.g. "strategy_v1_3").
-  - Legacy "engine_*" keys (e.g. "engine_v1_3") are kept ONLY as backward-compat
-    ALIASES so existing Instances whose strategy_id was seeded as "engine_v1_3"
-    continue to resolve without a DB migration. ALIASES is consulted inside
-    get_strategy() / get_presets() — the STRATEGIES dict itself contains ONLY
-    canonical "strategy_*" keys, so iteration and listing never produce duplicates.
+Track 5.3 (2026-07-24): the registry now DISCOVERS strategies dynamically by
+scanning strategies/{slug}/ for a BaseStrategy subclass via importlib. The
+legacy hardcoded dict below remains as the SEED (canonical built-ins); the
+loader overlays any discovered subdir strategy on top, so built-ins and
+file-based strategies coexist. Public names are unchanged so callers
+(instances/runner.py, api/*, app/routes.py, testing/runner.py,
+backtests/runner.py, scripts/worker.py) don't break.
+
+detect_mintick is re-exported from core/ (moved in Track 5.7).
 """
+import importlib
+import inspect
+import pkgutil
+from pathlib import Path
 
-from strategies.v1_3 import EngineV1_3Strategy
-from strategies.v1 import EngineV1Strategy
-from strategies.v6_1 import EngineV6_1Strategy
+from strategies.base import BaseStrategy
+
+# Re-export detect_mintick from core/ (moved there in Track 5.7 — it is a
+# strategy-support helper, not registry logic). Kept here so existing importers
+# (`instances/runner.py`, `api/strategies.py`, `scripts/worker.py`) need no change.
+from core.detect_mintick import detect_mintick  # noqa: E402,F401
 
 
-# Canonical strategy registry — "strategy_*" keys only.
-STRATEGIES = {
+# ---------------------------------------------------------------------------
+# Seed registry — canonical built-in strategies (kept for backward compat).
+# Imported directly so they resolve even if subdir discovery is disabled.
+# ---------------------------------------------------------------------------
+from strategies.strategy_v1_3.v1_3 import EngineV1_3Strategy  # noqa: E402
+from strategies.strategy_v1.v1 import EngineV1Strategy  # noqa: E402
+from strategies.strategy_v6_1.v6_1 import EngineV6_1Strategy  # noqa: E402
+
+_SEED_STRATEGIES = {
     "strategy_v1_3": EngineV1_3Strategy,
     "strategy_v1": EngineV1Strategy,
     "strategy_v6_1": EngineV6_1Strategy,
@@ -33,6 +50,47 @@ ALIASES = {
     "engine_v1": "strategy_v1",
     "engine_v6_1": "strategy_v6_1",
 }
+
+
+def _discover_subdir_strategies() -> dict:
+    """Scan strategies/{slug}/ for BaseStrategy subclasses.
+
+    Returns {slug: class}. A subdir strategy overrides a seed entry with the
+    same slug. The class's module name (strategy_id) is derived from the subdir
+    name; the discovered class is registered under that slug.
+    """
+    found = {}
+    strategies_root = Path(__file__).resolve().parent
+    for sub in strategies_root.iterdir():
+        if not sub.is_dir():
+            continue
+        if sub.name.startswith("_") or sub.name in ("__pycache__",):
+            continue
+        # find the first .py file that defines a BaseStrategy subclass
+        py_files = sorted(sub.glob("*.py"))
+        for pf in py_files:
+            if pf.name.startswith("_") or pf.name == "base.py":
+                continue
+            module_name = f"strategies.{sub.name}.{pf.stem}"
+            try:
+                mod = importlib.import_module(module_name)
+            except Exception:
+                # a broken strategy subdir must not take down the whole registry
+                continue
+            for _, obj in inspect.getmembers(mod, inspect.isclass):
+                if (
+                    issubclass(obj, BaseStrategy)
+                    and obj is not BaseStrategy
+                    and obj.__module__ == module_name
+                ):
+                    found[sub.name] = obj
+                    break
+    return found
+
+
+# STRATEGIES = seed overlaid with discovered subdir strategies.
+STRATEGIES = dict(_SEED_STRATEGIES)
+STRATEGIES.update(_discover_subdir_strategies())
 
 
 def list_strategies() -> list:
@@ -52,6 +110,12 @@ def get_strategy(strategy_id: str):
 
 
 def get_presets(strategy_id: str) -> dict:
+    """Return preset configs for a strategy (UI-facing; kept as static map).
+
+    TODO (1.7 / future): derive from strategy.get_default_config() once all
+    built-ins expose presets uniformly. Kept static to avoid breaking the
+    engine settings panel during the dynamic-loader refactor.
+    """
     canonical = _resolve_strategy_id(strategy_id)
     if canonical == "strategy_v1_3":
         return {
@@ -94,81 +158,5 @@ def register_uploaded_strategy(strategy_id: str, strategy_cls) -> None:
 def unregister_uploaded_strategy(strategy_id: str) -> None:
     """Remove an uploaded/cloned strategy from the runtime registry."""
     canonical = _resolve_strategy_id(strategy_id)
-    if canonical in STRATEGIES and canonical not in ("strategy_v1_3", "strategy_v1", "strategy_v6_1"):
+    if canonical in STRATEGIES and canonical not in _SEED_STRATEGIES:
         del STRATEGIES[canonical]
-
-
-def detect_mintick(df=None, token: str = None) -> float:
-    """
-    Detect the minimum price tick (syminfo.mintick equivalent) from HL API.
-    Uses the markPx string precision from metaAndAssetCtxs, which is the
-    authoritative source of HL's price tick size.
-
-    Falls back to L2 orderbook granularity, then candle data, then 0.00001.
-
-    Do NOT use szDecimals - that's quantity decimals, not price tick size.
-    """
-    import requests
-
-    # Method 1: markPx decimal precision from metaAndAssetCtxs (authoritative)
-    if token:
-        try:
-            resp = requests.post(
-                "https://api.hyperliquid.xyz/info",
-                headers={"Content-Type": "application/json"},
-                json={"type": "metaAndAssetCtxs"},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                meta = data[0] if isinstance(data, list) and len(data) > 0 else {}
-                ctxs = data[1] if isinstance(data, list) and len(data) > 1 else []
-                for m, c in zip(meta.get("universe", []), ctxs):
-                    if m.get("name") == token:
-                        mark_px = c.get("markPx", "")
-                        if "." in mark_px:
-                            dec_places = len(mark_px.split(".")[1])
-                        else:
-                            dec_places = 0
-                        return 10 ** (-dec_places)
-        except Exception:
-            pass
-
-    # Method 2: L2 orderbook granularity (fallback)
-    if token:
-        try:
-            resp = requests.post(
-                "https://api.hyperliquid.xyz/info",
-                headers={"Content-Type": "application/json"},
-                json={"type": "l2Book", "coin": token},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                levels = data.get("levels", [])
-                if levels and levels[0]:
-                    bids = [float(l["px"]) for l in levels[0][:10]]
-                    diffs = [abs(bids[i + 1] - bids[i]) for i in range(len(bids) - 1)]
-                    pos_diffs = [d for d in diffs if d > 0]
-                    if pos_diffs:
-                        return float(min(pos_diffs))
-        except Exception:
-            pass
-
-    # Method 3: candle data detection (last resort fallback)
-    if df is not None:
-        try:
-            all_prices = set()
-            for col in ("close", "open", "high", "low"):
-                if col in df.columns:
-                    all_prices.update(df[col].dropna().unique())
-            sorted_prices = sorted(all_prices)
-            if len(sorted_prices) >= 2:
-                diffs = [sorted_prices[i + 1] - sorted_prices[i] for i in range(len(sorted_prices) - 1)]
-                pos_diffs = [d for d in diffs if d > 0]
-                if pos_diffs:
-                    return float(min(pos_diffs))
-        except Exception:
-            pass
-
-    return 0.00001
