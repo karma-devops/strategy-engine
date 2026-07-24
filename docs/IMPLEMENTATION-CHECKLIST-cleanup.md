@@ -73,6 +73,30 @@ Listed as *propose* items — NOT executed in this cleanup unless operator appro
 
 ---
 
+## Track 5 — Registry architecture (NEW, scope expansion 2026-07-24)
+
+**Goal (operator):** two distinct, clean registries:
+- **strategy.registry** — catalog of available strategy classes. New strategies register here → become selectable by any engine. (Currently `engine/registry.py` STRATEGIES/ALIASES/list_strategies/get_strategy/register_uploaded_strategy/get_presets.)
+- **engine.registry** — per-engine instance config: which `strategy_id` + its params/vars (activation, offset, profile, mode, timeframe, leverage, max_position_pct, poll_interval). (Currently spread across `instances/manager.py` DEFAULT_FLEET + Instance model.)
+
+**Proposed physical layout (post Track-1 split, pending operator go):**
+- `strategies/registry.py` ← strategy catalog (STRATEGIES, ALIASES, list_strategies, get_strategy, register/unregister_uploaded_strategy, get_presets refactored to pull from strategy class per 1.7).
+- `instances/registry.py` ← NEW: DEFAULT_FLEET, get_default_fleet, per-instance param schema/defaults, running-engine registry.
+- `detect_mintick` → moves to `core/` (strategy helper, not registry concern).
+- Neither registry imports the other by name; they meet only via the 3-point contract.
+
+| # | Step | Type | Gate | Status |
+|---|------|------|------|--------|
+| 5.1 | Confirm physical layout (strategies/registry.py + instances/registry.py) with operator | consent | go | ☐ PENDING |
+| 5.2 | Split current `engine/registry.py` into strategy catalog + engine config; `git mv` to new paths after Track 1.2 | structural | imports clean | ☐ |
+| 5.3 | `get_presets` refactor (merges with 1.7): pull presets FROM strategy class, not registry switch | code | presets unchanged | ☐ |
+| 5.4 | `detect_mintick` → `core/` | code | import clean | ☐ |
+| 5.5 | **DOCUMENTATION.md** = authoritative registry + 3-point contract doc (this is the deliverable doc — NOT archived). Document all steps. | doc | reviewer-read | ☐ |
+
+**Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.5 deliverable (registry/architecture authority), not a stale overlap.
+
+---
+
 ## Execution log
 
 | Date | Phase | What changed | Verify | Commit |

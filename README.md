@@ -65,6 +65,7 @@ main/
 - **Worker stays standalone** (port 9999, not merged)
 - **Seed engine-1 only** on fresh accounts
 - **CONTEXT.md / NOTES.md at repo root** (operator navigation)
+- **Strategy vs engine daemon:** strategy = trading logic (catalogued in `strategy.registry`); engine = running instance (config in `engine.registry`). The engine is a universal receiver via `entry_config` / `exit_config` / `strategy_config` — it never references a strategy's class or file name.
 
 ## Safety
 

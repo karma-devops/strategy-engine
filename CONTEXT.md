@@ -65,6 +65,29 @@ strategy-engine/
 
 ---
 
+## 2b. Vocabulary — strategy vs engine daemon (authoritative)
+
+These two words are deliberately distinct. Confusing them is the root cause of the
+repo's historical structure drift.
+
+| Term | Means | Lives in | Registry |
+|------|-------|----------|----------|
+| **Strategy** | The trading logic — signal generation, params, presets. User may name/slug it anything (e.g. `v1_3`, `my_scalp`); a strategy file is just `strategy.py`-style logic. | `engine/` today → `strategies/` after the split (Track 1) | **strategy.registry** — the catalog of available strategy classes. New strategies register here and become selectable by any engine. |
+| **Engine (daemon)** | A running Instance that executes a Strategy against HyperLiquid. Own token, creds, risk, mode. | `instances/` (runner, manager, models, events) + `core/` (exchange, market_data) | **engine.registry** — per-engine instance config: which `strategy_id`, plus its params/vars (activation, offset, profile, mode, timeframe, leverage, max_position_pct, poll_interval). |
+
+**Receiver contract (inviolable):** the engine daemon is a *universal receiver*. It never
+references a strategy's class or file name. It consumes a strategy only through the
+3-point contract returned by `generate_signals()`:
+- `entry_config` — clear entry signal → open trade (param values are log-only).
+- `exit_config` — clear exit of an open trade → close it (param values are log-only).
+- `strategy_config` — manual settings / params (editable in UI, stored per instance).
+
+The strategy.registry exposes strategies by slug; the engine.registry wires a chosen
+slug + its params into a running instance. Neither registry imports the other's logic
+by name — they meet only through the 3-point contract. (Full registry design: Track 5.)
+
+---
+
 ## 3. URL Structure
 
 ### Public (no auth)
