@@ -1,131 +1,148 @@
-# PLANNED-EDITS-24-7-2026 — Live UI Repair Plan (Pulse · Positions · Trades · KPI)
+# PLANNED-EDITS-24-7-2026 — Consolidated Live Repair Plan
 
-**Project:** strategy-engine · **Status:** APPROVED for hotfix (operator go, 2026-07-24)
-**Engines:** RUNNING — operator is ~10h into a 24h live test (engine-1 LIVE). This plan is **DEFERRED** until the live test completes. Do NOT execute while engines are live (mutations touch runner + DB + restart). Status: drafted, pending post-test execution.
-**Principle (operator directive):** HL is the source of truth for *rendering*. DB is the *historical record*. No mismatch between KPI, Pulse, and HL.
+**Project:** strategy-engine
+**Status:** APPROVED 2026-07-24 (operator go; all engines halted, 24h live test stopped). Execution authorized with care.
+**Discipline:** ADIX — one verified file change per turn, commit+push each; backup DB before any mutation.
 
 ---
 
-## 0. VERIFIED GROUND TRUTH (from source read)
+## 0. RECONCILIATION — dropped / merged stale items
+
+Two external docs were reviewed and verified item-by-item against disk (2026-07-24). Both were partially STALE.
+
+**Sources:**
+- Attached `strategy-engine-functional-analysis.md` (dated 2026-07-23)
+- `AEE.md` (engine-detail page bug-hunt, 2026-07-19)
+
+**DROPPED (already fixed in code at 2026-07-24):**
+| Item | Claim | Disk reality |
+|---|---|---|
+| F1 `paper_routes.py` missing `instances` | 🔴 broken | FIXED — lines 52-58 query correctly |
+| F2 `@dataclass` on `BacktestTrade` | 🔴 broken | FIXED — `@dataclass` at backtests/runner.py:47 |
+| F5 entry cost uses `TAKER_FEE` | 🟠 wrong math | FIXED — backtests/runner.py:663 uses `_entry_cost()` |
+| AEE Defect 1 (pulse graph empty) | 🔴 broken | FIXED — engine_detail.html:378 uses `PulsRChart.createEquityChart` |
+| AEE Defect 2 (positions unstyled) | 🔴 broken | FIXED — engine_detail.html:87 `#pos-card` + :344 `renderEngineDetailPosition` |
+| AEE Defect 3 (settings don't persist) | 🔴 broken | FIXED — PUT path engine_detail.html:187-238 works; runner revert bug fixed in 3e7d2fa |
+
+> **AEE.md DELETED per operator instruction** (faulty naming + all defects resolved). Its only useful residue — "engine-detail page already uses PulsRChart + renderEngineDetailPosition + working PUT" — is recorded here so Phase A3 only needs confirmation, not rebuild.
+
+**MERGED as live defects (verified broken on disk):** ROOT-2, ROOT-3, FE-1, FE-2, FE-3, FE-4, FE-5, PINE-1, PINE-2.
+**TO-VERIFY-BEFORE-FIX (gates):** F3 (OHLC None-guard), F4 (backtests.html profile), F6 (activation int), F7 (slippage naming).
+
+---
+
+## 1. VERIFIED GROUND TRUTH (disk-confirmed 2026-07-24)
 
 | Mechanism | Location | Finding |
 |---|---|---|
-| `get_account_value()` | `core/exchange.py:134` | perps `accountValue` + available spot USDC = **total portfolio** |
-| `get_perp_account_value()` | `core/exchange.py:151` | HL-native perp-only `marginSummary.accountValue` (excludes idle spot) — **the consistent figure** |
-| Positions render | `dashboard.html:680` `renderPositions(d.instances)`; `engine_detail.html:337` | reads DB `Instance.position_side` column, NOT HL live |
-| HL-live positions exist | `api/positions.py` (`/api/v2/positions`) | correct, but only fetched once at boot by `position-card.js:265 hydratePositions()` |
-| Runner writes `position_side` | `instances/runner.py:707/736` | only when HL `position` truthy; sets `None` on stale-None ticks (line 712) |
-| Pulse seed | `dashboard.html:682-692` | `equityData` seeded from `/summary` `equity_series` (1h) ONLY if empty |
-| Pulse live push | `dashboard.html:755-762` + `stream.py:55` | SSE pushes `get_account_value()` (full) into `equityData` **capped 60-pt rolling window** → evicts 1h history → scale jump |
-| Anomaly filter | `instances/runner.py:1076-1089` `_record_account` | **drops snapshot if swing >50%** from last-good → gaps in `account_snapshots` at transitions |
-| KPI account_value | `api/instances.py:280-290` | `/summary` returns `account_value`; for operator it's overridden with LIVE `get_account_value()` (full perps+spot) — but pulse history uses `account_snapshots.account_value` (same full figure) → *should* match, but the 60-cap eviction + gaps break visual continuity |
-| Trades pricing | `instances/runner.py:946-947` `_close_active_trade` | `exit_price=mark_px`; HL `user_fills` override only on `position is None` branch (line 923) → `pnl_usd`/`exit_price` wrong on normal closes |
-| AccountSnapshot model | `instances/models.py:373-382` | `account_value`, `withdrawable`, `dry_run`, `timestamp` — no `source` column |
-| PositionSnapshot model | `instances/models.py:359-370` | `side`,`size`,`entry_price`,`mark_price`,`unrealized_pnl_*` |
+| `get_account_value()` | core/exchange.py | perps `accountValue` + spot USDC = total portfolio |
+| `get_perp_account_value()` | core/exchange.py | HL-native perp-only = consistent figure |
+| Positions render (dash) | dashboard.html:680 `renderPositions` | reads DB `position_side` |
+| Positions render (engine) | engine_detail.html:344 `renderEngineDetailPosition` | FIXED (AEE) — uses styled `#pos-card` |
+| HL-live positions | api/positions.py `/api/v2/positions` | correct; position-card.js `hydratePositions` (265) polls 3s + SSE |
+| Runner writes `position_side` | runner.py:707/736 | only when HL truthy; None on stale-None ticks |
+| Pulse seed | dashboard.html:282/686 | `equityData` from `/summary.equity_series` if empty |
+| Pulse live push | dashboard.html:758-760 + stream.py:55 | pushes value, **60-cap `shift()` evicts history → scale jump** |
+| Anomaly filter | runner.py:1076-1089 `_record_account` | **drops >50% swing → gaps in `account_snapshots`** |
+| KPI account_value | api/instances.py:280-295 | operator override calls `get_account_value()` (full perps+spot) |
+| Trades pricing | runner.py:879-951 `_close_active_trade` | NO HL `user_fills` correlate; `exit_price=mark_px`; **NO `user_id`** (FE-1) |
+| AccountSnapshot model | models.py:373-382 | `account_value`, `withdrawable`, `dry_run`, `timestamp` — **NO `source` column** |
+| EMA prev update | runner.py:257-265 | sets `_prev_fast/medm_ema` BEFORE `_evaluate_exit` (~476) → crossunder never fires (ROOT-2) |
+| Backtest trail | backtests/runner.py:300-345 | `trail_activation`=activation, `trail_offset`=distance — OPPOSITE of live (ROOT-3) |
+| Paper equity | runner.py:1072 | `_record_account` uses `_paper_balance` only → flatlines on open trade (FE-5) |
+| v1_3 risk_profile | engine/v1_3.py:644 | hardcoded `"Scalp Aggressive (8/3)"` (PINE-1) |
+| v6_1 man_* | engine/v6_1.py:61-62 | `man_activation`/`man_offset` set but NOT wired to `active_*` (PINE-2) |
+| position-card.js HTTPS | position-card.js:268 | hardcodes `'http://'` strip → wrong scheme on HTTPS (FE-4) |
+
+**My 4 prior corrections — now verified against disk:**
+1. **A1 gate bug CONFIRMED** — api/instances.py:237 requires `i.position_side != "FLAT"` before calling HL, so the HL override never fires for the stale-None case. Real plan gap, fixed in Phase A1.
+2. **A1 field mapping UNVERIFIED** — `get_position()` return shape not yet read (only `liquidationPx` consumed). Phase A0 reads it.
+3. **B1→B2/B4 ordering CONFIRMED load-bearing** — `AccountSnapshot` has no `source` column; `_record_account` writes none. B2/B4 crash before B1. B1 must land first.
+4. **Residual grep-only sections NOW VERIFIED** — dashboard.html pulse JS (682-762), KPI (202/665/747), position-card.js hydratePositions (265) all match plan.
 
 ---
 
-## 1. DESIGN DECISIONS (operator-approved)
+## 2. PHASED PLAN
 
-1. **Positions** → always rendered from **HL live** (`/api/v2/positions`), never the stale DB column.
-2. **Pulse** → a **pure `balance_history` array** that always appends the latest value; seeded from DB history on load, then live-appended (no fixed cap that evicts history; append-only, trim from front only to a generous max e.g. 2000).
-3. **Live KPI** → fetched **directly from `get_account_value()` / `get_perp_account_value()`** (same source as the pulse), so KPI ≡ pulse tail ≡ HL. No cross-source mismatch.
-4. **Trades** → corrected from HL `user_fills` at close (both branches); open legs recorded; backfill script post-fix.
+### Phase A — Positions HL-live (API + JS)  [safe with engines stopped/running]
+- **A0.** READ `core/exchange.py get_position()` return dict. Verify keys (`entryPx`, `sz`, `unrealizedPnl`, `liquidationPx`).
+- **A1.** `api/instances.py:237` relax gate: call HL for all `status==running & dry_run is False`; let HL drive `position_side`/`size`/`entry`/`mark`/`pnl`. Keep DB fallback on HL error. *(Fixes stale-None flash-vanish — verified gate bug.)*
+- **A2.** `position-card.js:265` already 3s-poll + SSE (verified). Confirm dashboard sets `window.API_KEY` (975 does). Gate: position stable 1min vs live HL.
+- **A3.** `engine_detail.html:344` `renderEngineDetailPosition` already wired (AEE fixed). Confirm A1 override flows in. No rebuild.
 
----
+### Phase B — Pulse pure-append (model + filter + JS)  [model migration → restart after]
+- **B1.** `models.py:373` add `source = Column(String(16), default="perp")`. **MUST land before B2/B4.**
+- **B2.** `runner.py:1076-1089` remove >50% filter; write `get_perp_account_value()` stamped `source="perp"`.
+- **B3.** `dashboard.html:682-762` replace 60-cap with append-only `balance_history` (trim front >2000); seed from `/summary.equity_series`.
+- **B4.** `api/instances.py` `equity_series` filter `source="perp"`. Gate: continuous 1h+ history, smooth tail, no jump.
 
-## 2. PHASES
+### Phase C — KPI ≡ pulse ≡ HL  [no schema change]
+- **C1.** `api/instances.py:291` operator override `get_account_value()` → `get_perp_account_value()`. Gate: KPI == pulse tail == HL perp dashboard.
 
-### PHASE A — Positions: HL-live render (JS + 1 read endpoint)
-**Safe to run with engines stopped or running. No DB schema change.**
+### Phase D — Trades HL-accurate (DB mutation)  [backup before writes]
+- **D0.** `cp data/dev_test.db /tmp/dev_test.db.bak.$(date +%s)`.
+- **D1.** `runner.py:942` add `user_id=self.instance.user_id` (FE-1). Both close branches correlate HL `user_fills` by (side, px, ts±30s) for real `closedPnl`/`exit_price`; fallback `mark_px` only if no fill.
+- **D2.** `runner.py:765 _execute_open` write open `Trade` row (`pnl_usd=0`), update in place on close (match by signal_id/open ts).
+- **D3.** New `scripts/backfill_trades_hl.py` — re-pull `user_fills`, reconcile window. Gate: `trades` mirrors HL.
 
-- **A1.** `api/instances.py` `/summary` (lines 237-245 A4 block): extend the live HL enrichment to ALL running instances — for each, call `get_hyperliquid_client(i).get_position(i.token)`; if open, override `position_side` / `position_size` / `entry_price` / `mark_price` / `unrealized_pnl` from HL (already imports `get_hyperliquid_client`). Keep DB as fallback when HL fails.
-  - *Verify:* `curl /api/v2/summary` (operator per-user key) → engine with open pos shows correct `position_side` + `entry_price`.
-- **A2.** `app/static/position-card.js` `hydratePositions()` (line 265): change from one-time boot fetch to a **3s interval** that re-fetches `/api/v2/positions` and re-renders `window.POSITIONS_DATA` (so it never reverts to stale). Gate on `window.API_KEY` being set on dashboard (currently `dashboard.html:448` sets it — confirm both pages set it).
-  - *Verify:* open a position on HL (paper engine), dashboard shows it persistently across 10s, no flash-vanish.
-- **A3.** `engine_detail.html` (line 337): already reads `inst.position_side` from `/summary` → inherits A1. Confirm `renderEngineDetailPosition()` uses the same. No change unless mismatch found.
+### Phase E — Engine correctness (live-behavior)  [engines halted → executable]
+- **E1. ROOT-2:** `runner.py:257-265` move `_prev_fast/medm_ema` update to AFTER `_evaluate_exit` (~476). Gate: trend-change exit fires on EMA crossunder.
+- **E2. ROOT-3 + F3:** verify live `_evaluate_exit` trail semantics; align `backtests/runner.py:300-345` + OHLC 563-614 so `trail_activation`=distance, `trail_offset`=activation; confirm/add None-guards at OHLC blocks. Gate: backtest trail matches live.
+- **E3. PINE-1:** `engine/v1_3.py:644` `"risk_profile": self.risk_profile`.
+- **E4. FE-5:** `runner.py:1072` mark paper balance to market during open trade (`_active_trade` stores `current_mark_price`).
+- **E5. PINE-2:** `engine/v6_1.py:61-62` wire `active_activation=man_activation`, `active_offset=man_offset`.
 
-**Gate A:** positions visible & stable on both dashboard + engine page for 1 min against a live HL position.
+### Phase F — Paper/Backtest UI (safe, no engine logic, no restart needed)
+- **F1. FE-4:** `position-card.js:268` HTTPS scheme fix (3 lines).
+- **F2. FE-2:** verify `testing_paper.html:208` `time_unix` exists in `paper_routes.py` dict; add if missing.
+- **F3. FE-3:** verify `paper_routes.py` inst_data `account_value` not aliased to `unrealized_pnl`; fix if present.
+- **F4. F4:** `backtests.html` profile payload → valid label + dropdown from `GET /api/v2/strategies`.
+- **F5. F6:** `api/backtests.py:37` `activation: int`.
+- **F6. F7:** `cost_model.py` `slippage_bps` naming doc (optional cleanup).
 
----
-
-### PHASE B — Pulse: pure appending balance_history (JS + runner filter + 1 model col)
-**Engines stopped → can restart after. Includes model migration.**
-
-- **B1.** `instances/models.py` `AccountSnapshot` (line 373): add `source = Column(String(16), default="perp")` to distinguish `perp` (HL-native perp-only) vs `total` (perps+spot). Generates Alembic/SQLAlchemy `ALTER TABLE` on next `Base.metadata.create_all`.
-  - *Verify:* `python -c "from instances.models import AccountSnapshot; print(AccountSnapshot.__table__.columns)"` shows `source`.
-- **B2.** `instances/runner.py` `_record_account` (line 1076-1089): **remove the >50% drop**. Record every tick. Use `get_perp_account_value()` (HL-native, consistent with KPI) as the `account_value` written to `account_snapshots`, stamped `source="perp"`. If a swing is suspicious, set a flag column (or just keep it — visual gaps were the real bug, not a few bad points).
-  - *Verify:* after restart + 1 tick, `account_snapshots` has a contiguous row (no gaps) for the window; `source='perp'`.
-- **B3.** `dashboard.html` pulse JS (lines 682-762): replace the 60-cap rolling window with **append-only `balance_history`**:
-  - Seed `balance_history` from `/summary.equity_series` (DB history, `source` filtered) on load (if empty).
-  - On SSE `metrics` (line 745-762): `balance_history.push({time: Date.now()/1000, value: m.portfolio_value})`; trim from front only if `length > 2000`. **Never shift out the DB history.**
-  - `buildPulse()` reads `balance_history` (rename from `equityData` or alias). Scale to its own min/max → stable, no jump.
-  - *Verify:* reload page → 1h history shows; live point appends at the tail continuously for 60s+ without the line "jumping" or history disappearing.
-- **B4.** `api/instances.py` `/summary` `equity_series` (line 257): filter `AccountSnapshot` by `source="perp"` (so pulse + KPI use the same HL-native figure). Default `hours` handling unchanged.
-
-**Gate B:** pulse renders continuous 1h+ history; live tail appends smoothly; reload shows no discontinuity; `account_snapshots` has no gaps.
-
----
-
-### PHASE C — Live KPI from HL directly (backend + JS align)
-**Ensures KPI ≡ pulse tail ≡ HL. No schema change.**
-
-- **C1.** `api/instances.py` `/summary` (lines 280-290): the operator live override already calls `hl.get_account_value()`. Change it to `hl.get_perp_account_value()` so the KPI figure **equals** the pulse's `source="perp"` history. (Perp-only is the consistent, non-jumpy figure; full perps+spot can jump when spot USDC moves.)
-  - *Verify:* KPI `account_value` == last `account_snapshots` (`source='perp'`) value == HL dashboard perp account value.
-- **C2.** `dashboard.html` KPI render (lines 202/206, 664, 934): ensure `kpi-account` + ticker show the `/summary.account_value` (now perp-consistent). No separate live fetch needed — `/summary` already live for operator. If a faster KPI is wanted, add a 1s SSE-driven `portfolio_value` text update (already at line 745-757) but **label it clearly as the same perp figure**.
-  - *Verify:* KPI number matches pulse tail exactly.
-
-**Gate C:** KPI, pulse tail, and HL perp dashboard all show the same number within rounding.
-
----
-
-### PHASE D — Trades: HL-accurate pricing (DB mutation — post-restart)
-**Engines stopped → safe now. Mutates `trades` table.**
-
-- **D1.** `instances/runner.py` `_close_active_trade` (lines 914-947): on **both** branches (position present / None), correlate HL `user_fills` for the token by `(side, px, timestamp±30s)`; use the real `closedPnl` + fill `px` for `pnl_usd` / `exit_price`. Fallback to `mark_px` only if no fill found.
-  - *Verify:* close a paper trade; `trades` row `exit_price` == HL fill `px`, `pnl_usd` == HL `closedPnl`.
-- **D2.** `instances/runner.py` entry path (around line 765 `_execute_open`): write a `Trade` row on OPEN (side=entry, size, entry_px, `pnl_usd=0`), so open legs are recorded, not just closes. (Or reconcile at close — operator preference: record-on-open is cleaner.)
-  - *Verify:* open a position → `trades` has an open row; on close it updates in place (match by `signal_id` / open timestamp).
-- **D3.** Backfill script `scripts/backfill_trades_hl.py` (new, read-only against HL, write to DB): re-pull `user_fills` for the test window, correct/replace `trades` rows. Run once, backup DB first.
-  - *Verify:* `trades` count + sums match HL `user_fills` for the window (operator's audit method: scope recent window, match by timestamp/coin/side/price).
-
-**Gate D:** `trades` table mirrors HL `user_fills` for open + closed; backfill reconciles history.
-
----
-
-### PHASE E — Restart & Full Verify
-- **E1.** Kill all runner processes; confirm port 8792 free (`grep -qi ':2268' /proc/net/tcp`).
-- **E2.** Restart: `DATABASE_URL=dev_test.db STRATEGY_ENGINE_PORT=8792 ./venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8792`.
-- **E3.** Health: `curl -o /dev/null -w "%{http_code}" http://127.0.0.1:8792/` (landing 200) + `/app/dashboard` (200) + `/api/v2/summary` (200 with per-user key).
-- **E4.** Functional: open a paper position on HL → dashboard shows it (A), pulse appends (B), KPI matches (C), close it → trades row correct (D).
+### Phase G — Restart & Full Verify
+- **G1.** Kill runner processes; confirm port 8792 free.
+- **G2.** Relaunch: `DATABASE_URL=dev_test.db STRATEGY_ENGINE_PORT=8792 ./venv/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8792`.
+- **G3.** Health: landing 200, `/app/dashboard` 200, `/api/v2/summary` 200 (per-user key).
+- **G4.** Functional: open paper pos → shows (A); pulse appends (B); KPI matches (C); close → trades correct (D); EMA exit fires (E1); backtest trail matches (E2).
 
 ---
 
 ## 3. EXECUTION DISCIPLINE
-- ADIX: **one verified file change per turn**, commit + push each (`git add -p` style, not bulk).
-- Backup DB before any Phase D mutation: `cp data/dev_test.db /tmp/dev_test.db.bak.$(date +%s)`.
-- Each phase has a **Gate** — do not advance until the gate verifies green.
-- No autonomous deletion; cleanup candidates listed, not executed.
+- ADIX: one verified file change per turn; `git add -p` style, commit+push each.
+- Backup DB before Phase D mutations.
+- Each phase has a Gate — do not advance until green.
+- No autonomous deletion (AEE.md deletion pre-authorized by operator).
 
 ## 4. FILE TOUCH MAP
 | Phase | File | Type |
-|---|------|------|
-| A1 | `api/instances.py` | read-endpoint enrich |
-| A2 | `app/static/position-card.js` | JS poll |
-| A3 | `app/templates/engine_detail.html` | verify only |
-| B1 | `instances/models.py` | +1 column |
-| B2 | `instances/runner.py` | filter removal + perp source |
-| B3 | `app/templates/dashboard.html` | JS pulse rewrite |
-| B4 | `api/instances.py` | equity_series filter |
-| C1 | `api/instances.py` | perp KPI |
-| C2 | `app/templates/dashboard.html` | KPI label |
-| D1 | `instances/runner.py` | trades pricing |
-| D2 | `instances/runner.py` | trades open row |
-| D3 | `scripts/backfill_trades_hl.py` | new script |
-| E | shell | restart + verify |
+|---|---|---|
+| A0 | core/exchange.py | read |
+| A1 | api/instances.py | gate relax + HL enrich |
+| A2 | app/static/position-card.js | confirm only |
+| A3 | app/templates/engine_detail.html | confirm only |
+| B1 | instances/models.py | +1 column |
+| B2 | instances/runner.py | filter removal + perp source |
+| B3 | app/templates/dashboard.html | JS pulse rewrite |
+| B4 | api/instances.py | equity_series filter |
+| C1 | api/instances.py | perp KPI |
+| D1 | instances/runner.py | trades user_id + HL pricing |
+| D2 | instances/runner.py | trades open row |
+| D3 | scripts/backfill_trades_hl.py | new script |
+| E1 | instances/runner.py | EMA update order |
+| E2 | backtests/runner.py | trail semantics + None-guard |
+| E3 | engine/v1_3.py | risk_profile |
+| E4 | instances/runner.py | paper mark-to-market |
+| E5 | engine/v6_1.py | man_* wiring |
+| F1 | app/static/position-card.js | HTTPS scheme |
+| F2 | app/paper_routes.py + testing_paper.html | time_unix |
+| F3 | app/paper_routes.py | account_value |
+| F4 | app/templates/backtests.html | profile payload |
+| F5 | api/backtests.py | activation int |
+| G | shell | restart + verify |
 
-## 5. OPEN DECISIONS (resolved by operator directive)
-- Pulse figure = **perp-only** (`get_perp_account_value`) for consistency. ✅
-- KPI = same perp figure. ✅
-- Trades = record-on-open + correct-on-close from HL. ✅
-- Anomaly filter = **removed** (gaps were the bug). ✅
+## 5. OPEN VERIFICATION GATES (verify before fix)
+- **F3** OHLC None-guard (backtests/runner.py:563-614)
+- **F4** backtests.html profile payload (`"balanced"` invalid)
+- **F6** api/backtests.py:37 `activation` type
+- **F7** cost_model.py `slippage_bps` naming
