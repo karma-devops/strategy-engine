@@ -60,6 +60,7 @@ strategy-engine/
 ├── scripts/worker.py      # Live strategy worker — port 9999, STANDALONE tester, no DB.
 │                          #   Operator directive: KEEP as standalone testing wrapper, NOT integrated.
 ├── pinescript-tv/         # Original PineScript source-of-truth
+├── engines/              # engine.registry: saved ENGINE DEFINITIONS (user-facing var/param layer). registry.py (ENGINE_DEFS + get_engine_defs/get_engine_def/get_default_fleet). Net-new saved-definition layer (Track 5.2, 2026-07-24); seed fleet migrated here from strategies/registry.
 ├── strategies/            # strategy.catalog: base.py (BaseStrategy + detect_mintick), registry.py (strategy.registry: STRATEGIES dict + get_strategy/get_presets), v1.py, v1_3.py, v6_1.py
 └── data/                  # SQLite DBs + backups (template_empty_STABLE.db, dev_test.db, backups/)
 ```

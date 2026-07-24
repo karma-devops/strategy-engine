@@ -6,7 +6,8 @@ import re
 from fastapi import APIRouter, Request
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
-from strategies.registry import list_strategies, get_presets, get_default_fleet, get_strategy
+from strategies.registry import list_strategies, get_presets, get_strategy
+from engines.registry import get_default_fleet
 
 router = APIRouter()
 

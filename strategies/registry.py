@@ -35,34 +35,6 @@ ALIASES = {
 }
 
 
-DEFAULT_FLEET = [
-    {
-        "slug": "engine-1",
-        "name": "FARTCOIN Scalp v1.3",
-        "token": "FARTCOIN",
-        "strategy_id": "strategy_v1_3",
-        "mode": "Scalp",
-        "profile": "aggressive_8_3",
-        "timeframe": "15m",
-        "leverage": 1,
-        "max_position_pct": 0.97,
-        "poll_interval_seconds": 3,
-    },
-    {
-        "slug": "engine-2",
-        "name": "HYPE Paper v1.3",
-        "token": "HYPE",
-        "strategy_id": "strategy_v1_3",
-        "mode": "Scalp",
-        "profile": "aggressive_8_3",
-        "timeframe": "15m",
-        "leverage": 5,
-        "max_position_pct": 0.97,
-        "poll_interval_seconds": 3,
-    },
-]
-
-
 def list_strategies() -> list:
     # Canonical keys only — no alias duplicates.
     return list(STRATEGIES.keys())
@@ -112,11 +84,6 @@ def get_presets(strategy_id: str) -> dict:
             }
         }
     return {}
-
-
-def get_default_fleet() -> list:
-    """Return the default fleet spec (engine-1 only)."""
-    return [dict(p) for p in DEFAULT_FLEET]
 
 
 def register_uploaded_strategy(strategy_id: str, strategy_cls) -> None:

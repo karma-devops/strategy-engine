@@ -8,7 +8,7 @@ from typing import Dict
 from sqlalchemy.orm import sessionmaker
 
 from config import config
-from strategies.registry import DEFAULT_FLEET
+from engines.registry import get_default_fleet
 from instances.models import engine, Instance
 from instances.runner import InstanceRunner, event_bus
 
@@ -260,7 +260,7 @@ def seed_default_fleet():
         operator = get_or_seed_operator(db)
         created_or_updated = []
         existing = {i.slug: i for i in db.query(Instance).all()}
-        for preset in DEFAULT_FLEET:
+        for preset in get_default_fleet():
             inst = existing.get(preset["slug"])
             if inst is None:
                 inst = Instance(
