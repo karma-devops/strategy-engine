@@ -74,11 +74,39 @@ def chat(system: str, user: str, *, user_id: str | None = None,
     return data["choices"][0]["message"]["content"]
 
 
-def convert_pine_to_python(pine_source: str, strategy_name: str = "", user_id: str | None = None) -> str:
+def _strip_fences(raw: str) -> str:
+    """Strip markdown code fences if the model ignored the 'no fences' instruction."""
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    return cleaned.strip()
+
+
+def convert_pine_to_python(
+    pine_source: str,
+    strategy_name: str = "",
+    user_id: str | None = None,
+    *,
+    save_path: str | None = None,
+    retries: int = 0,
+) -> str:
     """Convert PineScript source to a Python strategy module via the LLM.
 
     Returns Python source code only (code fences stripped). Raises on failure.
     Uses the user's CODER model (User.coder_model) when user_id is given.
+
+    Args:
+        pine_source: PineScript v5 source text.
+        strategy_name: Human label for the strategy (used in the prompt only).
+        user_id: operator/account id for credential + coder-model resolution.
+        save_path: if given, the cleaned Python source is written to this path
+            (atomic: temp file + rename) so the strategy becomes a loadable module
+            under strategies/<slug>/. None = preview only (no disk write).
+        retries: number of additional attempts if the LLM transport/HTTP call
+            fails (credential/timeouts). Each retry re-invokes chat(); the
+            successful result is stripped + (optionally) saved. Set 0 for no retry.
     """
     system = (
         "You are an expert quant developer. Convert TradingView PineScript strategies "
@@ -101,11 +129,36 @@ def convert_pine_to_python(pine_source: str, strategy_name: str = "", user_id: s
         "Emit ONLY valid Python source code. No prose. No markdown fences."
     )
     user = f"Strategy name: {strategy_name or 'Unnamed'}\n\nPineScript source:\n```pinescript\n{pine_source}\n```"
-    raw = chat(system, user, user_id=user_id, model_role="coder")
-    # Strip markdown code fences if the model ignored the "no fences" instruction
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    return cleaned.strip()
+
+    last_err: Exception | None = None
+    cleaned = ""
+    for attempt in range(1 + max(0, retries)):
+        try:
+            raw = chat(system, user, user_id=user_id, model_role="coder")
+            cleaned = _strip_fences(raw)
+            break  # success — exit retry loop
+        except Exception as e:  # transport / HTTP / creds
+            last_err = e
+            continue  # try again if retries remain
+
+    if not cleaned:
+        raise RuntimeError(
+            f"Conversion failed after {1 + max(0, retries)} attempt(s): {last_err}"
+        )
+
+    if save_path:
+        import os
+        import tempfile
+
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(suffix=".tmp", dir=os.path.dirname(os.path.abspath(save_path)))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(cleaned)
+            os.replace(tmp, save_path)  # atomic on POSIX
+        except Exception:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+
+    return cleaned
