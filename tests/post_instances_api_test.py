@@ -35,7 +35,7 @@ def main():
         "slug": "engine-test",
         "name": "Test Engine",
         "token": "DOGE",
-        "strategy_id": "strategy_v1_3",
+        "strategy_id": "translation-test",
         "mode": "Scalp",
         "profile": "aggressive_8_3",
         "timeframe": "15m",
