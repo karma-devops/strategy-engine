@@ -264,8 +264,13 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
     snap_q = (
         db.query(AccountSnapshot)
         .filter(AccountSnapshot.timestamp >= cutoff)
-        .filter(AccountSnapshot.source == "perp")  # B4: HL-native only — consistent pulse/KPI
     )
+    # B4: source filter is mode-aware. Live → 'perp' (HL-native), Paper → 'paper'.
+    # mode='all' (dry_run_filter=None) → no source filter (both series).
+    if dry_run_filter is True:
+        snap_q = snap_q.filter(AccountSnapshot.source == "paper")
+    elif dry_run_filter is False:
+        snap_q = snap_q.filter(AccountSnapshot.source == "perp")
     if dry_run_filter is not None:
         snap_q = snap_q.filter(AccountSnapshot.dry_run == dry_run_filter)
     snapshots = snap_q.order_by(AccountSnapshot.timestamp.asc()).limit(500).all()

@@ -81,7 +81,7 @@ class InstanceRunner:
         self._hl = get_hyperliquid_client(instance)
 
         # Paper Trading state simulation
-        self._paper_balance = float(instance.start_balance) if (instance.start_balance and instance.start_balance > 0) else 1000.0
+        self._paper_balance = float(instance.start_balance) if (instance.start_balance and instance.start_balance > 0) else 100.0  # E4: paper baseline 100 (matches backtest), operator directive
         self._equity_history: list = [self._paper_balance] if instance.dry_run else []  # closed-trade equity values
 
     def _refresh_hl_client(self):
