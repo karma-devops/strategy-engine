@@ -2269,3 +2269,14 @@ Server RUNNING on 8792, healthy, serving 200s. Phase B verified end-to-end. Live
 Next: C1 (KPI get_perp_account_value override) or D-series (trades HL-accurate).
 
 **Next session reminder:** on 24h-test completion, verify (1) engine-1 still running/flat-or-closed cleanly, (2) no duplicate entries (idempotency held), (3) circuit breaker / kill-switch behavior, (4) then resume T3-8 / B-series from table above.
+
+---
+## 2026-07-24 — Sprint F2-F6 verification (final code pass)
+All six F-items verified NO-OP on disk (attached analysis stale, like F1/AEE/expert-runner):
+- F2 time_unix: app/routes.py:924-927 already None-guards (`if t.timestamp else 0`)
+- F3 OHLC None-guard: cited runner.py:563-614 is signal-logging; real OHLC path guards None (equity_history/use_saved_ohlcv)
+- F4 backtests.html profile: no profile UI selector exists; hardcoded default is the only path (by design)
+- F5 account_value alias in paper_routes.py: file does NOT exist; paper equity in runner.py (B2/E4 done)
+- F6 activation int api/backtests.py:37: already typed int
+Sprint code complete: A,B,C,D,E + ref-CSS. G (live-test) deferred to operator engine restart.
+**Server:** running on 8792, healthy. Engines halted (no live capital risk).
