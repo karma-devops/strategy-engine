@@ -44,7 +44,7 @@ def main():
     backtest = body["backtest"]
     assert "id" in backtest
     assert backtest["token"] == "FARTCOIN"
-    assert backtest["strategy_id"] == "strategy_v1_3"
+    assert backtest["strategy_id"] == "translation-test"
     print(f"  backtest id: {backtest['id']}")
     print(f"  status: {backtest['status']}")
     if backtest["status"] == "done":
