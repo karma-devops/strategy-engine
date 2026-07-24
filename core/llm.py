@@ -68,7 +68,7 @@ def chat(system: str, user: str, *, user_id: str | None = None,
      2. Else -> env vars (config.AI_API_KEY / AI_API_URL / AI_MODEL).
     Model resolution:
       model_override wins; else the user's stored pref (coder_model for model_role="coder",
-      assistant_model otherwise); else config.AI_MODEL; else "glm-5.1".
+      assistant_model otherwise); else config.AI_MODEL; else "gpt-oss:20b".
     """
     if user_id:
         creds = config.get_credential("ai_provider", user_id)
@@ -77,7 +77,7 @@ def chat(system: str, user: str, *, user_id: str | None = None,
     api_key = (creds or {}).get("api_key") or config.AI_API_KEY
     api_url = (creds or {}).get("api_url") or config.AI_API_URL
 
-    # Resolve model: override -> user pref -> env -> glm-5.1 default
+    # Resolve model: override -> user pref -> env -> gpt-oss:20b default
     model = model_override
     if not model and user_id:
         from instances.models import SessionLocal, User
@@ -88,7 +88,7 @@ def chat(system: str, user: str, *, user_id: str | None = None,
                 model = u.coder_model if model_role == "coder" else u.assistant_model
         finally:
             db.close()
-    model = model or config.AI_MODEL or "glm-5.1"
+    model = model or config.AI_MODEL or "gpt-oss:20b"
 
     if not api_key:
         raise RuntimeError(

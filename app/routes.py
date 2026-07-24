@@ -1940,7 +1940,7 @@ async def chat_api(request: Request, username: str = Depends(verify_ui_credentia
                 user_id=user_id, model_role="assistant",
                 model_override=model_override,
             )
-            model_used = model_override or user.assistant_model or "glm-5.1"
+            model_used = model_override or user.assistant_model or "gpt-oss:20b"
         except Exception as e:
             return {"ok": False, "session_id": sess.id,
                     "message": f"LLM error: {e}"}

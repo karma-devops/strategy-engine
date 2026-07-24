@@ -65,8 +65,8 @@ class User(Base):
     email_verified = Column(Boolean, default=False)           # email confirmation status
     email_verify_token = Column(String(128), nullable=True, index=True)  # email verify token
     # Phase 9: per-user model selection
-    assistant_model = Column(String(64), default="glm-5.1")  # chat model (Assistant + dashboard)
-    coder_model = Column(String(64), default="glm-5.1")      # Pine->Python conversion model (Studio)
+    assistant_model = Column(String(64), default="gpt-oss:20b")  # chat model (Assistant + dashboard)
+    coder_model = Column(String(64), default="gpt-oss:20b")      # Pine->Python conversion model (Studio)
     # Phase 18: per-user API key (auto-generated on signup)
     # api_key stores Fernet-encrypted key; api_key_hash stores SHA256 for O(1) lookup
     api_key = Column(Text, nullable=True)  # Fernet-encrypted puls_<uuid4>_key
