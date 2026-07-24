@@ -301,11 +301,13 @@ def _check_trailing_stop_on_ticks(position: BacktestTrade, ticks: list[float], m
             if tick_price > position.best_price:
                 position.best_price = tick_price
             if not position.trail_active:
-                activation_price = position.entry_price + position.trail_activation * mintick
+                # E2: trail_offset = ACTIVATION MOVE (Pine trail_offset); trail_activation = DISTANCE (Pine trail_points)
+                activation_price = position.entry_price + position.trail_offset * mintick
                 if tick_price >= activation_price:
                     position.trail_active = True
             if position.trail_active:
-                trail_stop = position.best_price - position.trail_offset * mintick
+                # E2: distance uses trail_activation (matches live runner + Pine)
+                trail_stop = position.best_price - position.trail_activation * mintick
                 position.trail_stop_price = trail_stop
                 if position.stop_loss_price is not None and trail_stop > position.stop_loss_price and tick_price <= trail_stop:
                     exit_cost = _exit_cost(position.qty * trail_stop)
@@ -322,11 +324,13 @@ def _check_trailing_stop_on_ticks(position: BacktestTrade, ticks: list[float], m
             if position.best_price == 0 or tick_price < position.best_price:
                 position.best_price = tick_price
             if not position.trail_active:
-                activation_price = position.entry_price - position.trail_activation * mintick
+                # E2: trail_offset = ACTIVATION MOVE (Pine trail_offset); trail_activation = DISTANCE (Pine trail_points)
+                activation_price = position.entry_price - position.trail_offset * mintick
                 if tick_price <= activation_price:
                     position.trail_active = True
             if position.trail_active:
-                trail_stop = position.best_price + position.trail_offset * mintick
+                # E2: distance uses trail_activation (matches live runner + Pine)
+                trail_stop = position.best_price + position.trail_activation * mintick
                 position.trail_stop_price = trail_stop
                 if position.stop_loss_price is not None and trail_stop < position.stop_loss_price and tick_price >= trail_stop:
                     exit_cost = _exit_cost(position.qty * trail_stop)
