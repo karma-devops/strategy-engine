@@ -1564,6 +1564,33 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
     }
     if save_path:
         resp["saved_path"] = save_path
+        # Register the freshly-saved strategy in the runtime registry so it
+        # is live-loadable immediately (no server restart). Mirrors
+        # strategies/registry.clone_strategy's registration step.
+        try:
+            import importlib
+            import inspect as _inspect
+            from strategies.registry import BaseStrategy, register_uploaded_strategy
+
+            module_name = f"strategies.{save_slug}.strategy"
+            _sysmod = __import__("sys").modules
+            _sysmod.pop(module_name, None)
+            _mod = importlib.import_module(module_name)
+            for _, _obj in _inspect.getmembers(_mod, _inspect.isclass):
+                if (
+                    issubclass(_obj, BaseStrategy)
+                    and _obj is not BaseStrategy
+                    and _obj.__module__ == module_name
+                ):
+                    register_uploaded_strategy(save_slug, _obj)
+                    resp["registered"] = True
+                    break
+            else:
+                resp["registered"] = False
+                resp["warning"] = "saved file has no BaseStrategy subclass; restart to load"
+        except Exception as _reg_e:  # save succeeded; registration is best-effort
+            resp["registered"] = False
+            resp["warning"] = f"save ok; live register skipped: {_reg_e}"
     return resp
 
 
@@ -1869,17 +1896,66 @@ async def strategy_save_api(strategy_id: str, request: Request, username: str = 
     documentation = body.get("documentation") or None
     if not python_source.strip():
         return {"ok": False, "message": "python_source is required"}
+    # Materialize the class to disk so the dynamic loader + engines can use it
+    # without a process restart. Mirrors /convert save_slug behaviour.
+    saved_path = None
+    registered = False
+    if all(c.isalnum() or c in "-_" for c in strategy_id):
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        save_dir = root / "strategies" / strategy_id
+        save_dir.mkdir(parents=True, exist_ok=True)
+        saved_path = str(save_dir / "strategy.py")
+        save_dir.joinpath("strategy.py").write_text(python_source)
+        try:
+            import importlib
+            import inspect as _inspect
+            from strategies.registry import BaseStrategy, register_uploaded_strategy
+            module_name = f"strategies.{strategy_id}.strategy"
+            _sysmod = __import__("sys").modules
+            _sysmod.pop(module_name, None)
+            _mod = importlib.import_module(module_name)
+            for _, _obj in _inspect.getmembers(_mod, _inspect.isclass):
+                if (
+                    issubclass(_obj, BaseStrategy)
+                    and _obj is not BaseStrategy
+                    and _obj.__module__ == module_name
+                ):
+                    register_uploaded_strategy(strategy_id, _obj)
+                    registered = True
+                    break
+        except Exception:
+            registered = False
     db = Session()
     try:
         strat = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
         if not strat:
-            return {"ok": False, "message": f"Strategy '{strategy_id}' not found"}
-        strat.python_source = python_source
-        if documentation is not None:
-            strat.documentation = documentation
-        strat.status = "active"
-        db.commit()
-        return {"ok": True, "strategy_id": strategy_id, "message": "Strategy saved and activated."}
+            # best-effort: create the DB row so the strategy is tracked.
+            # pine_source is NOT NULL; paste-mode has no pine, so seed it
+            # from the python_source (or empty) to satisfy the constraint.
+            try:
+                strat = Strategy(
+                    strategy_id=strategy_id,
+                    name=strategy_id,
+                    status="active",
+                    pine_source=python_source or "",
+                )
+                db.add(strat)
+            except Exception:
+                strat = None
+        if strat:
+            strat.python_source = python_source
+            if documentation is not None:
+                strat.documentation = documentation
+            strat.status = "active"
+            db.commit()
+        return {
+            "ok": True,
+            "strategy_id": strategy_id,
+            "message": "Strategy saved and activated.",
+            "saved_path": saved_path,
+            "registered": registered,
+        }
     finally:
         db.close()
 
