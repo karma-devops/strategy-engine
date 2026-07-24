@@ -810,50 +810,37 @@ button:focus-visible, a:focus-visible, .nav-item:focus-visible {
 .console-warn { color: var(--amber); }
 .console-err { color: var(--red); }
 
-/* ── Chart entrance animations ── */
-/* ── Position Cards ── */
+/* ── Position Cards (aligned to Puls-R reference: glass card + flat tertiary grid rows) ── */
 .pos-card {
-    background: var(--surface-inset, var(--bg-3, #1e1a16));
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md, 8px);
-    padding: var(--space-2) var(--space-3);
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-3);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: rgba(20, 20, 20, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 9px;
+    transition: background 0.2s ease, border-color 0.2s ease;
 }
 .pos-card:hover {
-    border-color: var(--border-strong);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    background: #252525;
+    border-color: var(--blue, #2196f3);
 }
 .pos-side-bar {
-    width: 3px;
-    min-width: 3px;
-    align-self: stretch;
-    border-radius: 2px;
-    flex-shrink: 0;
+    display: none; /* reference has no spine; side shown via badge */
 }
-.pos-side-bar.long { background: var(--green, #00ff88); }
-.pos-side-bar.short { background: var(--red, #ff4757); }
-.pos-side-bar.flat { background: var(--text-muted); }
 .pos-body {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex: 1;
-    min-width: 0;
-    flex-wrap: wrap;
+    display: contents;
 }
 .pos-head {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     min-width: 140px;
-    flex-shrink: 0;
 }
 .pos-token {
-    font-family: var(--font-display);
+    font-family: var(--font-display, 'Inter');
     font-weight: var(--weight-bold);
     font-size: var(--text-sm);
     color: var(--text-1);
@@ -863,12 +850,7 @@ button:focus-visible, a:focus-visible, .nav-item:focus-visible {
     color: var(--text-muted);
 }
 .pos-metrics {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    flex: 1;
-    min-width: 0;
-    flex-wrap: wrap;
+    display: contents;
 }
 .pos-metric {
     display: flex;
@@ -884,8 +866,9 @@ button:focus-visible, a:focus-visible, .nav-item:focus-visible {
     font-weight: var(--weight-semibold);
 }
 .pos-metric .value {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
+    font-family: var(--font-display, 'Inter');
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
     color: var(--text-1);
     white-space: nowrap;
 }
