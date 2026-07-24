@@ -7,12 +7,15 @@ TERMINOLOGY (keep these distinct):
   - ENGINE    = a running Instance that executes a Strategy against HyperLiquid
                 (see instances/runner.py). An Instance has a strategy_id.
 
-Track 5.3 (2026-07-24): the registry now DISCOVERS strategies dynamically by
+Track 5.3 (2026-07-24): the registry DISCOVERS strategies dynamically by
 scanning strategies/{slug}/ for a BaseStrategy subclass via importlib. The
-legacy hardcoded dict below remains as the SEED (canonical built-ins); the
-loader overlays any discovered subdir strategy on top, so built-ins and
-file-based strategies coexist. Public names are unchanged so callers
-(instances/runner.py, api/*, app/routes.py, testing/runner.py,
+prior hardcoded SEED dict (EngineV1_3Strategy / EngineV1Strategy /
+EngineV6_1Strategy) was removed in Track 5 legacy-removal (2026-07-24)
+— the legacy strategy_v1_3 / strategy_v1 / strategy_v6_1 dirs were
+moved to backups/legacy-strategies/, so the seed must stay empty or the
+whole module raises ModuleNotFoundError at import. STRATEGIES is now
+populated by _discover_subdir_strategies() alone. Public names unchanged
+so callers (instances/runner.py, api/*, app/routes.py, testing/runner.py,
 backtests/runner.py, scripts/worker.py) don't break.
 
 detect_mintick is re-exported from core/ (moved in Track 5.7).
@@ -31,25 +34,15 @@ from core.detect_mintick import detect_mintick  # noqa: E402,F401
 
 
 # ---------------------------------------------------------------------------
-# Seed registry — canonical built-in strategies (kept for backward compat).
-# Imported directly so they resolve even if subdir discovery is disabled.
+# Seed registry — EMPTY by design (Track 5 legacy removal, 2026-07-24).
+# All strategies are now discovered dynamically from strategies/{slug}/ via
+# _discover_subdir_strategies() below. The prior hardcoded seed imported
+# EngineV1_3Strategy / EngineV1Strategy / EngineV6_1Strategy from the
+# legacy strategy_v1_3 / strategy_v1 / strategy_v6_1 dirs — those dirs
+# were moved to backups/legacy-strategies/ and must NOT be imported here,
+# or the whole registry module raises ModuleNotFoundError at import time.
 # ---------------------------------------------------------------------------
-from strategies.strategy_v1_3.v1_3 import EngineV1_3Strategy  # noqa: E402
-from strategies.strategy_v1.v1 import EngineV1Strategy  # noqa: E402
-from strategies.strategy_v6_1.v6_1 import EngineV6_1Strategy  # noqa: E402
-
-_SEED_STRATEGIES = {
-    "strategy_v1_3": EngineV1_3Strategy,
-    "strategy_v1": EngineV1Strategy,
-    "strategy_v6_1": EngineV6_1Strategy,
-}
-
-# Backward-compat aliases → canonical key. DO NOT remove (existing DB rows use these).
-ALIASES = {
-    "engine_v1_3": "strategy_v1_3",
-    "engine_v1": "strategy_v1",
-    "engine_v6_1": "strategy_v6_1",
-}
+_SEED_STRATEGIES = {}
 
 
 def _discover_subdir_strategies() -> dict:
@@ -88,9 +81,9 @@ def _discover_subdir_strategies() -> dict:
     return found
 
 
-# STRATEGIES = seed overlaid with discovered subdir strategies.
-STRATEGIES = dict(_SEED_STRATEGIES)
-STRATEGIES.update(_discover_subdir_strategies())
+# STRATEGIES = discovered subdir strategies only (seed is empty post-legacy-removal).
+# Dynamic loader is the sole source of truth now.
+STRATEGIES = _discover_subdir_strategies()
 
 
 def list_strategies() -> list:
@@ -99,10 +92,15 @@ def list_strategies() -> list:
 
 
 def _resolve_strategy_id(strategy_id: str) -> str:
-    """Map a (possibly legacy) strategy_id to its canonical registry key."""
+    """Map a (possibly legacy) strategy_id to its canonical registry key.
+
+    As of Track 5 legacy removal (2026-07-24) all strategies are
+    slug-discovered; there are no backward-compat aliases. This now
+    resolves only to a live key or returns the id unchanged.
+    """
     if strategy_id in STRATEGIES:
         return strategy_id
-    return ALIASES.get(strategy_id, strategy_id)
+    return strategy_id
 
 
 def get_strategy(strategy_id: str):
@@ -112,41 +110,16 @@ def get_strategy(strategy_id: str):
 def get_presets(strategy_id: str) -> dict:
     """Return preset configs for a strategy (UI-facing; kept as static map).
 
-    TODO (1.7 / future): derive from strategy.get_default_config() once all
-    built-ins expose presets uniformly. Kept static to avoid breaking the
-    engine settings panel during the dynamic-loader refactor.
+    Track 5 legacy removal (2026-07-24): the hardcoded v1_3 / v1 /
+    v6_1 preset blocks were removed with the legacy strategies. Presets
+    should now be derived per-strategy via strategy.get_default_config()
+    (TODO 1.7). Until every discovered strategy exposes that uniformly,
+    this returns {} and the UI falls back to the strategy's own defaults.
     """
     canonical = _resolve_strategy_id(strategy_id)
-    if canonical == "strategy_v1_3":
-        return {
-            "default": {
-                "mode": "Scalp",
-                "profile": "aggressive_8_3",
-                "timeframe": "15m",
-                "activation": 8,
-                "offset": 3,
-            }
-        }
-    if canonical == "strategy_v1":
-        return {
-            "sniper_36_12": {
-                "mode": "Swing",
-                "profile": "sniper_36_12",
-                "timeframe": "1h",
-                "activation": 36,
-                "offset": 12,
-            }
-        }
-    if canonical == "strategy_v6_1":
-        return {
-            "default": {
-                "mode": "Scalp",
-                "profile": "manual_18_6",
-                "timeframe": "15m",
-                "activation": 18,
-                "offset": 6,
-            }
-        }
+    # No static presets remain post-legacy-removal; callers fall back to
+    # the discovered strategy's get_default_config()/get_parameters().
+    _ = canonical  # resolved for forward-compat callers
     return {}
 
 
