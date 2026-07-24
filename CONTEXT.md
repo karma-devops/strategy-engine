@@ -1,7 +1,7 @@
 # CONTEXT.md — strategy-engine (PULS·R) — THE MAP
 
 > **Single structural reference.** All architecture, product, deployment, naming, pipe/IA design, strategy contract, and design-system specs live here.
-> Companion docs (consolidated 2026-07-19): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/bugreport.md**, **docs/task-priorities.md**, **HANDOVER-UI-WALKTHROUGH.md**.
+> Companion docs (consolidated 2026-07-19): **NOTES.md** (session log + audits + ROAST), **docs/TASK-LIST.md** (SINGLE consolidated work inventory — TIER 0/1/2 priority), **BETA-ROADMAP.md** (forward plan). Read-only evidence: **docs/bugreport.md**, **docs/task-priorities.md**, **docs/HANDOVER-UI-WALKTHROUGH.md**.
 > Rollback index: `backups/VERSIONING.md`. Pre-consolidation docs moved to `backups/deprecated-docs_2026-07-18/`.
 > Do not commit to GitHub (local-only). Version: **v2.02** (synced 2026-07-23; prior doc freeze was v1.98 @ 2026-07-19).
 
