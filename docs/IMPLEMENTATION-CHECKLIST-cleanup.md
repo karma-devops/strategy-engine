@@ -132,13 +132,15 @@ strategies/{slug}/
 | 5.9 | Fidelity-score mechanism: decide compare method (AST diff / pynescript round-trip / LLM eval) and implement into doc generation | code | score produced | ☐ |
 | 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set. Instance registry loads/writes this file per instance. DB `strategy_config` column remains the runtime copy; `config.yaml` is authoritative per instance. Location TBD (5-risk-5). | code | instance boots from its config.yaml | ☐ |
 | 5.12 | **API editability of engine config** (operator addendum): already exists at `PUT /instances/{id}/strategy-config` (api/instances.py:468-534, API-key gated, restarts engine). Extend the SAME write path to also persist `config.yaml`. Design target: agent edits via API using the identical path the UI uses. The binding model applies identically whether write comes from UI or API. | design | endpoint writes config.yaml too | ☐ |
+| 5.13 | **Instance clone / snapshot (operator ask 2026-07-24):** "save, copy or duplicate any instance as a separate engine snapshot with its unique config." YES — falls out of the model. An instance = engine def (ref) + strategy (ref) + `instances/{slug}/config.yaml` (self-contained). Clone = copy config.yaml under a NEW slug + reference same engine/strategy. Config is git-tracked so snapshots are diffable + restorable. Implement in `instances/registry.py` as `clone_instance(slug, new_slug)`. | code | clone produces bootable new instance | ☐ |
 
 **Open risks / decisions to confirm before 5.2:**
 1. **`engine/` vs `engines/`** — confirm Track 1 (`engine/`→`strategies/`) precedes `engines/` creation (no clash). 
 2. **pynescript** is an external PyPI dep — must verify it works in this env + supports the pine syntax used before we depend on it (5.8).
 3. **Fidelity score** needs a defined method (5.9) — not yet chosen.
 4. **Migration safety** — existing live `strategy_id` (`strategy_v1_3`) must stay resolvable after subdir move (5.6 keeps slugs).
-5. **Per-instance config.yaml location** — `instances/{slug}/config.yaml` vs `data/instances/{slug}/config.yaml` (gitignore? data/ is gitignored, so configs wouldn't be tracked — may want `instances/{slug}/config.yaml` tracked, or a `data/instances/` that's intentional per-deploy).
+5. **Per-instance config.yaml location** — ✅ RESOLVED (operator 2026-07-24): `instances/{slug}/config.yaml`, **git-tracked + version-controlled**. DB `strategy_config` column stays the runtime copy; the file is authoritative per instance.
+6. **Directory taxonomy (RESOLVED):** `/instances` is SEPARATE from `/engines`. An **instance = deployed engine + its config + the strategy script it runs**. `engines/` holds engine *definitions* (reusable, copy-able); `instances/` holds *deployed* engine+config+strategy bindings. `strategies/` holds strategy *code* (catalog). Three distinct top-level dirs.
 
 **Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.10 deliverable (registry/architecture authority), not a stale overlap. **RULE (operator 2026-07-24): DOCUMENTATION.md contains ONLY LIVE + STABLE tested code — written LAST, after Track 5 implemented + live-verified.** The existing 765-line `docs/DOCUMENTATION.md` stays a candidate to archive until then.
 
