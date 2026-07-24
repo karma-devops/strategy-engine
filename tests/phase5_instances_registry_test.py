@@ -21,7 +21,7 @@ def test_instance_config_catalog():
     # no live config yet (5.11 writes real ones)
     assert R.get_instance_config("engine-1") is None
     # write + readback
-    p = R.save_instance_config("engine-1", {"slug": "engine-1", "token": "FARTCOIN", "strategy_id": "strategy_v1_3"})
+    p = R.save_instance_config("engine-1", {"slug": "engine-1", "token": "FARTCOIN", "strategy_id": "translation-test"})
     assert p.exists()
     cfg = R.get_instance_config("engine-1")
     assert cfg["token"] == "FARTCOIN"
