@@ -356,6 +356,7 @@ strategy-engine/
 - Keep worker (9999) standalone — do not integrate into main app.
 
 ## Doc pointer (REFRESHED 2026-07-24 — Track 2.6)
+- **Authoritative doc taxonomy (4-file):** `CONTEXT.md` = MAP (structure, architecture, rules) · `NOTES.md` = LOG (session log + audits) · `docs/TASK-LIST.md` = WORK (single consolidated TIER 0/1/2 tracker) · `BETA-ROADMAP.md` = FORWARD (beta readiness plan). Everything else = companion/read-only evidence.
 - `docs/TASK-LIST.md` is the single consolidated work/status tracker (TIER 0/1/2). ROOT `TASK-LIST.md` no longer exists — all work now lives in `docs/`.
 - `docs/` KEEP set (authoritative, living): `TASK-LIST.md`, `IMPLEMENTATION-CHECKLIST-cleanup.md`, `PLANNED-EDITS-24-7-2026.md`, `HANDOVER-UI-WALKTHROUGH.md`, `DOCUMENTATION.md`, `FAQ.md`, `VOCABULARY.md`. All others (ARCHITECTURE, ROADMAP, REFACTOR_PLAN, bugreport, DECISIONS, STYLEGUIDE, AI_RULES, UI-TODO-1, etc.) archived to `backups/deprecated-docs_2026-07-24/`. `wiki/` removed (overlapped docs/).
 - `DOCUMENTATION.md` / `FAQ.md` / `VOCABULARY.md` = living PWA docs; must reflect ACTUAL implemented frontend (LIVE+STABLE). Refresh pending (Track 2.7).
