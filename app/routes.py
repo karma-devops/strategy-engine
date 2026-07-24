@@ -1343,7 +1343,7 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
                 "api_key": get_dashboard_api_key(request),
                 "strategies": strategies_data,
                 "total_strategies": len(strategies_data),
-                "active_count": sum(1 for s in strategies_data if s["status"] == "active"),
+                "active_count": sum(1 for s in strategies_data if s.get("running_count", 0) > 0),
                 "active": "strategies",
             },
         )

@@ -123,9 +123,9 @@
                             </div>
                             <div class="fleet-card-actions" style="display:flex;gap:4px;flex-shrink:0;" onclick="event.stopPropagation()">
                                 {% if inst.status == 'running' %}
-                                <button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/stop')">⏹</button>
+                                <button class="fleet-btn btn-stop" style="height:28px;padding:0 10px;font-size:11px;" aria-label="Stop engine {{ inst.name }}" title="Stop engine" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/stop')">⏹</button>
                                 {% else %}
-                                <button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">▶</button>
+                                <button class="fleet-btn btn-start" style="height:28px;padding:0 10px;font-size:11px;" aria-label="Start engine {{ inst.name }}" title="Start engine" onclick="apiPost('/api/v2/instances/{{ inst.slug }}/start')">▶</button>
                                 {% endif %}
                                 <button class="fleet-btn" style="height:28px;width:28px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;" onclick="event.stopPropagation();openEngineSettings('{{ inst.slug }}')">⚙</button>
                             </div>
@@ -217,7 +217,7 @@
             </div>
             <div class="pulse-head" style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);flex-wrap:wrap;padding:0 var(--space-2);">
                 <div style="display:flex;align-items:center;gap:var(--space-2);">
-                    <h2 style="font-size:var(--text-sm);">Pulse</h2>
+                    <h2 style="font-size:var(--text-sm);" title="Pulse = total equity deviation since your start balance. Green ▲ = up, red ▼ = down.">Pulse</h2>
                     <span class="pulse-change" id="pulse-change">—</span>
                     {# P14: Mode toggle — paper/live separation. Click to cycle LIVE → PAPER → ALL #}
                     <button id="mode-toggle" onclick="cycleMode()" style="font-size:9px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;letter-spacing:1px;font-weight:700;transition:all 0.2s;">LIVE</button>
