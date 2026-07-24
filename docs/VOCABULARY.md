@@ -1,95 +1,60 @@
 # VOCABULARY
 
-Domain terms for the PULS-R strategy engine. Definitions follow the architecture
-contract (see `docs/REFACTOR_PLAN.md`).
+Domain terms for the PULS·R strategy engine, as **actually implemented in this repo** (LIVE + STABLE, verified 2026-07-24). Where an older concept was renamed, the live name is used.
 
 ## Strategy
-A pure trading algorithm that produces signals from market data. Owns trading
-logic + parameters. Knows: candles, settings. Does NOT know: exchange, account,
-orders, DB, logging, HTTP, other strategies. Immutable at runtime.
+A pure trading algorithm that produces signals from market data. Owns trading logic + parameters. Immutable at runtime — the engine passes config IN; the strategy file is never mutated.
+- Live location: `strategies/{slug}/strategy-name.py` (subclass of `BaseStrategy`).
+- Declares 3 ports (see below).
 
-## Strategy Package
-A versioned bundle: `python.py`, `pine.pine`, `metadata.yaml`, `defaults.yaml`,
-`tests.py`, `README.md`. New version = new package (never mutate in place).
+## The three ports (strategy contract)
+1. **strategy_config** (Port 1): static per-instance parameters. The strategy exposes its schema via `get_parameters()`; the engine settings panel renders these fields. Applied at runtime via `strategy_class(**strategy_config)`.
+2. **entry_config** (Port 2): per-signal output — direction (BUY/SELL/NEUTRAL), signal strength (0–1), metadata. Consumer reads to decide entry.
+3. **exit_config** (Port 3): per-signal exit declaration — stop_loss, take_profit, trail_activation/offset, time_exit. Consumer is neutral — reads only what the strategy declares.
 
-## Engine
-A deployed strategy = Strategy + Definition + Runtime + Context + Risk + Execution
-+ Exchange Adapter. Knows its own state + injected services. Does NOT know other
-engines, HTTP/API, or DB directly (uses repositories).
+## Strategy Package (subdir)
+`strategies/{slug}/` holds:
+- `strategy-name.py` — executable strategy
+- `strategy-name.pine` — exported PineScript (optional)
+- `strategy-name-doc.md` — what it does + FIDELITY SCORE vs original
+- `strategy-origin.py` / `strategy-origin.pine` — source if ported
 
-## Engine Definition
-Immutable config (name, strategy ref, symbol, exchange, paper/live, risk, interval).
-YAML. To change → new definition.
+## Engine (runtime executor)
+The deployed trading loop for ONE strategy + ONE config on ONE token. Driven by `instances/runner.py` + `core/`. Knows its own state. Does NOT contain strategy logic (strategy is imported, not embedded).
 
-## Engine Runtime
-Mutable per-tick state: position, last signal, PnL, drawdown, consecutive errors,
-heartbeat, order/trade counts. Disposable (rebuildable from events).
+## Instance
+= 1 engine + 1 strategy + 1 config parameter set, deployed and running. Created via UI (`/app/engines` → Add Engine) or API (`POST /api/v2/instances`).
+- Live model: `instances/{slug}/` holds `config.yaml` (authoritative, git-tracked) + the running process.
+- `Instance.strategy_config` (DB JSON column) is the runtime copy; `config.yaml` is the source of truth per instance.
 
-## Engine Context
-Injected services: exchange, risk, execution, event_bus, market, logger. Knows
-interfaces, not implementations.
+## Strategy Registry (`strategies/registry.py`)
+Catalog of available strategies. Public API kept stable: `STRATEGIES`, `list_strategies()`, `get_strategy()`, `register_uploaded_strategy()`, `get_presets()`. Loads `strategies/{slug}/` dynamically via `importlib`. Receivers (runner, API, UI) import ONLY through this — never by strategy class name.
 
-## Runner
-Scheduler. Orchestrates engine ticks. Owns active-engine list + tick loop + global
-kill state. Does NOT know strategy logic, order execution, or DB.
+## Engine/Instance Registry (`instances/registry.py`)
+Manages instance lifecycle (create / manage / delete / clone). Absorbs `DEFAULT_FLEET`. Clone = copy `config.yaml` under a new slug (see `clone_instance`).
 
 ## Signal
-A decision from a Strategy: engine_id, strategy_id, version, symbol, direction
-(BUY/SELL/HOLD), strength (0–1), timestamp, metadata. Past-tense fact once emitted.
+A decision from a Strategy: direction, strength, metadata. Consumed by the engine to open/adjust a position.
 
-## Order
-Instruction to exchange: idempotency key, engine_id, symbol, side, type, size,
-price, status, timestamps, fill price. Created by Execution Engine.
-
-## Position
-Current exposure: engine_id, symbol, side (LONG/SHORT/FLAT), size, entry, mark,
-unrealized/realized PnL, opened/closed timestamps.
-
-## Risk Check
-Single validation rule (e.g. PositionLimitCheck). Knows Order + context. Called
-every order.
-
-## Event
-Immutable past-tense fact. Published → handled by subscribers → persisted.
-
-## Candle
-OHLCV for one period. Pure data.
-
-## Portfolio
-Aggregate view of all engine positions + PnL. Computed on demand.
+## Position / Trade / Order
+- **Position:** current exposure (LONG/SHORT/FLAT), size, entry, mark, PnL.
+- **Trade:** completed open+close transaction (immutable once closed).
+- **Order:** instruction to exchange (idempotency-keyed).
 
 ## Account
-Exchange account state (value, equity, margin, leverage). Fetched from exchange.
+HyperLiquid account state (value, equity, margin, leverage), fetched from exchange. All engine instances share wallet `0xA871…8078` (global `ACCOUNT_ADDRESS`); engine fills + manual fills co-mingle in `user_fills`.
 
-## Trade
-Completed transaction (open + close). Immutable once closed.
+## Core service layer (`core/`)
+- `exchange.py` — HyperLiquid SDK wrapper (order/cancel, position/account query, candle fetch).
+- `llm.py` — strategy Pine→Python translation helper.
+- `risk`, `execution`, `market`, `event_bus`, `logger`, `metrics` — injected services the runner depends on.
 
-## Exchange (interface)
-Abstract: order placement/cancel, position/account queries, candle fetch. Knows
-exchange API. Does NOT know strategy/risk/engine.
+## PWA
+Progressive Web App: `app/static/manifest.json` + `app/static/sw.js` (service worker). Server-rendered Jinja2 templates + vanilla JS. Installable, offline-shell capable.
 
-## Market Provider
-Supplies candles + indicators. Live or replay. Does NOT know trading decisions.
+## Authentication
+- **UI:** HTTP Basic Auth (`operator:operator` default). Verified by `verify_ui_credentials`.
+- **API:** `X-API-Key` header (per `.env` `AGENT_API_KEY`). Verified by `verify_api_key`. All `/api/v2/*` routes are API-key gated.
 
-## Execution Engine
-Owns order lifecycle: signal→order, idempotency, placement, fills, retry,
-reconciliation, position closing. Does NOT know strategy/risk.
-
-## Repository
-Abstract persistence interface. Knows DB/ORM. Does NOT know business logic.
-
-## Event Bus
-Decouples publishers/subscribers. Knows event types + handlers.
-
-## Logger
-Structured logging with context injection.
-
-## Metrics
-Counters/gauges/histograms from events.
-
-## Persistence
-ORM models, migrations, connection pooling.
-
-## Infrastructure Concepts
-Exchange, Market Provider, Execution Engine, Repository, Event Bus, Logger,
-Metrics, Persistence — the service layer engines depend on via Context.
+## Backup (versioned)
+`backups/v{N}_{context}_STABLE_YYYY-MM-DD_HHMM.tar.gz`. Index in `backups/VERSIONING.md`. NO deletions — relocate stale artifacts to `backups/deprecated-docs_*/`.

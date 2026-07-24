@@ -2,7 +2,7 @@
 
 > **Version:** v0.095
 > **Last updated:** 2026-07-16
-> **Status:** Pine fidelity refactor Phases 1-8 complete (61/61 tests PASS)
+> **Status:** Repo cleanup in progress (Track 1–2.6 done 2026-07-24: `engine/` → `strategies/`, stale docs archived). LIVE + STABLE. Verify against running server before trusting any claim.
 
 ---
 
@@ -46,11 +46,11 @@ PULS·R is a systematic trading engine for HyperLiquid perpetuals. It runs Pytho
 |------|---------|
 | `main.py` | FastAPI app entrypoint |
 | `config.py` | Environment config |
-| `engine/base.py` | Base strategy class (contract) |
-| `engine/v1_3.py` | Eve Engine v1.3 strategy |
-| `engine/v1.py` | Eve Engine v1 strategy |
-| `engine/v6_1.py` | Engine v6.1 PRO strategy |
-| `engine/registry.py` | Strategy registry + mintick detection |
+| `strategies/base.py` | Base strategy class (contract) |
+| `strategies/v1_3.py` | Eve Engine v1.3 strategy |
+| `strategies/v1.py` | Eve Engine v1 strategy |
+| `strategies/v6_1.py` | Engine v6.1 PRO strategy |
+| `strategies/registry.py` | Strategy registry + mintick detection (dynamic loader) |
 | `instances/runner.py` | Instance runner (managed by dev server) |
 | `instances/models.py` | All SQLAlchemy models |
 | `instances/manager.py` | Instance lifecycle manager |
@@ -207,7 +207,7 @@ class BaseStrategy(ABC):
 
 ### 3.2 Engine v1.3 (Eve Engine v1.3)
 
-**File:** `engine/v1_3.py`
+**File:** `strategies/v1_3.py`
 **Class:** `EngineV1_3Strategy`
 
 Full-fidelity translation of the Pine Script Eve Engine v1.3. Supports both Swing and Scalp modes.
@@ -244,14 +244,14 @@ Full-fidelity translation of the Pine Script Eve Engine v1.3. Supports both Swin
 
 ### 3.3 Engine v1 (Eve Engine v1)
 
-**File:** `engine/v1.py`
+**File:** `strategies/v1.py`
 **Class:** `EngineV1Strategy`
 
 Swing/sniper strategy. Default timeframe 1h. Wider stops (36/12). EMA 50/18/6.
 
 ### 3.4 Engine v6.1 (Engine v6.1 PRO)
 
-**File:** `engine/v6_1.py`
+**File:** `strategies/v6_1.py`
 **Class:** `EngineV6_1Strategy`
 
 Scalp strategy with dynamic risk multiplier and drawdown protection. EMA 6/18/50. Trail 18/6.
@@ -599,10 +599,10 @@ Read the full Pine file. Identify:
 
 ### Step 2: Create the Python file
 ```python
-# engine/my_strategy.py
+# strateges/my_strategy.py
 import pandas as pd
 import numpy as np
-from engine.base import BaseStrategy
+from strateges.base import BaseStrategy
 
 class MyStrategy(BaseStrategy):
     @classmethod
@@ -624,9 +624,9 @@ class MyStrategy(BaseStrategy):
 ```
 
 ### Step 3: Register
-Add to `engine/registry.py`:
+No manual registration — `strategies/registry.py` auto-discovers `strategies/{slug}/` via `importlib`. Just drop the file in.
+
 ```python
-from engine.my_strategy import MyStrategy
 STRATEGIES = {
     "engine_v1_3": EngineV1_3Strategy,
     "engine_v1": EngineV1Strategy,
@@ -637,7 +637,7 @@ STRATEGIES = {
 
 ### Step 4: Verify
 ```python
-from engine.my_strategy import MyStrategy
+from strateges.my_strategy import MyStrategy
 s = MyStrategy()
 params = s.get_parameters()
 result = s.generate_signals(df, symbol="TEST", equity_history=[100])
@@ -683,7 +683,7 @@ tar xzf backups/v{N}_{context}_STABLE_YYYY-MM-DD_HHMM.tar.gz
 
 | Version | Description | Size |
 |---------|------------|------|
-| v91 | Pine fidelity refactor Phases 1-8, 61/61 tests PASS, clean slate | 680KB |
+| v2.03.004 | Track 1–2.6 cleanup: `engine/`→`strategies/`, 25 stale docs + wiki/ archived to `backups/deprecated-docs_2026-07-24/`. Code backups at `v2.03.001–004`. | — |
 
 ---
 
@@ -716,28 +716,28 @@ strategy-engine/
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
-├── CONTEXT.md             # Structural rails
+├── CONTEXT.md             # Structural rails (THE MAP)
 ├── NOTES.md               # Session memory
-├── HANDOVER-PROMPT.md     # Session handover
-├── REFACTOR_PLAN.md       # Pine fidelity refactor plan
-├── STRATEGY_CONVERTER.md  # Strategy porting contract
-├── SPECSHEET.md           # Architecture spec
-├── PIPE-ARCHITECTURE.md   # Data flow
-├── DEPLOYMENT.md          # Deployment guide
-├── docs/
+├── BETA-ROADMAP.md       # Forward plan
+├── docs/                  # KEEP docs only
+│   ├── TASK-LIST.md      # Work inventory (TIER 0/1/2)
+│   ├── IMPLEMENTATION-CHECKLIST-cleanup.md
+│   ├── PLANNED-EDITS-24-7-2026.md
+│   ├── HANDOVER-UI-WALKTHROUGH.md
 │   ├── FAQ.md             # Quick answers
-│   └── DOCUMENTATION.md   # This file
+│   ├── VOCABULARY.md     # Domain terms
+│   └── DOCUMENTATION.md  # This file
 ├── api/                   # REST API routes (11 modules)
 ├── app/                   # Jinja2 UI
-│   ├── routes.py          # UI routes
+│   ├── routes.py          # UI routes (mounted as ui_routes)
 │   ├── templates/         # HTML templates
-│   └── static/            # CSS, JS, PWA assets
-├── engine/                # Strategy modules
+│   └── static/           # CSS, JS, PWA assets
+├── strateges/             # Strategy modules
 │   ├── base.py            # Base strategy contract
-│   ├── v1_3.py            # Eve Engine v1.3
-│   ├── v1.py              # Eve Engine v1
-│   ├── v6_1.py            # Engine v6.1 PRO
-│   └── registry.py        # Strategy registry
+│   ├── v1_3.py          # Eve Engine v1.3
+│   ├── v1.py             # Eve Engine v1
+│   ├── v6_1.py          # Engine v6.1 PRO
+│   └── registry.py        # Strategy registry (dynamic loader)
 ├── instances/             # Instance management
 │   ├── runner.py          # Instance runner
 │   ├── models.py          # SQLAlchemy models
