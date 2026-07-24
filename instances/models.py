@@ -379,6 +379,7 @@ class AccountSnapshot(Base):
     account_value = Column(Float, default=0.0)
     withdrawable = Column(Float, default=0.0)
     dry_run = Column(Boolean, default=True)  # P14: paper vs live separation
+    source = Column(String(16), default="perp")  # B1: 'perp' (HL-native perp-only) vs 'total' (perps+spot)
     timestamp = Column(DateTime, default=_now_utc)
 
 
@@ -549,7 +550,7 @@ def _migrate_columns(engine):
     from sqlalchemy import inspect, text
     desired = {
         "instances": [("user_id", "VARCHAR(36)"), ("hl_credential_id", "VARCHAR(36)"), ("strategy_config", "JSON"), ("snapshot_data", "JSON"), ("snapshot_image_url", "VARCHAR(512)"), ("snapshot_at", "DATETIME")],
-        "account_snapshots": [("user_id", "VARCHAR(36)"), ("dry_run", "BOOLEAN")],
+        "account_snapshots": [("user_id", "VARCHAR(36)"), ("dry_run", "BOOLEAN"), ("source", "VARCHAR(16)")],
         "backtests": [
             ("user_id", "VARCHAR(36)"),
             ("kind", "VARCHAR(16)"),
