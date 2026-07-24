@@ -231,16 +231,30 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
             "stop_loss": i.stop_loss,
             "take_profit": i.take_profit,
         })
-        # A4 live enrichment: if this instance is running (live) and has an
-        # open position, pull liquidationPx fresh from HL so the dashboard
-        # position card shows a real value (not 0.0).
-        if i.status == "running" and i.dry_run is False and i.position_side and i.position_side != "FLAT":
+        # A4 live enrichment: if this instance is running (live), pull the
+        # open position fresh from HL so the dashboard/engine position cards
+        # show real values (not 0.0 / stale-NONE). This fires for ALL
+        # running live instances — including the case where the DB
+        # position_side went stale-NONE but HL still holds a position
+        # (the flash-vanish bug). HL is the source of truth for rendering.
+        if i.status == "running" and i.dry_run is False:
             try:
                 from core.exchange import get_hyperliquid_client
                 _hl = get_hyperliquid_client(i)
                 _pos = _hl.get_position(i.token)
-                if _pos and _pos.get("liquidationPx"):
-                    instances_data[-1]["liquidation_price"] = float(_pos["liquidationPx"])
+                if _pos:
+                    _szi = float(_pos.get("szi") or 0)
+                    if _szi != 0:
+                        instances_data[-1]["position_side"] = "LONG" if _szi > 0 else "SHORT"
+                        instances_data[-1]["position_size"] = abs(_szi)
+                        if _pos.get("entryPx") is not None:
+                            instances_data[-1]["entry_price"] = float(_pos["entryPx"])
+                        if _pos.get("markPx") is not None:
+                            instances_data[-1]["mark_price"] = float(_pos["markPx"])
+                        if _pos.get("unrealizedPnl") is not None:
+                            instances_data[-1]["unrealized_pnl"] = float(_pos["unrealizedPnl"])
+                    if _pos.get("liquidationPx"):
+                        instances_data[-1]["liquidation_price"] = float(_pos["liquidationPx"])
             except Exception as _e:
                 pass  # keep DB value on HL error
     # Filter snapshots by hours range AND dry_run mode for pulse graph.
