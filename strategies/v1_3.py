@@ -13,7 +13,7 @@ if _ROOT not in sys.path:
 
 import pandas as pd
 import numpy as np
-from engine.base import BaseStrategy
+from strategies.base import BaseStrategy
 
 class EngineV1_3Strategy(BaseStrategy):
     """

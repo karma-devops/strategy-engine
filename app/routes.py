@@ -27,7 +27,7 @@ from instances.models import (
     decrypt_api_key,
 )
 from instances.manager import manager
-from engine.registry import get_strategy
+from strategies.registry import get_strategy
 
 Session = sessionmaker(bind=engine)
 router = APIRouter()  # Protected routes (auth required)
@@ -1125,7 +1125,7 @@ def settings_app(request: Request, username: str = Depends(verify_ui_credentials
             user = get_user_or_seed_user(db, username)
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
         total_engines = len(instances)
-        from engine.registry import list_strategies
+        from strategies.registry import list_strategies
         total_strategies = len(list_strategies())
         return templates.TemplateResponse(
             request,
@@ -1195,7 +1195,7 @@ async def settings_app_save(request: Request, username: str = Depends(verify_ui_
             user.timezone = tz
         db.commit()
         instances = db.query(Instance).filter(Instance.user_id == user.id).all()
-        from engine.registry import list_strategies
+        from strategies.registry import list_strategies
         return templates.TemplateResponse(
             request,
             "settings.html",
@@ -1264,7 +1264,7 @@ def strategies_page(request: Request, username: str = Depends(verify_ui_credenti
     """Strategies overview — grid of all registered strategies."""
     db = Session()
     try:
-        from engine.registry import STRATEGIES, get_presets
+        from strategies.registry import STRATEGIES, get_presets
         strategies_data = []
         for sid, cls in STRATEGIES.items():
             info = STRATEGY_FILES.get(sid, {})
@@ -1350,7 +1350,7 @@ def strategy_detail_page(request: Request, strategy_id: str, username: str = Dep
     """Strategy detail — Overview / PineScript / Python / Documentation tabs."""
     db = Session()
     try:
-        from engine.registry import STRATEGIES, get_presets
+        from strategies.registry import STRATEGIES, get_presets
         if strategy_id not in STRATEGIES:
             return templates.TemplateResponse(request, "error.html", context={
                 "request": request, "error": f"Strategy '{strategy_id}' not found", "active": "strategies",
@@ -1428,7 +1428,7 @@ async def strategy_upload_api(request: Request, username: str = Depends(verify_u
         except SyntaxError as e:
             return {"ok": False, "message": f"Python syntax error: {e}"}
         # Validate: must have BaseStrategy subclass
-        from engine.base import BaseStrategy
+        from strategies.base import BaseStrategy
         namespace = {"__builtins__": __builtins__, "BaseStrategy": BaseStrategy}
         try:
             exec(python_source, namespace)
@@ -1445,7 +1445,7 @@ async def strategy_upload_api(request: Request, username: str = Depends(verify_u
         if not hasattr(strategy_cls, 'generate_signals') or not callable(getattr(strategy_cls, 'generate_signals')):
             return {"ok": False, "message": "Missing generate_signals() method"}
         # Auto-register
-        from engine.registry import register_uploaded_strategy
+        from strategies.registry import register_uploaded_strategy
         register_uploaded_strategy(strategy_id, strategy_cls)
         # Get default config
         parameters = strategy_cls.get_default_config() if hasattr(strategy_cls, 'get_default_config') else {}

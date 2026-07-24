@@ -17,7 +17,7 @@ Every Pine input default, constant, and logic branch is preserved:
 import numpy as np
 import pandas as pd
 
-from engine.base import BaseStrategy
+from strategies.base import BaseStrategy
 
 
 class EngineV1Strategy(BaseStrategy):

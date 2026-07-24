@@ -15,9 +15,9 @@ Naming:
     canonical "strategy_*" keys, so iteration and listing never produce duplicates.
 """
 
-from engine.v1_3 import EngineV1_3Strategy
-from engine.v1 import EngineV1Strategy
-from engine.v6_1 import EngineV6_1Strategy
+from strategies.v1_3 import EngineV1_3Strategy
+from strategies.v1 import EngineV1Strategy
+from strategies.v6_1 import EngineV6_1Strategy
 
 
 # Canonical strategy registry — "strategy_*" keys only.

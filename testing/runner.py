@@ -39,7 +39,7 @@ def main():
 
     # Validate strategy exists via the engine registry (single source of truth)
     try:
-        from engine.registry import get_strategy
+        from strategies.registry import get_strategy
         if get_strategy(args.strategy) is None:
             raise ValueError(f"strategy '{args.strategy}' not registered")
     except Exception as e:

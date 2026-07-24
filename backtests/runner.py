@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from core.market_data import HyperLiquidMarketData
-from engine.registry import get_strategy
+from strategies.registry import get_strategy
 from instances.models import CandleCache, Instance, SessionLocal
 from backtests.cost_model import ExecutionCostModel, get_cost_model
 

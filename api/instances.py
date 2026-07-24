@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
 from api.auth import verify_api_key
 from api.credentials import _current_user_id
-from engine.registry import STRATEGIES
+from strategies.registry import STRATEGIES
 from instances.models import get_db, Instance, AccountSnapshot, PositionSnapshot
 from instances.manager import manager
 from api.killswitch import is_global_killed, is_instance_killed
@@ -484,7 +484,7 @@ def update_strategy_config(
     if not inst:
         return {"ok": False, "message": "Instance not found"}
 
-    from engine.registry import get_strategy
+    from strategies.registry import get_strategy
     strategy_cls = get_strategy(inst.strategy_id)
     if not strategy_cls:
         return {"ok": False, "message": f"Unknown strategy {inst.strategy_id}"}
@@ -547,7 +547,7 @@ def get_strategy_config(
     inst = db.query(Instance).filter(Instance.slug == instance_id).first()
     if not inst:
         return {"ok": False, "message": "Instance not found"}
-    from engine.registry import get_strategy
+    from strategies.registry import get_strategy
     strategy_cls = get_strategy(inst.strategy_id)
     parameters = strategy_cls.get_parameters() if strategy_cls else []
     return {

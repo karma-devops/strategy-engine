@@ -13,7 +13,7 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import sessionmaker
 
 from config import config
-from engine.registry import get_strategy, detect_mintick
+from strategies.registry import get_strategy, detect_mintick
 from core.market_data import market_data
 from core.exchange import get_hyperliquid_client
 from core.position_sizer import PositionSizer

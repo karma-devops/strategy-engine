@@ -8,7 +8,7 @@ from typing import Dict
 from sqlalchemy.orm import sessionmaker
 
 from config import config
-from engine.registry import DEFAULT_FLEET
+from strategies.registry import DEFAULT_FLEET
 from instances.models import engine, Instance
 from instances.runner import InstanceRunner, event_bus
 

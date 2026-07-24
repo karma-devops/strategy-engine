@@ -6,7 +6,7 @@ import re
 from fastapi import APIRouter, Request
 
 from api.ratelimit import limiter, READ_LIMIT, WRITE_LIMIT
-from engine.registry import list_strategies, get_presets, get_default_fleet, get_strategy
+from strategies.registry import list_strategies, get_presets, get_default_fleet, get_strategy
 
 router = APIRouter()
 
@@ -166,7 +166,7 @@ def activate_strategy(request: Request, strategy_id: str):
     and has required methods, then registers in runtime STRATEGIES dict."""
     import json
     from instances.models import engine as db_engine, Strategy
-    from engine.registry import register_uploaded_strategy
+    from strategies.registry import register_uploaded_strategy
     from sqlalchemy.orm import Session
 
     with Session(db_engine) as db:
@@ -186,8 +186,8 @@ def activate_strategy(request: Request, strategy_id: str):
         # Validate: has BaseStrategy subclass with generate_signals and get_parameters
         namespace = {"__builtins__": __builtins__}
         # Pre-load required base classes into namespace
-        from engine.base import BaseStrategy
-        from engine.registry import detect_mintick
+        from strategies.base import BaseStrategy
+        from strategies.registry import detect_mintick
         import pandas as pd
         import numpy as np
         namespace["BaseStrategy"] = BaseStrategy
@@ -200,7 +200,7 @@ def activate_strategy(request: Request, strategy_id: str):
             return {"ok": False, "error": f"Exec error: {e}"}, 400
 
         # Find the strategy class
-        from engine.base import BaseStrategy
+        from strategies.base import BaseStrategy
         strategy_cls = None
         for obj in namespace.values():
             if isinstance(obj, type) and issubclass(obj, BaseStrategy) and obj is not BaseStrategy:

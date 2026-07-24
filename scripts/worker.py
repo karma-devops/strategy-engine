@@ -18,7 +18,7 @@ import uvicorn
 from core.exchange import HyperLiquidClient
 from core.market_data import HyperLiquidMarketData
 from core.position_sizer import PositionSizer
-from engine.registry import STRATEGIES
+from strategies.registry import STRATEGIES
 
 # ── Config ──
 PORT = int(os.getenv("WORKER_PORT", "9999"))
@@ -334,7 +334,7 @@ def strategy_loop():
                                 position = ex.get_position(token)
                                 entry_px = float(position.get("entryPx", 0)) if position else 0.0
                                 # Get mintick from HL API markPx precision (authoritative)
-                                from engine.registry import detect_mintick
+                                from strategies.registry import detect_mintick
                                 mintick = detect_mintick(df=df, token=token)
                                 # Read trail params from exit_config (receptacle)
                                 ec = result.get("exit_config", {}) or {}
