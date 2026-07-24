@@ -73,27 +73,57 @@ Listed as *propose* items — NOT executed in this cleanup unless operator appro
 
 ---
 
-## Track 5 — Registry architecture (NEW, scope expansion 2026-07-24)
+## Track 5 — Three-registry architecture + strategy lifecycle (scope expansion 2026-07-24)
 
-**Goal (operator):** two distinct, clean registries:
-- **strategy.registry** — catalog of available strategy classes. New strategies register here → become selectable by any engine. (Currently `engine/registry.py` STRATEGIES/ALIASES/list_strategies/get_strategy/register_uploaded_strategy/get_presets.)
-- **engine.registry** — per-engine instance config: which `strategy_id` + its params/vars (activation, offset, profile, mode, timeframe, leverage, max_position_pct, poll_interval). (Currently spread across `instances/manager.py` DEFAULT_FLEET + Instance model.)
+**Operator model (verbatim intent):**
+- An **instance** = 1 engine + 1 strategy + 1 config-parameter set.
+- An **engine** = execution code + log/db entry from a strategy, driven by configs.
+- A **strategy** = trading logic; each gets its own subdir with python + pine + doc + originals.
 
-**Proposed physical layout (post Track-1 split, pending operator go):**
-- `strategies/registry.py` ← strategy catalog (STRATEGIES, ALIASES, list_strategies, get_strategy, register/unregister_uploaded_strategy, get_presets refactored to pull from strategy class per 1.7).
-- `instances/registry.py` ← NEW: DEFAULT_FLEET, get_default_fleet, per-instance param schema/defaults, running-engine registry.
-- `detect_mintick` → moves to `core/` (strategy helper, not registry concern).
-- Neither registry imports the other by name; they meet only via the 3-point contract.
+**Three registries (confirmed 2026-07-24):**
+| Registry | Path | Role |
+|----------|------|------|
+| `strategies/registry.py` | catalog of available strategies; manage/create/edit/delete a `strategy.py`; stores pine + python originals; translation via `pynescript` | strategy catalog |
+| `engines/registry.py` | created/saved engine definitions; persist; later copy-able for the user | engine catalog |
+| `instances/registry.py` | created instances; manage/create/delete an "engine instance" (engine + strategy + config bound) | instance catalog |
+
+**⚠️ Naming collision to resolve (singular vs plural):** current `engine/` (singular) holds the *strategy* classes (`v1.py`, `v1_3.py`, `v6_1.py`). After Track 1 it becomes `strategies/`. The NEW `engines/` (plural) dir is for engine definitions. No clash because singular≠plural, but the split order matters: Track 1 (`engine/`→`strategies/`) runs FIRST, then `engines/` is created.
+
+**Strategy subdir layout (per slug):**
+```
+strategies/{slug}/
+  strategy-name.py        # executable strategy python script
+  strategy-name.pine      # exported pine script of latest strategy (optional)
+  strategy-name-doc.md    # doc: what it does + technical terms + FIDELITY SCORE vs original
+  strategy-origin.py      # if origin was python
+  strategy-origin.pine    # if origin was pine
+```
+
+**Translation + fidelity:** `pynescript` (https://pypi.org/project/pynescript/) authors pine→python more accurately. Each strategy's `strategy-name-doc.md` carries a fidelity score (translated python vs origin script) shown on the front end.
+
+**Loader change (architecture-affecting):** `strategies/registry.py` must DYNAMICALLY discover `strategies/{slug}/strategy-name.py` via `importlib` and introspect for a `BaseStrategy` subclass + metadata (slug, name, doc path, fidelity). This replaces the current hardcoded `STRATEGIES = {...}` dict. `get_strategy/list_strategies/register_uploaded_strategy` keep the same public names so callers (`instances/runner.py`, `api/*`, `app/routes.py`, `testing/runner.py`, `backtests/runner.py`, `scripts/worker.py`) don't break.
 
 | # | Step | Type | Gate | Status |
 |---|------|------|------|--------|
-| 5.1 | Confirm physical layout (strategies/registry.py + instances/registry.py) with operator | consent | go | ☐ PENDING |
-| 5.2 | Split current `engine/registry.py` into strategy catalog + engine config; `git mv` to new paths after Track 1.2 | structural | imports clean | ☐ |
-| 5.3 | `get_presets` refactor (merges with 1.7): pull presets FROM strategy class, not registry switch | code | presets unchanged | ☐ |
-| 5.4 | `detect_mintick` → `core/` | code | import clean | ☐ |
-| 5.5 | **DOCUMENTATION.md** = authoritative registry + 3-point contract doc (this is the deliverable doc — NOT archived). Document all steps. | doc | reviewer-read | ☐ |
+| 5.1 | Confirm 3-registry layout + `engine/`→`strategies/` order (this table) | consent | go | ☐ PENDING |
+| 5.2 | Track 1 first (`engine/`→`strategies/` via git mv). Then create NEW `engines/` dir + `engines/registry.py` | structural | imports clean | ☐ |
+| 5.3 | `strategies/registry.py`: dynamic `importlib` loader scanning `strategies/{slug}/strategy-name.py`; expose STRATEGIES/list_strategies/get_strategy/register/unregister + get_presets (pulled from strategy class per 1.7) | code | loader test passes | ☐ |
+| 5.4 | `engines/registry.py`: saved engine definitions (execution-code ref + config schema); persist + copy-able | code | engine list returns | ☐ |
+| 5.5 | `instances/registry.py`: instance = engine+strategy+config; create/manage/delete; absorbs `DEFAULT_FLEET` from `instances/manager.py` | code | instance CRUD works | ☐ |
+| 5.6 | Seed existing strategies into subdirs: `engine/v1.py`→`strategies/strategy_v1/strategy-name.py`, `v1_3.py`→`strategy_v1_3/`, `v6_1.py`→`strategy_v6_1/`; write `{slug}-doc.md` (fidelity TBD) + origin files | code | 3 subdirs import | ☐ |
+| 5.7 | `detect_mintick` → `core/` (strategy helper, not registry concern) | code | import clean | ☐ |
+| 5.8 | Add `pynescript` to `requirements.txt`; verify it imports + supports the pine version in use (python 3.12 venv) BEFORE relying on it for translation | verify | pip install + import OK | ☐ |
+| 5.9 | Fidelity-score mechanism: decide compare method (AST diff / pynescript round-trip / LLM eval) and implement into doc generation | code | score produced | ☐ |
+| 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set (engine + strategy bound + params: activation, offset, profile, mode, timeframe, leverage, max_position_pct, poll_interval). Instance registry loads/writes this file per instance (path e.g. `instances/{slug}/config.yaml` or `data/instances/{slug}/config.yaml`). DB columns remain the runtime copy; `config.yaml` is the source-of-truth per instance. Decide location + migration of existing DEFAULT_FLEET rows into files. | code | instance boots from its config.yaml | ☐ |
 
-**Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.5 deliverable (registry/architecture authority), not a stale overlap.
+**Open risks / decisions to confirm before 5.2:**
+1. **`engine/` vs `engines/`** — confirm Track 1 (`engine/`→`strategies/`) precedes `engines/` creation (no clash). 
+2. **pynescript** is an external PyPI dep — must verify it works in this env + supports the pine syntax used before we depend on it (5.8).
+3. **Fidelity score** needs a defined method (5.9) — not yet chosen.
+4. **Migration safety** — existing live `strategy_id` values (`strategy_v1_3` etc.) must stay resolvable after subdir move (5.6 keeps slugs).
+5. **Per-instance config.yaml location** — `instances/{slug}/config.yaml` vs `data/instances/{slug}/config.yaml` (gitignore? data/ is gitignored, so configs wouldn't be tracked — may want `instances/{slug}/config.yaml` tracked, or a `data/instances/` that's intentional per-deploy).
+
+**Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.10 deliverable (registry/architecture authority), not a stale overlap.
 
 ---
 
