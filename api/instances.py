@@ -264,6 +264,7 @@ def summary(request: Request, db: Session = Depends(get_db), hours: int = 24, mo
     snap_q = (
         db.query(AccountSnapshot)
         .filter(AccountSnapshot.timestamp >= cutoff)
+        .filter(AccountSnapshot.source == "perp")  # B4: HL-native only — consistent pulse/KPI
     )
     if dry_run_filter is not None:
         snap_q = snap_q.filter(AccountSnapshot.dry_run == dry_run_filter)
