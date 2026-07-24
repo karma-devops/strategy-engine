@@ -1567,6 +1567,94 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
     return resp
 
 
+@router.post("/api/v2/strategies/{strategy_id}/generate")
+@limiter.limit(WRITE_LIMIT)
+async def strategy_generate_api(strategy_id: str, request: Request, username: str = Depends(verify_ui_credentials)):
+    """API (Track 5.9): generate PineScript + doc + fidelity for a strategy.
+
+    Returns {ok, strategy_id, pinescript, doc, fidelity}.
+      - pinescript: the strategy's PineScript source (from the Strategy row).
+      - doc:        a deterministic markdown doc derived from the structural
+                    summary (no LLM call — offline + verifiable).
+      - fidelity:   structural diff surface via core.translate.pine_to_struct
+                    ({indicators, inputs, vars, functions}) used by the
+                    fidelity-score mechanism.
+
+    Body may override with `pine_source` (standalone, no DB write).
+    """
+    body = await request.json()
+    pine_source = (body.get("pine_source") or "").strip()
+
+    if not pine_source:
+        db = Session()
+        try:
+            strat = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+            if strat:
+                pine_source = strat.pine_source or ""
+        finally:
+            db.close()
+        # Fallback: read the originating .pine from the strategy subdir
+        # (disk-based strategies may not have a DB Strategy row).
+        if not pine_source.strip():
+            from pathlib import Path
+
+            strat_dir = Path(__file__).resolve().parent.parent / "strategies" / strategy_id
+            pines = sorted(strat_dir.glob("*.pine")) if strat_dir.is_dir() else []
+            if pines:
+                pine_source = pines[0].read_text(encoding="utf-8", errors="replace")
+        if not pine_source.strip():
+            return {"ok": False, "message": f"No PineScript source for strategy '{strategy_id}' (no DB row and no .pine file)"}
+
+    try:
+        from core.translate import pine_to_struct
+
+        struct = pine_to_struct(pine_source)
+    except Exception as e:
+        return {"ok": False, "message": f"Fidelity analysis failed: {e}"}
+
+    indicators = struct.get("indicators", [])
+    inputs = struct.get("inputs", [])
+    vars_ = struct.get("vars", [])
+    functions = struct.get("functions", [])
+
+    doc_lines = [
+        f"# Strategy: `{strategy_id}`",
+        "",
+        "Auto-generated structural summary (Track 5.9 fidelity surface).",
+        "",
+        f"- **Indicators:** {', '.join(indicators) if indicators else 'none detected'}",
+        f"- **Inputs (tuneable):** {len(inputs)}",
+    ]
+    for inp in inputs:
+        doc_lines.append(f"  - `{inp.get('name')}` ({inp.get('kind')})")
+    doc_lines += [
+        f"- **Variables:** {len(vars_)}",
+        f"- **Functions:** {len(functions)}",
+        "",
+        "## PineScript source",
+        "",
+        "```pinescript",
+        pine_source.strip(),
+        "```",
+    ]
+    doc = "\n".join(doc_lines)
+
+    # Fidelity score: fraction of the structural surface that is non-empty.
+    surface_total = len(indicators) + len(inputs) + len(vars_) + len(functions)
+    fidelity_score = round(min(1.0, surface_total / 12.0), 3) if surface_total else 0.0
+
+    return {
+        "ok": True,
+        "strategy_id": strategy_id,
+        "pinescript": pine_source,
+        "doc": doc,
+        "fidelity": {
+            "score": fidelity_score,
+            "surface": struct,
+        },
+    }
+
+
 @router.post("/api/v2/chat")
 @limiter.limit(WRITE_LIMIT)
 async def chat_api(request: Request, username: str = Depends(verify_ui_credentials)):
