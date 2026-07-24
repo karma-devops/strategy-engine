@@ -2352,3 +2352,12 @@ Captured live screenshots of Dashboard / Strategies list / Strategy detail and v
 - Track 1 (1.1–1.8) now FULLY CLOSED.
 - Remaining (need operator decision / deploy, NOT executed): Track 4 (root `/` auth product call; test split-brain repair — test_hardening.py:29 + test_g7_integration.py hit live 8792; withdrawals legacy already gone); UI-1/2/3 (live-host easypanel deploy-gated — separate box).
 - Backup: v2.03.009_pre-1.8-guardrail-test_STABLE_2026-07-24_1738.tar.gz (7.4MB). Committed + pushed. Local=remote (0/0).
+
+---
+## 2026-07-24 (Turn 12) — Live host UI-1/2/3 verification
+- Drove browser on live host https://puls-r-engine.6cdzen.easypanel.host (operator-provided; same internal :8792, separate deploy + own DB).
+- UI-1 VERIFIED: /app/strategies shows translation-test (Saved 2026-07-24) with Duplicate/Edit/Delete/View buttons, ACTIVE 0, ENGINES (RUN/TOTAL) 0/0. Saved strategy visible on live frontend.
+- UI-2 BLOCKED: Strategy Studio loads, but Convert -> returns 403 Forbidden from Ollama. Captured via browser console: {"ok":false,"message":"Conversion failed: ... 403 Forbidden ... ollama.com/v1/chat/completions"}. Root cause: live host DB User.coder_model = glm-5.1 (paywalled at Ollama). Same bug we fixed LOCALLY by setting gpt-oss:20b in the DB row (env AI_MODEL is shadowed by DB row). The easypanel deploy has its OWN database, so the local fix did not propagate.
+- UI-3 PENDING: blocked behind UI-2 (cannot add a new strategy until Convert works). Will verify right after UI-2 fix.
+- FIX NEEDED (live data write, awaiting operator consent): on the LIVE DB, UPDATE users SET coder_model='gpt-oss:20b', assistant_model='gpt-oss:20b' (same as local fix). This is a production deploy data change -> must halt for explicit go per consent gate.
+- Checklist UI-1/2/3 rows updated to verified/blocked/pending. No local code changed.
