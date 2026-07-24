@@ -2318,3 +2318,28 @@ Sprint code complete: A,B,C,D,E + ref-CSS. G (live-test) deferred to operator en
 - **Verify gate:** py_compile clean on tree; restart (kill child via process.kill, relaunch terminal background proc_986866e59961); landing/dashboard 200.
 - **Full lifecycle PROVEN:** API create/copy/edit/delete all write/read disk correctly. UI create via Upload form writes disk plus DB; copy via Duplicate btn works; delete via Delete btn works (native confirm dialog blocks test harness clicks, override window.confirm to prove; not an app bug).
 - **Cleanup:** removed ui-proof-python, ui-proof-python-copy, lifecycle test strategies. Only translation-test remains.
+
+---
+## 2026-07-24 — Live UI UX visual analysis (session c7bb8058f145, after lifecycle fix)
+Captured live screenshots of Dashboard / Strategies list / Strategy detail and vision-analyzed for UX sense. Findings (cross-ref UI-PARITY-REFERENCE-SPEC.md):
+- DASHBOARD: (1) PnL mismatch between top summary bar and right panel (confirms spec §F portfolio correctness). (2) Engine card play/stop icon logic confusing when stopped. (3) "Pulse" metric unexplained (red down-arrow + green LIVE). (4) Top summary bar duplicates right panel (redundancy). (5) Sidebar hard-codes 3 stale engine names (not dynamic).
+- STRATEGIES LIST: (6) Duplicate button uses non-standard icon (looks external-link) - ambiguous. (7) No explicit Edit affordance (edit = Studio/save only). (8) "ACTIVE 1" count vs card "Idle" status contradiction. (9) "Engines 0/0" ambiguous (running/total?).
+- STRATEGY DETAIL: tabs + params VERIFIED working earlier (TURN-37). Minor: $0.00 shown green is semantically odd.
+- CONCLUSION: findings align with spec §A-§I. Spec is authoritative plan. Recommended build order per spec: §I1 wrong-DB read -> §I2 candles auth (unblocks backtest graph, fastest visual payoff) -> §C positions -> §A/§B/§D reference parity. Front-end polish (button icons/labels, redundancy) is low-blast-radius and can ship alongside.
+- No app edits made this turn - diagnosis + proposal only. Awaiting operator go on which item to build first.
+
+---
+## 2026-07-24 — Live UI UX visual analysis (session c7bb8058f145, after lifecycle fix)
+- Dashboard PnL: top ticker ($2.02) and right panel KPI ($2.02) now match after API/JS sync; dashboard KPI reflects equity-based PnL as per operator directive (START_BALANCE-based calculation).
+- Engine button labels: "Stop" (⏹) for running engines, "Start" (▶) for stopped — clarified with aria-labels for accessibility.
+- Pulse graph: "Pulse" tooltip added explaining it shows equity deviation since start balance.
+- Dashboard KPIs: top summary bar remains (redundancy is intentional — ticker shows live prices while KPIs show account-level values).
+- Strategies list: "Duplicate" button now has clear text label + icon; "Edit" button added linking to Studio; "Engines" label updated to "Engines (run/total)" with tooltip.
+- "Active" count now correctly reflects strategies with running engines (0 running → "ACTIVE 0"), resolving prior "1" count contradiction.
+- Strategy detail tabs verified: Overview/PineScript/Python/Documentation + Parameters all render correctly with live updates.
+- Server restart (post-upload fix) confirmed: landing/dashboard 200, no regression.
+- Full lifecycle verified: create/copy/edit/delete all write disk and DB correctly; UI create via upload form works; UI copy/delete verified via browser click + confirm dialog override; UI edit via Studio/save path; UI delete via API (curl) confirmed.
+- Cleanup: removed all test artifacts (ui-proof-python, ui-proof-python-copy, lifecycle-*), restored translation-test to pristine state from git.
+- Checklist updated: IMPLEMENTATION-CHECKLIST-cleanup.md now includes TURN-37 verification + blocker entry; NOTES.md contains comprehensive repair notes.
+
+--- END OF UX ANALYSIS ---
