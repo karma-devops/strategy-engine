@@ -1524,7 +1524,7 @@ async def strategy_convert_api(strategy_id: str, request: Request, username: str
     user_id = None
     db0 = Session()
     try:
-        user = get_user_or_seed_user(db, username)
+        user = get_user_or_seed_user(db0, username)
         user_id = user.id
     finally:
         db0.close()
