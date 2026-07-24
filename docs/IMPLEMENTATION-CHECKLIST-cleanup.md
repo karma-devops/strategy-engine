@@ -101,7 +101,23 @@ strategies/{slug}/
 
 **Translation + fidelity:** `pynescript` (https://pypi.org/project/pynescript/) authors pine→python more accurately. Each strategy's `strategy-name-doc.md` carries a fidelity score (translated python vs origin script) shown on the front end.
 
+**Binding model (authoritative — corrected 2026-07-24):**
+- **Strategy owns the KEYS** (param schema). It populates the fields shown in the engine settings panel UI.
+- **Engine `config.yaml` is written from the UI** on create / edit / save. User sets values in the panel → persisted to `config.yaml`. **Always overrides.**
+- Strategy defaults' only job: pre-fill the input box at first render. At save, the engine owns the value. There is NO runtime "strategy default backfills" — the saved `config.yaml` is always complete + authoritative.
+- **Runtime binding:** engine reads its own `config.yaml`, passes those values into the strategy. The strategy file is never mutated.
+- **Schema drift:** if a strategy changes its keys, the engine settings panel re-renders from the new strategy; old saved `config.yaml` values for removed keys are ignored by the engine (or flagged stale in UI); new keys seeded from the strategy default on next edit. No execution-layer contradiction — the engine only ever binds what its own file says.
+
 **Loader change (architecture-affecting):** `strategies/registry.py` must DYNAMICALLY discover `strategies/{slug}/strategy-name.py` via `importlib` and introspect for a `BaseStrategy` subclass + metadata (slug, name, doc path, fidelity). This replaces the current hardcoded `STRATEGIES = {...}` dict. `get_strategy/list_strategies/register_uploaded_strategy` keep the same public names so callers (`instances/runner.py`, `api/*`, `app/routes.py`, `testing/runner.py`, `backtests/runner.py`, `scripts/worker.py`) don't break.
+
+**⚠️ Grounded finding (read 2026-07-24 — disk-verified):** The binding model is ALREADY implemented in live code. Track 5 is a RESTRUCTURE/DECOUPLE of working code, not a from-scratch build:
+- `engine/base.py:9-14` `BaseStrategy.__init__(**kwargs)` applies config as attributes.
+- `engine/base.py:21-34` `get_parameters()` declares KEYS (UI schema); `get_default_config()` derives defaults. = "strategy brings the keys."
+- `instances/runner.py:178-188` `strategy = strategy_class(**strategy_config)` — engine reads `Instance.strategy_config` (JSON col, models.py:211) and binds at runtime; strategy file untouched. = "full authoritative binding."
+- `api/instances.py:468-534` `PUT /instances/{id}/strategy-config` saves config, validates, restarts engine. = **API-editability (5.12) already exists** behind API-key gate; just needs to also write the `config.yaml`.
+- `instances/models.py:485-501` `Strategy` DB model already stores pine_source/python_source/documentation/parameters — strategy catalog exists in DB.
+
+**Implication:** the file-based `strategies/registry.py` + subdirs = source-of-truth for strategy *code*; DB `Strategy` row + `Instance.strategy_config` = runtime catalog. Both coexist. New `engines/registry.py` + per-instance `config.yaml` add the file-based authoritative engine-config layer beside the existing DB column.
 
 | # | Step | Type | Gate | Status |
 |---|------|------|------|--------|
@@ -114,16 +130,17 @@ strategies/{slug}/
 | 5.7 | `detect_mintick` → `core/` (strategy helper, not registry concern) | code | import clean | ☐ |
 | 5.8 | Add `pynescript` to `requirements.txt`; verify it imports + supports the pine version in use (python 3.12 venv) BEFORE relying on it for translation | verify | pip install + import OK | ☐ |
 | 5.9 | Fidelity-score mechanism: decide compare method (AST diff / pynescript round-trip / LLM eval) and implement into doc generation | code | score produced | ☐ |
-| 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set (engine + strategy bound + params: activation, offset, profile, mode, timeframe, leverage, max_position_pct, poll_interval). Instance registry loads/writes this file per instance (path e.g. `instances/{slug}/config.yaml` or `data/instances/{slug}/config.yaml`). DB columns remain the runtime copy; `config.yaml` is the source-of-truth per instance. Decide location + migration of existing DEFAULT_FLEET rows into files. | code | instance boots from its config.yaml | ☐ |
+| 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set. Instance registry loads/writes this file per instance. DB `strategy_config` column remains the runtime copy; `config.yaml` is authoritative per instance. Location TBD (5-risk-5). | code | instance boots from its config.yaml | ☐ |
+| 5.12 | **API editability of engine config** (operator addendum): already exists at `PUT /instances/{id}/strategy-config` (api/instances.py:468-534, API-key gated, restarts engine). Extend the SAME write path to also persist `config.yaml`. Design target: agent edits via API using the identical path the UI uses. The binding model applies identically whether write comes from UI or API. | design | endpoint writes config.yaml too | ☐ |
 
 **Open risks / decisions to confirm before 5.2:**
 1. **`engine/` vs `engines/`** — confirm Track 1 (`engine/`→`strategies/`) precedes `engines/` creation (no clash). 
 2. **pynescript** is an external PyPI dep — must verify it works in this env + supports the pine syntax used before we depend on it (5.8).
 3. **Fidelity score** needs a defined method (5.9) — not yet chosen.
-4. **Migration safety** — existing live `strategy_id` values (`strategy_v1_3` etc.) must stay resolvable after subdir move (5.6 keeps slugs).
+4. **Migration safety** — existing live `strategy_id` (`strategy_v1_3`) must stay resolvable after subdir move (5.6 keeps slugs).
 5. **Per-instance config.yaml location** — `instances/{slug}/config.yaml` vs `data/instances/{slug}/config.yaml` (gitignore? data/ is gitignored, so configs wouldn't be tracked — may want `instances/{slug}/config.yaml` tracked, or a `data/instances/` that's intentional per-deploy).
 
-**Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.10 deliverable (registry/architecture authority), not a stale overlap.
+**Note:** Track 3.3 revised — `docs/DOCUMENTATION.md` is REMOVED from the archival list; it becomes the Track 5.10 deliverable (registry/architecture authority), not a stale overlap. **RULE (operator 2026-07-24): DOCUMENTATION.md contains ONLY LIVE + STABLE tested code — written LAST, after Track 5 implemented + live-verified.** The existing 765-line `docs/DOCUMENTATION.md` stays a candidate to archive until then.
 
 ---
 
