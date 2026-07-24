@@ -133,3 +133,81 @@ def unregister_uploaded_strategy(strategy_id: str) -> None:
     canonical = _resolve_strategy_id(strategy_id)
     if canonical in STRATEGIES and canonical not in _SEED_STRATEGIES:
         del STRATEGIES[canonical]
+
+
+def clone_strategy(slug: str, new_slug: str) -> Path:
+    """Clone a strategy subdir into a new, self-contained, editable copy.
+
+    Mirrors clone_instance_config (5.13) but for STRATEGY code: the clone is a
+    full copy of strategies/{slug}/ -> strategies/{new_slug}/ (strategy .py,
+    .pine, -doc.md, origins) so the user can edit the copy's logic. The clone
+    is git-tracked and loads via the same dynamic discovery that found the
+    source. After a successful copy we also register it in the runtime
+    STRATEGIES dict so callers see it without a process restart.
+
+    Args:
+        slug: source strategy slug (must exist on disk under strategies/).
+        new_slug: target slug; must be a valid slug (alnum/_/-) and not collide.
+
+    Returns the new strategy dir Path.
+
+    Raises:
+        ValueError: invalid/colliding slug, or source missing.
+        FileExistsError: target already exists.
+    """
+    import re
+    import shutil
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", new_slug):
+        raise ValueError(f"new_slug must match [A-Za-z0-9_-]+, got {new_slug!r}")
+    if new_slug == slug:
+        raise ValueError("new_slug must differ from source slug")
+    if slug not in STRATEGIES:
+        raise ValueError(f"source strategy {slug!r} not found in registry")
+
+    strategies_root = Path(__file__).resolve().parent
+    src = strategies_root / slug
+    dst = strategies_root / new_slug
+    if not src.is_dir():
+        raise ValueError(f"source strategy dir missing: {src}")
+    if dst.exists():
+        raise FileExistsError(f"target already exists: {dst}")
+
+    shutil.copytree(src, dst)
+
+    # Best-effort: reassign an in-code class identity so the clone is
+    # distinguishable at runtime. Many strategies expose a `strategy_id`
+    # attribute or use it in config logging; rewrite occurrences of the
+    # source slug token inside .py files. This is cosmetic — discovery keys
+    # on the subdir name, not the in-code id.
+    for pf in dst.glob("*.py"):
+        if pf.name.startswith("_") or pf.name == "base.py":
+            continue
+        try:
+            text = pf.read_text()
+        except Exception:
+            continue
+        if slug in text:
+            pf.write_text(text.replace(slug, new_slug))
+
+    # Register in runtime registry (import the cloned module to get the class).
+    try:
+        module_name = f"strategies.{new_slug}.strategy"
+        # drop any prior cached module so a fresh import is forced
+        sys_mod = __import__("sys").modules
+        sys_mod.pop(module_name, None)
+        mod = importlib.import_module(module_name)
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if (
+                issubclass(obj, BaseStrategy)
+                and obj is not BaseStrategy
+                and obj.__module__ == module_name
+            ):
+                STRATEGIES[new_slug] = obj
+                break
+    except Exception:
+        # copy succeeded; registration is best-effort (discovery picks it up
+        # on next import / process restart regardless)
+        pass
+
+    return dst
