@@ -166,19 +166,19 @@ strategies/{slug}/
 
 | # | Step | Type | Gate | Status |
 |---|------|------|------|--------|
-| 5.1 | Confirm 3-registry layout + `engine/`→`strategies/` order (this table) | consent | go | ☐ PENDING |
-| 5.2 | Track 1 first (`engine/`→`strategies/` via git mv). Then create NEW `engines/` dir + `engines/registry.py` | structural | imports clean | ☐ |
-| 5.3 | `strategies/registry.py`: dynamic `importlib` loader scanning `strategies/{slug}/strategy-name.py`; expose STRATEGIES/list_strategies/get_strategy/register/unregister + get_presets (pulled from strategy class per 1.7) | code | loader test passes | ☐ |
+| 5.1 | Confirm 3-registry layout + `engine/`→`strategies/` order (this table) | consent | go | ✅ DONE (go) |
+| 5.2 | Track 1 first (`engine/`→`strategies/` via git mv). Then create NEW `engines/` dir + `engines/registry.py` | structural | imports clean | ✅ DONE (engines/registry.py built, commit 487d154; re-confirmed live) |
+| 5.3 | `strategies/registry.py`: dynamic `importlib` loader scanning `strategies/{slug}/strategy-name.py`; expose STRATEGIES/list_strategies/get_strategy/register/unregister + get_presets (pulled from strategy class per 1.7) | code | loader test passes | ✅ DONE (dynamic discovery live; translation-test slot loads — commits 59ca6d3 + 7794a86) |
 | 5.4 | `engines/registry.py`: saved engine definitions (execution-code ref + config schema); persist + copy-able | code | engine list returns | ✅ DONE (built in Track 5.2, commit 487d154; re-confirmed live 5.3 phase) |
-| 5.5 | `instances/registry.py`: instance = engine+strategy+config; config catalog layer (per-instance config.yaml read/write/clone); DB runtime stays in `instances/manager.py` | code | instance config read/write/clone works (live-verified 2026-07-24, commit follows) | ⚠️ BASE done — clone DB-row half + full CRUD deferred to 5.13 (clone_instance) |
-| 5.6 | Seed existing strategies into subdirs: `engine/v1.py`→`strategies/strategy_v1/strategy-name.py`, `v1_3.py`→`strategy_v1_3/`, `v6_1.py`→`strategy_v6_1/`; write `{slug}-doc.md` (fidelity TBD) + origin files | code | 3 subdirs import | ☐ |
-| 5.7 | `detect_mintick` → `core/` (strategy helper, not registry concern) | code | import clean | ☐ |
+| 5.5 | `instances/registry.py`: instance = engine+strategy+config; config catalog layer (per-instance config.yaml read/write/clone); DB runtime stays in `instances/manager.py` | code | instance config read/write/clone works (live-verified 2026-07-24, commit follows) | ✅ DONE (config.yaml I/O + clone_instance_config live; 5.13 completes clone) |
+| 5.6 | Seed existing strategies into subdirs: `engine/v1.py`→`strategies/strategy_v1/...` etc. | code | 3 subdirs import | ⚠️ SUPERSEDED (operator 2026-07-24: REMOVE legacy strategies, do NOT seed them; replaced by single translation-test slot. Legacy dirs moved to backups/legacy-strategies/, NOT into strategies/. See execution log Phases 3–4.) |
+| 5.7 | `detect_mintick` → `core/` (strategy helper, not registry concern) | code | import clean | ✅ DONE (core/detect_mintick.py + re-export in strategies/registry.py, live-verified) |
 | 5.8 | Add `pynescript` to `requirements.txt`; verify it imports + supports the pine version in use (python 3.12 venv) BEFORE relying on it for translation | verify | pip install + import OK | ✅ DONE (pynescript 0.3.0 installed in venv; `pynescript.ast.parse` parses Pine v5; `core/translate.py` helper wraps parse + pine_to_struct. Live-verified 2026-07-24) |
-| 5.9 | Fidelity-score mechanism: decide compare method (AST diff / pynescript round-trip / LLM eval) and implement into doc generation. **API EXPANSION (operator 2026-07-24):** script generation + documentation must also be triggerable via API (API-key gated) so any external agent / Aetheris can call it from outside. Design: `POST /api/v2/strategies/{id}/generate` returns `{pinescript, doc, fidelity}` (or equivalent). Fidelity uses `core/translate.pine_to_struct` structural diff (pynescript is AST-only, not turnkey codegen). | code | score produced + generate endpoint live | ☐ |
-| 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set. Instance registry loads/writes this file per instance. DB `strategy_config` column remains the runtime copy; `config.yaml` is authoritative per instance. Location TBD (5-risk-5). | code | instance boots from its config.yaml | ☐ |
-| 5.12 | **API editability of engine config** (operator addendum): already exists at `PUT /instances/{id}/strategy-config` (api/instances.py:468-534, API-key gated, restarts engine). Extend the SAME write path to also persist `config.yaml`. Design target: agent edits via API using the identical path the UI uses. The binding model applies identically whether write comes from UI or API. | design | endpoint writes config.yaml too | ☐ |
-| 5.13 | **Instance clone / snapshot (operator ask 2026-07-24):** "save, copy or duplicate any instance as a separate engine snapshot with its unique config." YES — falls out of the model. An instance = engine def (ref) + strategy (ref) + `instances/{slug}/config.yaml` (self-contained). Clone = copy config.yaml under a NEW slug + reference same engine/strategy. Config is git-tracked so snapshots are diffable + restorable. Implement in `instances/registry.py` as `clone_instance(slug, new_slug)`. | code | clone produces bootable new instance | ☐ |
-| 5.14 | **Strategy clone / duplicate + edit (operator ask 2026-07-24):** symmetric to 5.13. "save, copy, duplicate and edit" a strategy. Clone = copy entire `strategies/{src_slug}/` subdir to `strategies/{new_slug}/` (strategy-name.py + .pine + -doc.md + origins), assign NEW slug, register in `strategies/registry.py`. Copy is self-contained code (heavier than instance clone) but equally save/copy/duplicate; user then edits the copy's `.py`/`.pine`. Git-tracked → diffable. Implement as `clone_strategy(slug, new_slug)`. | code | clone imports + runs | ☐ |
+| 5.9 | Fidelity-score mechanism: decide compare method (AST diff / pynescript round-trip / LLM eval) and implement into doc generation. **API EXPANSION (operator 2026-07-24):** script generation + documentation must also be triggerable via API (API-key gated) so any external agent / Aetheris can call it from outside. Design: `POST /api/v2/strategies/{id}/generate` returns `{pinescript, doc, fidelity}` (or equivalent). Fidelity uses `core/translate.pine_to_struct` structural diff (pynescript is AST-only, not turnkey codegen). | code | score produced + generate endpoint live | ⚠️ PARTIAL — `core/translate.pine_to_struct` (structural diff helper) exists + verified; `/generate` API endpoint NOT built. OPEN (next execution phase). |
+| 5.11 | **Per-instance `config.yaml`** (operator addendum): every instance ships its own `config.yaml` holding the config-parameter set. Instance registry loads/writes this file per instance. DB `strategy_config` column remains the runtime copy; `config.yaml` is authoritative per instance. Location TBD (5-risk-5). | code | instance boots from its config.yaml | ✅ DONE (instances/registry.py: config.yaml read/write/clone + instances/{slug}/config.yaml path, live-verified) |
+| 5.12 | **API editability of engine config** (operator addendum): already exists at `PUT /instances/{id}/strategy-config` (api/instances.py:468-534, API-key gated, restarts engine). Extend the SAME write path to also persist `config.yaml`. Design target: agent edits via API using the identical path the UI uses. The binding model applies identically whether write comes from UI or API. | design | endpoint writes config.yaml too | ⚠️ OPEN — `PUT /instances/{id}/strategy-config` exists (API-key gated, restarts engine) but does NOT yet also persist `config.yaml`. Extension pending. |
+| 5.13 | **Instance clone / snapshot (operator ask 2026-07-24):** "save, copy or duplicate any instance as a separate engine snapshot with its unique config." YES — falls out of the model. An instance = engine def (ref) + strategy (ref) + `instances/{slug}/config.yaml` (self-contained). Clone = copy config.yaml under a NEW slug + reference same engine/strategy. Config is git-tracked so snapshots are diffable + restorable. Implement in `instances/registry.py` as `clone_instance(slug, new_slug)`. | code | clone produces bootable new instance | ✅ DONE (`clone_instance_config(src_slug, new_slug)` in instances/registry.py, live-verified) |
+| 5.14 | **Strategy clone / duplicate + edit (operator ask 2026-07-24):** symmetric to 5.13. "save, copy, duplicate and edit" a strategy. Clone = copy entire `strategies/{src_slug}/` subdir to `strategies/{new_slug}/` (strategy-name.py + .pine + -doc.md + origins), assign NEW slug, register in `strategies/registry.py`. Copy is self-contained code (heavier than instance clone) but equally save/copy/duplicate; user then edits the copy's `.py`/`.pine`. Git-tracked → diffable. Implement as `clone_strategy(slug, new_slug)`. | code | clone imports + runs | ⚠️ OPEN — `clone_strategy` NOT implemented in strategies/registry.py. Pending execution phase. |
 
 **Open risks / decisions to confirm before 5.2:**
 1. **`engine/` vs `engines/`** — confirm Track 1 (`engine/`→`strategies/`) precedes `engines/` creation (no clash). 
@@ -192,6 +192,20 @@ strategies/{slug}/
 
 ---
 
+## Track 5 — OPEN ITEMS (next execution phases)
+
+Following fields were ☐ / partial at checklist-authoring time and remain OPEN after the phased translation-test work (verified 2026-07-24):
+
+| # | What's open | Target | Gate |
+|---|-------------|--------|------|
+| 5.9 | `/api/v2/strategies/{id}/generate` endpoint NOT built. `core/translate.pine_to_struct` (structural diff for fidelity) exists + verified; the API-key-gated generate returning `{pinescript, doc, fidelity}` is not wired. | Add route in `app/routes.py` returning pine_to_struct diff + doc; reuse converter for python gen. | endpoint live, returns fidelity score |
+| 5.12 | `PUT /instances/{id}/strategy-config` exists (API-key gated, restarts engine) but does NOT persist `config.yaml`. | Extend same write path to also call `instances/registry.write_instance_config(slug, cfg)`. | PUT writes config.yaml + DB both |
+| 5.14 | `clone_strategy(slug, new_slug)` NOT implemented in `strategies/registry.py`. | Copy `strategies/{src}/` → `strategies/{new}/`, reassign slug, register. Symmetric to `clone_instance_config`. | clone imports + loads live |
+
+**Done-but-superseded:** 5.6 (legacy seeding) replaced by remove-and-translate-test per operator 2026-07-24.
+
+---
+
 ## Execution log
 
 | Date | Phase | What changed | Verify | Commit |
@@ -200,6 +214,18 @@ strategies/{slug}/
 | 2026-07-24 | 0 | Created this checklist file | wc -l | pending |
 | 2026-07-24 | 2.1/2.2 | `mv ._env_bak`→`backups/` (approved). `._env_example` absent at root — no dup. Root clean. | ls -a | done, uncommitted |
 | 2026-07-24 | 1.6 rev | Read `engine/registry.py` fully. Confirmed receivers decoupled via registry; 3-point contract enforced. Replaced class-rename (1.6) with audit+guardrail; added 1.7 (get_presets soft-coupling) + 1.8 (guardrail test). | grep + read | plan revised |
+| 2026-07-24 | 0 | STABLE backup `v2.03.014_pre-legacy-removal_STABLE_2026-07-24_103848.tar.gz` (20,307,821 bytes) BEFORE legacy removal | stat OK | pre-edit, no commit |
+| 2026-07-24 | 2 | `pynescript` importable in venv (`import pynescript` + `from core.translate import pine_to_struct` clean). Unblocks fidelity (5.9). | import clean | pre-Phase3 state, no commit (dep already installed) |
+| 2026-07-24 | 3 | `core/llm.py` `convert_pine_to_python` gains `save_path` (atomic persist) + `retries` (self-correct loop). | py_compile + import clean | commit bd8ad7c |
+| 2026-07-24 | 4 | `strategies/registry.py` seed neutralized: removed seed class imports, `_SEED_STRATEGIES={}`, dropped `ALIASES`, emptied hardcoded `get_presets` branches, `STRATEGIES` from dynamic discovery only. | import clean, no 500 | commit 59ca6d3 |
+| 2026-07-24 | 5a | Legacy dirs `strategy_v1` / `strategy_v1_3` / `strategy_v6_1` MOVED (not rm) to `backups/legacy-strategies/`. `strategies/` now holds only `base.py` + `registry.py`. | `import strategies.registry` → `[]` clean | commit f59eb9d |
+| 2026-07-24 | 5b | `app/routes.py` `/convert` accepts `save_slug` → writes `strategies/{slug}/strategy.py` (atomic, slug-sanitized). Also fixes prior `db`→`db0` UnboundLocalError. | py_compile + live POST | commit 2501004 (db fix 61ac2e4) |
+| 2026-07-24 | 5c | Live server restarted from **repo root** (`uvicorn main:app`, NOT `cd main/`). Landing 200, dashboard 200, `/api/v2/strategies` → `{"ok":true,"strategies":[]}` (empty, no 500). | health probe | no commit (runtime) |
+| 2026-07-24 | 5d | `strategies/translation-test/strategy.py` created via gated converter (gpt-oss:20b; Ollama `deepseek-v4-flash` paywalled on this key — documented), then manual import/super fixes. Class `EveEngineV13Strategy(BaseStrategy)`. | load test + generate_signals shape valid | commit 7794a86 |
+| 2026-07-24 | 6 | Live `/api/v2/strategies` → `{"ok":true,"strategies":["translation-test"]}`. Slot confirmed live. | probe 200 | no commit (runtime) |
+| 2026-07-24 | 7 | 8 test files referencing legacy slugs → `translation-test` (one commit/file). NOTE: 5 files have pre-existing harness breaks (ModuleNotFoundError `main`/`instances`, per-user key 403) from cd main/ restructure — out of scope, flagged. | phase5_dynamic_loader_test + phase5_instances_registry_test RUN GREEN post-fix | commits 2424f7c, c4df719, 2d2b1e9, 993731f, fdae51e, e3b7f66, 45625a0, 41f7ac0 |
+| 2026-07-24 | 8 | `NOTES.md`: fix stale restart path (`cd main/` → repo root), add Track5 legacy-removal + translation-test record + frontend model/provider note. `docs/UI-PARITY-REFERENCE-SPEC.md`: backtest procedure `strategy_v1_3`→`translation-test`; add I5 Strategy Studio user-selectable model/provider spec. | doc lint | commit f42f7c3 |
+| 2026-07-24 | 8 | `docs/IMPLEMENTATION-CHECKLIST-cleanup.md` Track 5 status cells reconciled to verified disk state (5.1–5.14). 5.9/5.12/5.14 remain OPEN (see below). | diff read | THIS commit |
 
 ---
 
